@@ -60,8 +60,14 @@ describe('parseOAuthCredentialDocument', () => {
       .toThrow(/empty api-key/)
     expect(() => parseOAuthCredentialDocument('{"p": {"type": "api_key", "env": []}}', '/tmp/x'))
       .toThrow(/non-object env/)
+    expect(() => parseOAuthCredentialDocument('{"p": {"type": "api_key", "env": null}}', '/tmp/x'))
+      .toThrow(/non-object env/)
     expect(parseOAuthCredentialDocument('{"p": {"type": "api_key"}}', '/tmp/x').get('p'))
       .toEqual({ type: 'api_key' })
+    expect(parseOAuthCredentialDocument(
+      '{"p": {"type": "api_key", "key": "sk", "env": {"REGION": "us"}}}',
+      '/tmp/x',
+    ).get('p')).toEqual({ type: 'api_key', key: 'sk', env: { REGION: 'us' } })
   })
 })
 
@@ -130,6 +136,16 @@ describe('FileOAuthStore', () => {
       { providerId: 'a', type: 'api_key' },
       { providerId: 'b', type: 'api_key' },
     ])
+  })
+
+  it('recovers the write queue after a failed modify', async () => {
+    const filename = await tempFile()
+    const store = new FileOAuthStore(filename)
+    await expect(store.modify('openai-codex', async () => {
+      throw new Error('boom')
+    })).rejects.toThrow(/boom/)
+    await store.modify('openai-codex', async () => OAUTH)
+    expect(await store.read('openai-codex')).toEqual(OAUTH)
   })
 
   it('loads an existing owner-only document in the constructor', async () => {

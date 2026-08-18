@@ -15,6 +15,7 @@ import {
   createBrowserOAuthInteraction,
   loginOpenaiCodex,
   OPENAI_CODEX_BROWSER_LOGIN_METHOD,
+  OPENAI_CODEX_DISPLAY_NAME,
   OPENAI_CODEX_PROVIDER,
   oauthProviderProfiles,
   openUrl,
@@ -63,6 +64,13 @@ describe('oauthProviderProfiles', () => {
       'openai-codex': { displayName: catalog.catalogProvider('openai-codex')?.name ?? 'OpenAI Codex' },
     })
     expect(oauthProviderProfiles([])).toEqual({})
+  })
+
+  it('falls back to the OpenAI Codex display name when the catalog provider is missing', () => {
+    vi.spyOn(catalog, 'catalogProvider').mockReturnValue(undefined)
+    expect(oauthProviderProfiles([{ providerId: 'openai-codex', type: 'oauth' }])).toEqual({
+      'openai-codex': { displayName: OPENAI_CODEX_DISPLAY_NAME },
+    })
   })
 })
 
@@ -113,8 +121,19 @@ describe('createBrowserOAuthInteraction', () => {
       openUrl: async () => { throw new Error('no browser') },
     })
     interaction.notify({ type: 'auth_url', url: 'https://auth.example/authorize' })
+    await Promise.resolve()
     await expect(interaction.prompt({ type: 'manual_code', message: 'paste' }))
       .rejects.toThrow(/no browser/)
+  })
+
+  it('wraps a non-Error opener failure', async () => {
+    const interaction = createBrowserOAuthInteraction({
+      openUrl: async () => { throw 'nope' },
+    })
+    interaction.notify({ type: 'auth_url', url: 'https://auth.example/authorize' })
+    await Promise.resolve()
+    await expect(interaction.prompt({ type: 'manual_code', message: 'paste' }))
+      .rejects.toThrow(/Failed to open the login page/)
   })
 
   it('fails an in-flight manual_code prompt when opening the URL fails', async () => {

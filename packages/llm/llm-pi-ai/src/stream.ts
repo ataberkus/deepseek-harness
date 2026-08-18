@@ -66,6 +66,7 @@ function classifyPiAiError(message: string): string {
  * Map a thrown pi-ai failure onto a harness error when the wording is one this
  * adapter owns. Unrecognized failures are rethrown unchanged.
  * @param error - the value `streamSimple` or the event iterator rejected with.
+ * @returns never; always throws.
  * @throws {LlmError} `MISSING_CREDENTIAL` when pi-ai reports an unconfigured provider.
  */
 export function rethrowPiAiError(error: unknown): never {
