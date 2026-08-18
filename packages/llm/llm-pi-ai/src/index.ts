@@ -179,6 +179,15 @@ export function apply(ctx: Context, config: Config): void {
       ...raw.providers,
     })
   }
+  /** Route keys injected solely by a stored OAuth credential, not settings. */
+  const oauthInjected = (): ReadonlySet<string> => {
+    resolveMemo()
+    const injected = new Set<string>()
+    for (const id of Object.keys(oauthProviderProfiles(oauthStore.credentialInfos()))) {
+      if (!(memoizedSettings as ReadonlyMap<string, ResolvedPiAiProviderProfile>).has(id)) injected.add(id)
+    }
+    return injected
+  }
   /** Profiles the Models page can address; OAuth-injected routes stay out. */
   const settingsProfiles = (): ReadonlyMap<string, ResolvedPiAiProviderProfile> => {
     resolveMemo()
@@ -220,6 +229,7 @@ export function apply(ctx: Context, config: Config): void {
     profiles,
     resolveApiKey,
     credentials: oauthStore,
+    oauthInjected,
     resolveAttachments: () => ctx.get('attachments'),
     onReplayDegrade: ({ provider, model, reason }) => {
       ctx.logger.warn(

@@ -344,7 +344,7 @@ describe('login and logout commands', () => {
       text: 'Signed in to OpenAI Codex. Select an openai-codex model to use the ChatGPT Codex subscription.',
     })
     expect(ctx.llm.listProviders()).toEqual([
-      { id: OPENAI_CODEX_PROVIDER, name: provider.name },
+      { id: OPENAI_CODEX_PROVIDER, name: provider.name, auth: 'oauth' },
     ])
     expect(ctx.llm.listConfigurableProviders().map(entry => entry.provider)).not.toContain(OPENAI_CODEX_PROVIDER)
     const models = await ctx.llm.listModels(OPENAI_CODEX_PROVIDER)
@@ -468,8 +468,32 @@ describe('login and logout commands', () => {
     contexts.push(ctx)
     await ctx.plugin(LlmRuntime)
     await ctx.plugin(LlmPiAi, {})
-    expect(ctx.llm.listProviders().map(provider => provider.id)).toEqual([OPENAI_CODEX_PROVIDER])
+    expect(ctx.llm.listProviders()).toEqual([{
+      id: OPENAI_CODEX_PROVIDER,
+      name: catalog.catalogProvider(OPENAI_CODEX_PROVIDER)?.name ?? OPENAI_CODEX_DISPLAY_NAME,
+      auth: 'oauth',
+    }])
     expect(ctx.llm.listConfigurableProviders().map(entry => entry.provider)).not.toContain(OPENAI_CODEX_PROVIDER)
+  })
+
+  it('does not mark a settings-declared openai-codex route as oauth-injected', async () => {
+    const home = await isolateDshHome()
+    await writeFile(join(home, OAUTH_CREDENTIALS_FILENAME), `${JSON.stringify({
+      'openai-codex': {
+        type: 'oauth',
+        access: 'access-token',
+        refresh: 'refresh-token',
+        expires: Date.now() + 60_000,
+      },
+    }, null, 2)}\n`, { mode: 0o600 })
+    const ctx = new Context()
+    contexts.push(ctx)
+    await ctx.plugin(LlmRuntime)
+    await ctx.plugin(LlmPiAi, { providers: { 'openai-codex': { apiKeyEnv: 'CODEX_TOKEN' } } })
+    expect(ctx.llm.listProviders()).toEqual([{
+      id: OPENAI_CODEX_PROVIDER,
+      name: OPENAI_CODEX_PROVIDER,
+    }])
   })
 
   it('keeps a stored settings profile in the directory beside a live oauth route', async () => {

@@ -92,6 +92,13 @@ export interface PiAiAdapterOptions {
    * `openai-codex` (and any future OAuth-only catalog route) authenticates.
    */
   credentials?: CredentialStore
+  /**
+   * Live routes this adapter registered only because an OAuth credential is
+   * stored, not because settings named them. `providerInfo` reports `auth:
+   * 'oauth'` for these so configuration surfaces can show a connected row
+   * without a key field.
+   */
+  oauthInjected?: () => ReadonlySet<string>
   /** Resolve the optional durable attachment service at request time. */
   resolveAttachments?: () => AttachmentStore | undefined
   /**
@@ -292,7 +299,12 @@ export class PiAiAdapter extends LlmAdapter {
     // The configured name, not the route key: `displayName` exists so a
     // deployment can label a route, and a label only the configuration surface
     // reads would leave every selector showing the raw key.
-    return { id: provider, name: this.current().profiles.get(provider)?.displayName ?? provider }
+    const oauth = this.config.oauthInjected?.().has(provider) === true
+    return {
+      id: provider,
+      name: this.current().profiles.get(provider)?.displayName ?? provider,
+      ...oauth ? { auth: 'oauth' as const } : {},
+    }
   }
 
   override providerRetryPolicy(provider: string): ResolvedRetryPolicy | undefined {

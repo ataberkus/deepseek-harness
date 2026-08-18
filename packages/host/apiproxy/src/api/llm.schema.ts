@@ -17,6 +17,8 @@ export const configurableProviderViewSchema = z.object({
   settingsPath: z.array(z.string()),
   active: z.boolean(),
   declared: z.boolean().optional(),
+  auth: z.literal('oauth').optional(),
+  connected: z.boolean().optional(),
 }) satisfies z.ZodType<Wire<ConfigurableProviderView>>
 
 /** llm.providers request payload. */

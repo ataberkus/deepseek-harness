@@ -176,6 +176,23 @@ describe('PiAiAdapter provider routing', () => {
     expect(adapter.providerInfo('departed')).toEqual({ id: 'departed', name: 'departed' })
   })
 
+  it('reports oauth auth only for injected OAuth routes', () => {
+    const adapter = new PiAiAdapter({
+      profiles: () => resolveProfiles({
+        openai: { apiKeyEnv: 'OPENAI_API_KEY' },
+        'openai-codex': { displayName: 'OpenAI Codex' },
+      }),
+      resolveApiKey: () => Promise.resolve(undefined),
+      oauthInjected: () => new Set(['openai-codex']),
+    })
+    expect(adapter.providerInfo('openai')).toEqual({ id: 'openai', name: 'openai' })
+    expect(adapter.providerInfo('openai-codex')).toEqual({
+      id: 'openai-codex',
+      name: 'OpenAI Codex',
+      auth: 'oauth',
+    })
+  })
+
   it('reports unsupported stop sequences rather than silently ignoring them', async () => {
     const server = await mockServer([])
     const ctx = await harness(server.url)
