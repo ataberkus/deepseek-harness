@@ -6,6 +6,7 @@ import * as LlmPiAi from '@deepseek-ai/dsh-llm-pi-ai'
 import type { PiAiProviderProfile } from '@deepseek-ai/dsh-llm-pi-ai'
 import * as LlmDeepSeek from '@deepseek-ai/dsh-llm-deepseek'
 import { assemble, type AssembledResult } from './assemble.ts'
+import { isolateDshHome, removeIsolatedHomes } from './dsh-home.ts'
 
 /**
  * Real-API e2e for the pi-ai-backed adapter: V4 Flash + V4 Pro with provider
@@ -19,6 +20,7 @@ const PRO = 'deepseek-v4-pro'
 const contexts: Context[] = []
 
 async function harness(_model: string, config: Partial<PiAiProviderProfile> = {}) {
+  await isolateDshHome()
   const ctx = new Context()
   contexts.push(ctx)
   await ctx.plugin(LlmRuntime)
@@ -36,6 +38,7 @@ async function harness(_model: string, config: Partial<PiAiProviderProfile> = {}
 
 afterEach(async () => {
   await Promise.all(contexts.splice(0).map(ctx => ctx.fiber.dispose()))
+  await removeIsolatedHomes()
 })
 
 function ask(text: string): Message[] {

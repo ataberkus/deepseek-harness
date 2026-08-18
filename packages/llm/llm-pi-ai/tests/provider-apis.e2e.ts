@@ -13,6 +13,7 @@ import type { Message, ToolSchema } from '@deepseek-ai/dsh-llm'
 import * as LlmPiAi from '@deepseek-ai/dsh-llm-pi-ai'
 import type { PiAiReplayResponse } from '../src/replay.ts'
 import { assemble, type AssembledResult } from './assemble.ts'
+import { isolateDshHome, removeIsolatedHomes } from './dsh-home.ts'
 
 interface ProviderCase {
   provider: 'openai' | 'anthropic'
@@ -52,6 +53,7 @@ const providerCases: ProviderCase[] = [
 const contexts: Context[] = []
 
 async function harness(image?: StoredImageAttachment): Promise<Context> {
+  await isolateDshHome()
   const ctx = new Context()
   contexts.push(ctx)
   await ctx.plugin(LlmRuntime)
@@ -95,6 +97,7 @@ async function harness(image?: StoredImageAttachment): Promise<Context> {
 
 afterEach(async () => {
   await Promise.all(contexts.splice(0).map(ctx => ctx.fiber.dispose()))
+  await removeIsolatedHomes()
 })
 
 function ask(text: string): Message[] {

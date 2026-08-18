@@ -10,6 +10,7 @@ import { settingsNamespace } from '@deepseek-ai/dsh-settings'
 import { FileSettingsProvider } from '@deepseek-ai/dsh-settings-file'
 import * as LlmPiAi from '@deepseek-ai/dsh-llm-pi-ai'
 import { assemble } from './assemble.ts'
+import { isolateDshHome, removeIsolatedHomes } from './dsh-home.ts'
 import { closeMockServers, mockServer, textEvents } from './mock-server.ts'
 
 const NS = settingsNamespace('llm-pi-ai')
@@ -28,6 +29,7 @@ afterEach(async () => {
   while (cleanups.length > 0) await cleanups.pop()!()
   await closeMockServers()
   vi.unstubAllEnvs()
+  await removeIsolatedHomes()
 })
 
 async function home(): Promise<string> {
@@ -38,6 +40,7 @@ async function home(): Promise<string> {
 
 /** Real dynamic composition mirroring the deepseek twin's harness. */
 async function boot(dir: string, config: LlmPiAi.Config): Promise<Context> {
+  await isolateDshHome()
   const ctx = new Context()
   cleanups.push(async () => {
     await ctx.fiber.dispose()

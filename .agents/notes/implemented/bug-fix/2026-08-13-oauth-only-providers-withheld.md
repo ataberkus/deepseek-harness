@@ -14,9 +14,9 @@ So the page advertised, with the keyless posture its own placeholder describes, 
 
 ## Decision
 
-The directory offers only what this adapter can authenticate. `catalogProviderTakesApiKey(provider)` answers whether pi-ai's installed provider for a route declares an api-key method — the one method the harness can feed, since it resolves a key through its own credential seam and hands it over as the request's `apiKey` override — and `directoryEntries()` skips the catalog routes that fail it.
+The directory offers only what a Models-page key field can authenticate. `catalogProviderTakesApiKey(provider)` answers whether pi-ai's installed provider for a route declares an api-key method — the one method the page can feed, since it resolves a key through the harness credential seam and hands it over as the request's `apiKey` override — and `directoryEntries()` skips the catalog routes that fail it.
 
-OAuth support is not attempted. It needs a persistent credential store, a login flow, and a surface to run it from; none of those is a release-blocking fix, and shipping the offer without them is what produced the report.
+Host OAuth for `openai-codex` is a separate login path: [[2026-08-18-openai-codex-oauth-host]] persists a `CredentialStore` and registers a live route after `/login openai-codex`. That path does not add a key card, which is why this withholding remains. Always-registering the route without a stored token would mark onboarding ready without a working API-key provider.
 
 Two boundaries keep the withholding narrow:
 
@@ -29,14 +29,14 @@ Resolution is untouched. A profile naming `apiKeyEnv` on an OAuth-only route sti
 
 - **Rejecting a keyless OAuth-only route in `resolveProfiles`.** This is where the repo normally enforces a decision, and the directory filter is a surface that a `cordis.yml` entry bypasses. It was refused for the boot behavior above: an existing stored profile would take down every other route in the namespace with it, which for a release trades a one-provider defect for a total one. The gap is that the offer, not the capability, is what got fixed — a deployment can still hand-write the route it can no longer add from the page.
 - **Keeping the offer and correcting only the placeholder text.** The field would then have to say the provider needs a login this build cannot run, which is a card whose only honest content is that it does not work.
-- **Mapping `Provider is not configured` to a named `LlmError`.** Worth doing, and reachable for reasons this change does not remove — any api-key route left blank whose provider finds nothing in the process environment produces the same message. Deferred as a separate change: it improves a diagnostic rather than removing a broken offer.
-- **Reading `~/.codex/auth.json` into a pi-ai `CredentialStore`.** It makes Codex work without a login flow, and pi-ai owns the refresh. It also binds the harness to another tool's private file format for one provider, which is a decision for the OAuth work rather than a release fix.
+- **Mapping `Provider is not configured` to a named `LlmError`.** Done later as part of the OAuth host: an unconfigured Codex route now fails `MISSING_CREDENTIAL` and names `/login openai-codex`.
+- **Reading `~/.codex/auth.json` into a pi-ai `CredentialStore`.** It makes Codex work without a login flow, and pi-ai owns the refresh. It also binds the harness to another tool's private file format for one provider. The OAuth host stores tokens in `$DSH_HOME/oauth-credentials.json` instead; see [[2026-08-18-openai-codex-oauth-host]].
 
 ## Consequences
 
-`openai-codex` disappears from the provider picker and from the directory the Models page joins; every other installed provider is unaffected, including the six that offer OAuth *beside* an api-key method (`anthropic`, `github-copilot`, `kimi-coding`, `openrouter`, `radius`, `xai`), which keep their entries and their key path. A future provider that ships OAuth alone is withheld automatically rather than by name.
+`openai-codex` stays absent from the provider picker and from the directory the Models page joins unless a settings profile already names it; every other installed provider is unaffected, including the six that offer OAuth *beside* an api-key method (`anthropic`, `github-copilot`, `kimi-coding`, `openrouter`, `radius`, `xai`), which keep their entries and their key path. A future provider that ships OAuth alone is withheld automatically rather than by name. After `/login openai-codex`, the live route is selectable without a directory card.
 
-Two adjacent gaps remain and are recorded in the package README: a route naming no credential still resolves through the catalog provider's own discovery, which reads process environment variables only — not `~/.aws/credentials`, and not the harness credential seam — and the resulting failure is still the catch-all `PI_AI_ERROR`.
+Two adjacent gaps remain and are recorded in the package README: a route naming no credential still resolves through the catalog provider's own discovery, which reads process environment variables only — not `~/.aws/credentials`, and not the harness credential seam — and host OAuth in this build covers `openai-codex` browser login only.
 
 ## Testing
 

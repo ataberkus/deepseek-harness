@@ -14,9 +14,9 @@ Status: implemented
 
 ## 决策
 
-目录只提供本适配器认得的东西。`catalogProviderTakesApiKey(provider)` 回答 pi-ai 为某路由安装的提供方是否声明了 api-key 方法——这是 harness 唯一能供给的方法，因为它通过自己的凭据 seam 解析密钥，再作为请求的 `apiKey` 覆盖交给 pi-ai——`directoryEntries()` 跳过不满足它的 catalog 路由。
+目录只提供模型页密钥字段能够认证的东西。`catalogProviderTakesApiKey(provider)` 回答已安装 catalog 提供方是否声明了 api-key 方法——这是页面能喂进去的唯一方法，因为它经 harness 凭据层解析密钥并作为请求的 `apiKey` 覆盖交出——`directoryEntries()` 跳过通不过该项的 catalog 路由。
 
-不尝试实现 OAuth。它需要持久化凭据存储、登录流程，以及运行登录的界面；这三样都不是发布阻塞项的修复，而在它们缺席时仍把提供方摆出来，正是这次报告的成因。
+`openai-codex` 的宿主 OAuth 是另一条登录路径：[[2026-08-18-openai-codex-oauth-host]] 持久化 `CredentialStore`，并在 `/login openai-codex` 之后注册 live 路由。那条路径不会加一张密钥卡片，因此本项不予提供仍然成立。在没有已存 token 时始终注册该路由，会在没有可用 API 密钥提供方时把引导标成就绪。
 
 两条边界把「不提供」的范围收窄：
 
@@ -29,14 +29,14 @@ resolution 未被触动。在仅 OAuth 的路由上指定 `apiKeyEnv` 的 profil
 
 - **在 `resolveProfiles` 里拒绝无密钥的仅 OAuth 路由。** 这才是本仓库通常强制决策的位置，而目录过滤是一层 `cordis.yml` entry 可以绕过的表面。因上述启动行为被否决：已存储的 profile 会连带拖垮该 namespace 中其他所有路由，对一次发布而言，这是拿一个提供方的缺陷换取全体的缺陷。留下的缺口是：被修的是「提供」而不是「能力」——部署仍可手写一条页面上已经无法添加的路由。
 - **保留提供，只修正占位文案。** 那么该输入框只能写「此提供方需要本构建无法运行的登录」，等于一张唯一诚实内容就是「它不能用」的卡片。
-- **把 `Provider is not configured` 映射成具名 `LlmError`。** 值得做，而且触发原因本次改动并未消除——任何留空密钥、其提供方又在进程环境里找不到东西的 api-key 路由，都会产生同一句话。作为独立改动暂缓：它改进的是诊断，而不是移除一个坏掉的提供。
-- **把 `~/.codex/auth.json` 读进 pi-ai 的 `CredentialStore`。** 这能让 Codex 在没有登录流程的情况下可用，刷新也由 pi-ai 负责。但它为一个提供方把 harness 绑定到另一个工具的私有文件格式上，这属于 OAuth 那项工作的决策，而不是发布期的修复。
+- **把 `Provider is not configured` 映射成具名 `LlmError`。** 后来作为 OAuth 宿主的一部分落地：未配置的 Codex 路由现在以 `MISSING_CREDENTIAL` 失败，并点名 `/login openai-codex`。
+- **把 `~/.codex/auth.json` 读进 pi-ai 的 `CredentialStore`。** 这能让 Codex 在没有登录流程的情况下可用，刷新也由 pi-ai 负责。但它为一个提供方把 harness 绑定到另一个工具的私有文件格式上。OAuth 宿主改为把 token 存进 `$DSH_HOME/oauth-credentials.json`；见 [[2026-08-18-openai-codex-oauth-host]]。
 
 ## 影响
 
-`openai-codex` 从提供方选择器、以及模型设置页所 join 的目录中消失；其余已安装提供方一概不受影响，包括在 api-key 方法*之外*另提供 OAuth 的那六个（`anthropic`、`github-copilot`、`kimi-coding`、`openrouter`、`radius`、`xai`），它们保留条目也保留密钥路径。将来若出现只带 OAuth 的提供方，会被自动排除，而不是靠列名。
+除非 settings profile 已经点名，`openai-codex` 仍不出现在提供方选择器和模型设置页所 join 的目录中；其余已安装提供方一概不受影响，包括在 api-key 方法*之外*另提供 OAuth 的那六个（`anthropic`、`github-copilot`、`kimi-coding`、`openrouter`、`radius`、`xai`），它们保留条目也保留密钥路径。将来若出现只带 OAuth 的提供方，会被自动排除，而不是靠列名。`/login openai-codex` 之后，live 路由可被选择且没有目录卡片。
 
-两处相邻缺口仍在，并记录在包 README 中：不指定凭据的路由仍走 catalog 提供方自带的发现，而它只读进程环境变量——不读 `~/.aws/credentials`，也不读 harness 凭据 seam——且由此产生的失败仍是兜底的 `PI_AI_ERROR`。
+两处相邻缺口仍在，并记录在包 README 中：不指定凭据的路由仍走 catalog 提供方自带的发现，而它只读进程环境变量——不读 `~/.aws/credentials`，也不读 harness 凭据 seam——且本构建的宿主 OAuth 只覆盖 `openai-codex` 浏览器登录。
 
 ## 测试
 

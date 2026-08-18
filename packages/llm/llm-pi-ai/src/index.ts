@@ -56,7 +56,9 @@
  */
 
 import type { Context } from '@deepseek-ai/cordis'
+import { join } from 'node:path'
 import { launchEnvironmentOf } from '@deepseek-ai/dsh-launch-environment'
+import { resolveDshHome } from '@deepseek-ai/dsh-home-paths'
 import { assertUsableApiKey, LlmError } from '@deepseek-ai/dsh-llm'
 import type { AdapterRegistrationHandle, DirectoryRegistrationHandle, LlmConfigurableProvider } from '@deepseek-ai/dsh-llm'
 import { deepEqualJson, installSettingsSection, settingsNamespace } from '@deepseek-ai/dsh-settings'
@@ -65,6 +67,8 @@ import { catalogProviderIds, catalogProviderTakesApiKey } from './catalog.ts'
 import { assertServiceable, Config, resolveProfiles } from './config.ts'
 import type { ResolvedPiAiProviderProfile } from './config.ts'
 import { discoverModels } from './discovery.ts'
+import { oauthProviderProfiles, registerOAuthCommands } from './oauth-login.ts'
+import { FileOAuthStore, OAUTH_CREDENTIALS_FILENAME } from './oauth-store.ts'
 
 export { PiAiAdapter } from './adapter.ts'
 export type { PiAiAdapterOptions } from './adapter.ts'
@@ -80,6 +84,8 @@ export type {
   ResolvedPiAiProviderProfile,
 } from './config.ts'
 export { supportedProtocols } from './provider.ts'
+export { OPENAI_CODEX_DISPLAY_NAME, OPENAI_CODEX_PROVIDER } from './oauth-login.ts'
+export { OAUTH_CREDENTIALS_FILENAME } from './oauth-store.ts'
 
 export const name = 'llm-pi-ai'
 export const inject = ['llm']
@@ -148,27 +154,40 @@ function directoryEntries(
 
 /** Register one generic pi-ai adapter for all configured provider routes. */
 export function apply(ctx: Context, config: Config): void {
+  const oauthStore = new FileOAuthStore(join(resolveDshHome(), OAUTH_CREDENTIALS_FILENAME))
   let current: () => Config = () => config
   let lastRaw: Config | undefined
-  let memoized: ReadonlyMap<string, ResolvedPiAiProviderProfile> | undefined
+  let lastOAuthRevision: number | undefined
+  let memoizedSettings: ReadonlyMap<string, ResolvedPiAiProviderProfile> | undefined
+  let memoizedLive: ReadonlyMap<string, ResolvedPiAiProviderProfile> | undefined
   /**
-   * The resolved profiles for the current configuration, memoized by the raw
-   * snapshot's identity — which is also what makes the adapter's own snapshot
-   * stable across operations that observe no change.
-   *
-   * No fallback for an unserviceable snapshot lives here: the section schema
-   * resolves the whole profile set, so a write that could not be served is
-   * refused where it is written, and the settings seam keeps a namespace's
-   * last good value for a stored section that fails. Anything reaching this
-   * point has already resolved once.
+   * Rebuild both profile maps when the settings snapshot identity or the OAuth
+   * store revision changes. Settings profiles feed the configurable-provider
+   * directory (so a login does not invent a key-card). Live profiles feed the
+   * adapter registry (so a stored Codex token becomes a selectable route).
    */
-  const profiles = (): ReadonlyMap<string, ResolvedPiAiProviderProfile> => {
+  const resolveMemo = (): void => {
     const raw = current()
-    if (raw === lastRaw && memoized !== undefined) return memoized
-    const next = resolveProfiles(raw.providers)
+    const revision = oauthStore.revision
+    if (raw === lastRaw && revision === lastOAuthRevision
+      && memoizedSettings !== undefined && memoizedLive !== undefined) return
     lastRaw = raw
-    memoized = next
-    return next
+    lastOAuthRevision = revision
+    memoizedSettings = resolveProfiles(raw.providers)
+    memoizedLive = resolveProfiles({
+      ...oauthProviderProfiles(oauthStore.credentialInfos()),
+      ...raw.providers,
+    })
+  }
+  /** Profiles the Models page can address; OAuth-injected routes stay out. */
+  const settingsProfiles = (): ReadonlyMap<string, ResolvedPiAiProviderProfile> => {
+    resolveMemo()
+    return memoizedSettings as ReadonlyMap<string, ResolvedPiAiProviderProfile>
+  }
+  /** Profiles the adapter serves, including a stored `openai-codex` OAuth route. */
+  const profiles = (): ReadonlyMap<string, ResolvedPiAiProviderProfile> => {
+    resolveMemo()
+    return memoizedLive as ReadonlyMap<string, ResolvedPiAiProviderProfile>
   }
   profiles()
 
@@ -200,6 +219,7 @@ export function apply(ctx: Context, config: Config): void {
   const adapter = new PiAiAdapter({
     profiles,
     resolveApiKey,
+    credentials: oauthStore,
     resolveAttachments: () => ctx.get('attachments'),
     onReplayDegrade: ({ provider, model, reason }) => {
       ctx.logger.warn(
@@ -215,7 +235,7 @@ export function apply(ctx: Context, config: Config): void {
   let directory: DirectoryRegistrationHandle | undefined
   let directoryFacts: unknown
   const ensureDirectory = (): void => {
-    const entries = directoryEntries(profiles())
+    const entries = directoryEntries(settingsProfiles())
     if (deepEqualJson(entries, directoryFacts)) return
     // Atomic replace, never dispose-then-register: a route another adapter
     // family already declares (a profile keyed `deepseek-official`) would
@@ -280,6 +300,19 @@ export function apply(ctx: Context, config: Config): void {
     registeredFacts = facts
   }
   ensureRegistrationFacts()
+
+  registerOAuthCommands(ctx, {
+    store: oauthStore,
+    onCredentialChange: () => {
+      lastRaw = undefined
+      try {
+        ensureRegistrationFacts()
+      } catch (error) {
+        ctx.logger.error('llm-pi-ai: keeping the previously registered routes after an OAuth credential change')
+        ctx.logger.error(error)
+      }
+    },
+  })
 
   installSettingsSection(ctx, NS, Config, config, {
     // Refuse an unserviceable section where it is written: without this a

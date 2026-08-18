@@ -16,7 +16,15 @@ Keys are write-only. The page receives a redacted descriptor after saving, never
 
 Choose **Add provider**, select a provider such as Anthropic or OpenAI, enter its API key, and save. The installed catalog supplies the endpoint, protocol, and model list.
 
-Providers with native authentication need their native credentials instead. Bedrock, Vertex, Azure, and Codex use AWS credentials and a region, an ADC project, an `api-version`, and OAuth respectively; filling only the API-key field does not configure them.
+Providers with native authentication need their native credentials instead. Bedrock, Vertex, and Azure use AWS credentials and a region, an ADC project, and an `api-version` respectively. Codex uses ChatGPT OAuth via `/login openai-codex`; filling only the API-key field does not configure it.
+
+## Sign in to OpenAI Codex
+
+Codex uses a ChatGPT subscription, not an API key. In CLI or ACP chat, run `/login openai-codex`, complete the browser login, then select an `openai-codex` model. `/logout openai-codex` deletes the stored tokens.
+
+Tokens live in `$DSH_HOME/oauth-credentials.json` (owner-only). They are not environment variables and never appear in logs. The Models page does not offer a Codex key card.
+
+Headless and SSH device-code login is not in this build.
 
 ## Add a custom provider
 
@@ -87,7 +95,7 @@ If a saved default names a provider that was deleted, the composer displays **Se
 
 ## Troubleshooting
 
-- **`MISSING_CREDENTIAL`** — Store the provider key through the Models page or supply the referenced environment variable.
+- **`MISSING_CREDENTIAL`** — Store the provider key through the Models page, supply the referenced environment variable, or run `/login openai-codex` for Codex.
 - **`UNKNOWN_MODEL`** — Select a configured model or add the missing model to the custom provider.
 - **Fetching available models returns 401** — Check the key. Model discovery calls the OpenAI-compatible `GET /models` endpoint; enter models manually for endpoints that do not provide it.
 - **An image is refused before sending** — The model declares no image modality. Give a custom provider's model `input: [text, image]`; DeepSeek's own chat-completions route is text-only and cannot be configured otherwise.

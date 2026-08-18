@@ -1,15 +1,20 @@
 import { createServer } from 'node:http'
 import type { IncomingMessage, Server, ServerResponse } from 'node:http'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import LlmRuntime, { userAgent } from '@deepseek-ai/dsh-llm'
 import * as LlmPiAi from '@deepseek-ai/dsh-llm-pi-ai'
 import { getBuiltinModels } from '@earendil-works/pi-ai/providers/all'
 import { discoverModels } from '../src/discovery.ts'
+import { isolateDshHome, removeIsolatedHomes } from './dsh-home.ts'
 
 const servers: Server[] = []
 /** Credential variables a test set, cleared so the next one starts unset. */
 const touchedEnv: string[] = []
+
+beforeEach(async () => {
+  await isolateDshHome()
+})
 
 afterEach(async () => {
   // A no-op when the test never stubbed `fetch`; only 'probe key format'
@@ -17,6 +22,7 @@ afterEach(async () => {
   vi.unstubAllGlobals()
   for (const name of touchedEnv.splice(0)) Reflect.deleteProperty(process.env, name)
   await Promise.all(servers.splice(0).map(server => new Promise(resolve => server.close(resolve))))
+  await removeIsolatedHomes()
 })
 
 interface ListingServer {
@@ -66,6 +72,7 @@ async function listingServer(behavior: {
 
 /** A bare dormant mount: discovery is offered whether or not a route exists. */
 async function harness(): Promise<Context> {
+  await isolateDshHome()
   const ctx = new Context()
   await ctx.plugin(LlmRuntime)
   await ctx.plugin(LlmPiAi, {})
