@@ -10,7 +10,7 @@
 import { Service } from '@deepseek-ai/cordis'
 import type { Context } from '@deepseek-ai/cordis'
 // Type-only: pulls the ctx.remote merge and the forwarded-event key face
-// (`commands/change` rides the allowlist) into this program.
+// (`commands/change` and `commands/open-url` ride the allowlist) into this program.
 import type {} from '@deepseek-ai/dsh-api-remotes/client'
 import type { CommandResult } from '@deepseek-ai/dsh-commands/types'
 import type { ClientContext, ISessions, SessionId } from '@deepseek-ai/dsh-client-runtime/client'
@@ -39,11 +39,42 @@ declare module '@deepseek-ai/cordis' {
   }
 }
 
+/** Named tab reused for ChatGPT OAuth so a second `/login` does not blank an in-progress authorize page. */
+const OPENAI_CODEX_LOGIN_WINDOW = 'dsh-openai-codex-login'
+
 /** Recover the command name from a line the Host confirmed as executed. */
 function submittedCommandName(line: string): string {
   const trimmed = line.trim()
   const separator = trimmed.search(/\s/u)
   return (separator === -1 ? trimmed : trimmed.slice(0, separator)).slice(1)
+}
+
+/**
+ * `/login` and `/login openai-codex` are the host ChatGPT login lines.
+ * `/login anthropic` and `/login-foo` are not.
+ */
+function isOpenaiCodexLoginLine(line: string): boolean {
+  const trimmed = line.trim()
+  const separator = trimmed.search(/\s/u)
+  const name = separator === -1 ? trimmed : trimmed.slice(0, separator)
+  if (name !== '/login') return false
+  const rest = separator === -1 ? '' : trimmed.slice(separator).trim()
+  return rest.length === 0 || rest === 'openai-codex'
+}
+
+/** Authorize URLs are https; `javascript:` and other schemes are ignored. */
+function isHttpsUrl(url: string): boolean {
+  try {
+    return new URL(url).protocol === 'https:'
+  } catch {
+    return false
+  }
+}
+
+/** Open `url` in `name`, or `null` when this process has no `window` (Node tests). */
+function openBrowserWindow(url: string, name: string): Window | null {
+  if (typeof globalThis.window === 'undefined') return null
+  return globalThis.window.open(url, name)
 }
 
 /** Live mutable state in one holder (service methods run behind the caller-ctx tracker). */
@@ -147,6 +178,7 @@ export class CommandUiRuntime extends Service implements CommandUiContract {
       warm: (session) => { this.directory.warm(session.sessionId) },
     }), 'command: slash source')
     ctx.remote.$on('commands/change', () => { this.directory.invalidateAll() })
+    ctx.remote.$on('commands/open-url', (url) => { this.navigateLoginTab(url) })
     // A preset switch changes which commands one session's agent resolves and
     // registers nothing globally, so the registry-wide signal above never
     // fires for it: repull that key alone, soft, so the old snapshot serves
@@ -225,6 +257,37 @@ export class CommandUiRuntime extends Service implements CommandUiContract {
 
   /** Composer focus hooks by session (the overlay wiring binds the textarea focus here). */
   private readonly focusHooks = new Map<SessionId, () => void>()
+
+  /**
+   * Tab opened during the `/login` keystroke. Kept until the user closes it so a
+   * second `/login` reuses it instead of replacing an in-progress authorize page
+   * with `about:blank`.
+   */
+  private pendingLoginTab: Window | null = null
+
+  /**
+   * Open a blank tab under the user gesture that submitted `/login`. Popup
+   * blockers swallow a `window.open` that runs later, when the authorize URL
+   * arrives on the downlink.
+   */
+  private prepareLoginTab(): void {
+    if (this.pendingLoginTab !== null && !this.pendingLoginTab.closed) return
+    this.pendingLoginTab = openBrowserWindow('about:blank', OPENAI_CODEX_LOGIN_WINDOW)
+  }
+
+  /**
+   * Navigate the prepared tab to `url`, or open `url` if the gesture tab was
+   * blocked or already closed. Non-https values are ignored.
+   * @param url - authorize URL forwarded from the Host.
+   */
+  private navigateLoginTab(url: string): void {
+    if (!isHttpsUrl(url)) return
+    if (this.pendingLoginTab !== null && !this.pendingLoginTab.closed) {
+      this.pendingLoginTab.location.href = url
+      return
+    }
+    this.pendingLoginTab = openBrowserWindow(url, OPENAI_CODEX_LOGIN_WINDOW)
+  }
 
   /**
    * Bind one session's composer-focus hook (overlay slot wiring; unbind on unmount).
@@ -371,6 +434,7 @@ export class CommandUiRuntime extends Service implements CommandUiContract {
     session: ClientSessionContext,
     line: string,
   ): Promise<SubmitOutcome> {
+    if (isOpenaiCodexLoginLine(line)) this.prepareLoginTab()
     const result = await this.ctx.remote.commands.execute(session.sessionId, line)
     if (!result.ok) throw new Error(`command.execute failed: ${result.error.code}: ${result.error.message}`)
     if (result.value === undefined) return { kind: 'error', text: `unknown or malformed command: ${line}` }

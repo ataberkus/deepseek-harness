@@ -18,6 +18,7 @@ import {
   loginOpenaiCodex,
   OPENAI_CODEX_BROWSER_LOGIN_METHOD,
   OPENAI_CODEX_DISPLAY_NAME,
+  OPENAI_CODEX_LOGIN_IN_PROGRESS,
   OPENAI_CODEX_PROVIDER,
   oauthProviderProfiles,
   openUrl,
@@ -217,12 +218,13 @@ describe('browserOpenArgv', () => {
     })).toEqual({ command: 'xdg-open', args: [url] })
   })
 
-  it('uses PowerShell Start-Process on Windows and WSL so `&` stays in one argument', () => {
+  it('uses rundll32 on Windows and WSL so `&` stays in one argument', () => {
     const expected = {
-      command: 'powershell.exe',
-      args: ['-NoProfile', '-NonInteractive', '-Command', `Start-Process '${url}'`],
+      command: 'rundll32.exe',
+      args: ['url.dll,FileProtocolHandler', url],
     }
     expect(browserOpenArgv(url, { platform: 'win32' })).toEqual(expected)
+    expect(expected.args.at(-1)).toContain('&')
     expect(browserOpenArgv(url, { platform: 'linux', env: { WSL_DISTRO_NAME: 'Ubuntu' }, osRelease: '6.8.0-generic' }))
       .toEqual(expected)
     expect(browserOpenArgv(url, { platform: 'linux', env: { WSL_INTEROP: '/run/WSL/1' }, osRelease: '6.8.0-generic' }))
@@ -231,19 +233,13 @@ describe('browserOpenArgv', () => {
       .toEqual(expected)
   })
 
-  it('escapes single quotes in the PowerShell literal', () => {
-    const quoted = "https://example.test/oauth?q=a'b&c=d"
-    expect(browserOpenArgv(quoted, { platform: 'win32' }).args.at(-1))
-      .toBe("Start-Process 'https://example.test/oauth?q=a''b&c=d'")
-  })
-
   it('samples ambient WSL markers and kernel release when internals omit them', () => {
     const env = process.env
     const ambientWsl = (env.WSL_DISTRO_NAME !== undefined && env.WSL_DISTRO_NAME !== '')
       || (env.WSL_INTEROP !== undefined && env.WSL_INTEROP !== '')
       || osRelease().toLowerCase().includes('microsoft')
     expect(browserOpenArgv(url, { platform: 'linux' }).command)
-      .toBe(ambientWsl ? 'powershell.exe' : 'xdg-open')
+      .toBe(ambientWsl ? 'rundll32.exe' : 'xdg-open')
   })
 })
 
@@ -282,7 +278,7 @@ describe('openUrl', () => {
     await expect(openUrl('https://auth.example/authorize', linuxDesktop)).rejects.toThrow(/ENOENT/)
   })
 
-  it('uses open on darwin and PowerShell Start-Process on win32', async () => {
+  it('uses open on darwin and rundll32 on win32', async () => {
     const child = new EventEmitter() as EventEmitter & { unref: () => void }
     child.unref = vi.fn()
     spawn.mockImplementation(() => {
@@ -293,13 +289,8 @@ describe('openUrl', () => {
     await openUrl(url, { platform: 'darwin' })
     expect(spawn.mock.calls.at(-1)?.[0]).toBe('open')
     await openUrl(url, { platform: 'win32' })
-    expect(spawn.mock.calls.at(-1)?.[0]).toBe('powershell.exe')
-    expect(spawn.mock.calls.at(-1)?.[1]).toEqual([
-      '-NoProfile',
-      '-NonInteractive',
-      '-Command',
-      `Start-Process '${url}'`,
-    ])
+    expect(spawn.mock.calls.at(-1)?.[0]).toBe('rundll32.exe')
+    expect(spawn.mock.calls.at(-1)?.[1]).toEqual(['url.dll,FileProtocolHandler', url])
   })
 
   it('reads process.platform when internals omit it', async () => {
@@ -310,7 +301,7 @@ describe('openUrl', () => {
       return child
     })
     await openUrl('https://auth.example/authorize')
-    expect(['open', 'xdg-open', 'powershell.exe']).toContain(spawn.mock.calls[0]?.[0])
+    expect(['open', 'xdg-open', 'rundll32.exe']).toContain(spawn.mock.calls[0]?.[0])
   })
 })
 
@@ -381,6 +372,85 @@ describe('login and logout commands', () => {
       .toEqual({ kind: 'error', text: 'Only /login openai-codex is supported.' })
     expect((await ctx.commands.execute(agent, '/logout anthropic', AbortSignal.timeout(1_000)))?.result)
       .toEqual({ kind: 'error', text: 'Only /logout openai-codex is supported.' })
+  })
+
+  it('emits commands/open-url with the authorize URL and still writes stderr', async () => {
+    await isolateDshHome()
+    const provider = catalog.catalogProvider(OPENAI_CODEX_PROVIDER)
+    if (provider?.auth.oauth === undefined) throw new Error('expected openai-codex oauth')
+    const url = 'https://auth.openai.com/oauth/authorize?response_type=code&client_id=app_test'
+    const child = new EventEmitter() as EventEmitter & { unref: () => void }
+    child.unref = vi.fn()
+    spawn.mockImplementation(() => {
+      queueMicrotask(() => child.emit('spawn'))
+      return child
+    })
+    vi.spyOn(provider.auth.oauth, 'login').mockImplementation(async (interaction) => {
+      await interaction.prompt({
+        type: 'select',
+        message: 'Select OpenAI Codex login method:',
+        options: [
+          { id: 'browser', label: 'Browser' },
+          { id: 'device_code', label: 'Device' },
+        ],
+      })
+      interaction.notify({ type: 'auth_url', url })
+      return {
+        type: 'oauth',
+        access: 'access-token',
+        refresh: 'refresh-token',
+        expires: Date.now() + 60_000,
+      }
+    })
+    const ctx = new Context()
+    contexts.push(ctx)
+    await ctx.plugin(LlmRuntime)
+    await ctx.plugin(CommandRuntime)
+    await ctx.plugin(LlmPiAi, {})
+    const opened: string[] = []
+    ctx.on('commands/open-url', (authUrl) => { opened.push(authUrl) })
+    const write = vi.spyOn(process.stderr, 'write').mockReturnValue(true)
+    const result = await ctx.commands.execute(fakeAgent(), '/login openai-codex', AbortSignal.timeout(5_000))
+    expect(result?.result).toMatchObject({ kind: 'success' })
+    expect(opened).toEqual([url])
+    expect(write).toHaveBeenCalledWith(authUrlFallbackMessage(url))
+  })
+
+  it('refuses a second /login while the first is still waiting on the callback', async () => {
+    await isolateDshHome()
+    const provider = catalog.catalogProvider(OPENAI_CODEX_PROVIDER)
+    if (provider?.auth.oauth === undefined) throw new Error('expected openai-codex oauth')
+    let release!: (value: {
+      type: 'oauth'
+      access: string
+      refresh: string
+      expires: number
+    }) => void
+    const hanging = new Promise<{
+      type: 'oauth'
+      access: string
+      refresh: string
+      expires: number
+    }>((resolve) => { release = resolve })
+    const login = vi.spyOn(provider.auth.oauth, 'login').mockReturnValue(hanging)
+    const ctx = new Context()
+    contexts.push(ctx)
+    await ctx.plugin(LlmRuntime)
+    await ctx.plugin(CommandRuntime)
+    await ctx.plugin(LlmPiAi, {})
+    const agent = fakeAgent()
+    const first = ctx.commands.execute(agent, '/login openai-codex', AbortSignal.timeout(5_000))
+    await vi.waitFor(() => expect(login).toHaveBeenCalledTimes(1))
+    expect((await ctx.commands.execute(agent, '/login', AbortSignal.timeout(1_000)))?.result)
+      .toEqual({ kind: 'error', text: OPENAI_CODEX_LOGIN_IN_PROGRESS })
+    expect(login).toHaveBeenCalledTimes(1)
+    release({
+      type: 'oauth',
+      access: 'access-token',
+      refresh: 'refresh-token',
+      expires: Date.now() + 60_000,
+    })
+    expect((await first)?.result).toMatchObject({ kind: 'success' })
   })
 
   it('registers openai-codex from a stored credential at boot without a settings profile', async () => {

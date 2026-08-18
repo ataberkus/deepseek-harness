@@ -2,7 +2,7 @@
  * Durable command event vocabulary and the registry's Cordis event
  * declaration, shared with type-only consumers. Client-safe: nothing here
  * reaches a Host-only symbol, so a Client compilation face reads the same
- * `commands/change` signature the Host emits.
+ * `commands/change` and `commands/open-url` signatures the Host emits.
  *
  * @module @deepseek-ai/dsh-commands/types
  */
@@ -70,6 +70,15 @@ declare module '@deepseek-ai/cordis' {
      * @mode emit
      */
     'commands/change'(): void
+    /**
+     * Ask connected browsers to open `url` in a tab. CLI has no subscriber
+     * and still uses the host OS opener. The Web client opens a blank tab
+     * during the `/login` keystroke and navigates it here so popup blockers
+     * do not swallow the authorize page. The URL is https only.
+     * @mode emit
+     * @param url - absolute https authorize URL.
+     */
+    'commands/open-url'(url: string): void
   }
 }
 

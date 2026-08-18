@@ -29,6 +29,10 @@ export const OPENAI_CODEX_DISPLAY_NAME = 'OpenAI Codex'
 /** pi-ai's browser login method id for OpenAI Codex. */
 export const OPENAI_CODEX_BROWSER_LOGIN_METHOD = 'browser'
 
+/** Shown when `/login` is invoked while another Codex login is still waiting. */
+export const OPENAI_CODEX_LOGIN_IN_PROGRESS =
+  'OpenAI Codex login is already in progress. Finish or cancel the open browser tab, then run /login again.'
+
 /**
  * Settings-free profiles for OAuth credentials this host persists.
  *
@@ -73,17 +77,13 @@ function isWsl(internals: BrowserOpenInternals): boolean {
   return (internals.osRelease ?? osRelease()).toLowerCase().includes('microsoft')
 }
 
-/** PowerShell single-quoted literal (doubles embedded quotes). */
-function powershellLiteral(value: string): string {
-  return `'${value.replace(/'/g, "''")}'`
-}
-
 /**
  * Platform browser-helper argv for `url`.
  *
  * The authorize URL's query string must stay one argument. `cmd /c start`
  * splits on `&`, which drops `client_id` and the remaining OAuth query and
- * makes OpenAI render `missing_required_parameter`.
+ * makes OpenAI render `missing_required_parameter`. Windows and WSL use
+ * `rundll32` so the query string is never a cmd command line.
  * @param url - the authorize URL pi-ai emitted.
  * @param internals - platform and environment overrides for tests.
  * @returns the helper command and argv.
@@ -96,8 +96,8 @@ export function browserOpenArgv(
   if (platform === 'darwin') return { command: 'open', args: [url] }
   if (platform === 'win32' || (platform === 'linux' && isWsl(internals))) {
     return {
-      command: 'powershell.exe',
-      args: ['-NoProfile', '-NonInteractive', '-Command', `Start-Process ${powershellLiteral(url)}`],
+      command: 'rundll32.exe',
+      args: ['url.dll,FileProtocolHandler', url],
     }
   }
   return { command: 'xdg-open', args: [url] }
@@ -237,6 +237,7 @@ export interface OAuthCommandDeps {
  */
 export function registerOAuthCommands(ctx: Context, deps: OAuthCommandDeps): void {
   ctx.inject(['commands'], (commandCtx) => {
+    let loginInFlight = false
     commandCtx.commands.register({
       name: 'login',
       description: 'Sign in to OpenAI Codex with ChatGPT',
@@ -246,8 +247,18 @@ export function registerOAuthCommands(ctx: Context, deps: OAuthCommandDeps): voi
         if (provider === undefined) {
           return { kind: 'error', text: 'Only /login openai-codex is supported.' }
         }
+        if (loginInFlight) {
+          return { kind: 'error', text: OPENAI_CODEX_LOGIN_IN_PROGRESS }
+        }
+        loginInFlight = true
         try {
-          await loginOpenaiCodex(deps.store, createBrowserOAuthInteraction({ signal }))
+          await loginOpenaiCodex(deps.store, createBrowserOAuthInteraction({
+            signal,
+            writeAuthUrl: (url) => {
+              commandCtx.emit('commands/open-url', url)
+              process.stderr.write(authUrlFallbackMessage(url))
+            },
+          }))
           deps.onCredentialChange()
           return {
             kind: 'success',
@@ -255,6 +266,8 @@ export function registerOAuthCommands(ctx: Context, deps: OAuthCommandDeps): voi
           }
         } catch (error) {
           return { kind: 'error', text: commandFailure(error, 'OpenAI Codex login failed') }
+        } finally {
+          loginInFlight = false
         }
       },
     })

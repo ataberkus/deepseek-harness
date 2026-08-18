@@ -20,9 +20,11 @@ Providers with native authentication need their native credentials instead. Bedr
 
 ## Sign in to OpenAI Codex
 
-Codex uses a ChatGPT subscription, not an API key. In CLI or ACP chat, run `/login openai-codex`, complete the browser login, then select an `openai-codex` model. `/logout openai-codex` deletes the stored tokens.
+Codex uses a ChatGPT subscription, not an API key. In the Web UI, CLI, or ACP chat, run `/login openai-codex` once, complete ChatGPT login, then select an `openai-codex` model. `/logout openai-codex` deletes the stored tokens.
 
-If the browser shows OpenAI's **Authentication Error** with `missing_required_parameter`, paste the full authorize URL printed in the terminal into the address bar. Clicking a line-wrapped link drops `client_id` and the rest of the query.
+The Web UI opens a new tab from that keystroke. Allow pop-ups for the dsh origin if the tab does not appear. A second `/login` while the first tab is still waiting is refused. Do not paste an older authorize URL from the terminal: each attempt has its own `state`, and a mismatch shows OpenAI's **Authentication failed** page.
+
+If the authorize page reports `missing_required_parameter`, paste the full URL printed in the server terminal into the address bar. Clicking a line-wrapped link drops `client_id` and the rest of the query.
 
 Tokens live in `$DSH_HOME/oauth-credentials.json` (owner-only). They are not environment variables and never appear in logs. The Models page does not offer a Codex key card.
 

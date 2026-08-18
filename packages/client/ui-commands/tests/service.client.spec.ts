@@ -8,7 +8,7 @@
  * lifecycle, and the directory invalidation event subscriptions.
  */
 import { Context } from '@deepseek-ai/cordis'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { CommandResult } from '@deepseek-ai/dsh-commands/types'
 import { createScope, scopeOf } from '@deepseek-ai/dsh-client-runtime/client'
 import type { SessionId } from '@deepseek-ai/dsh-client-runtime/client'
@@ -31,6 +31,13 @@ const S2_CMDS: CommandDescriptor[] = [
   ...S1_CMDS,
   { name: 'attach', description: 'scoped shadow', input: { hint: 'path' } },
 ]
+
+const LOGIN_CMDS: CommandDescriptor[] = [
+  ...S1_CMDS,
+  { name: 'login', description: 'Sign in to OpenAI Codex with ChatGPT', input: { hint: '[openai-codex]' } },
+]
+
+const CODEX_AUTH_URL = 'https://auth.openai.com/oauth/authorize?response_type=code&client_id=app_test'
 
 type ExecuteValue = { matched: boolean; commandId?: string }
 
@@ -745,5 +752,134 @@ describe('directory invalidation events', () => {
     release({ commands: S2_CMDS })
     await new Promise(resolve => setTimeout(resolve, 0))
     expect(source.matchSpace!(proj('s2'), '/attach')).not.toBeUndefined()
+  })
+})
+
+describe('openai-codex login tab', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  async function loginBench(execute?: BenchOptions['execute']) {
+    return await bench({
+      commands: () => Promise.resolve({ commands: LOGIN_CMDS }),
+      execute,
+    })
+  }
+
+  async function submitLogin(source: InputTriggerSource, args: string) {
+    const outcome = source.matchSpace!(proj('s1'), '/login')
+    if (outcome === undefined || outcome === 'handled' || !('claim' in outcome)) throw new Error('expected login claim')
+    return outcome.claim.submit(args, new Context())
+  }
+
+  it('opens a blank tab on the /login keystroke and navigates it when commands/open-url arrives', async () => {
+    const tab = { closed: false, location: { href: 'about:blank' } }
+    const open = vi.fn(() => tab)
+    vi.stubGlobal('window', { open })
+    let finish!: (value: ExecuteValue) => void
+    const { ctx, source, warm } = await loginBench(() => new Promise((resolve) => { finish = resolve }))
+    await warm(proj('s1'))
+    const pending = submitLogin(source, 'openai-codex')
+    expect(open).toHaveBeenCalledWith('about:blank', 'dsh-openai-codex-login')
+    ctx.remote.$dispatch('commands/open-url', [CODEX_AUTH_URL])
+    expect(tab.location.href).toBe(CODEX_AUTH_URL)
+    expect(open).toHaveBeenCalledTimes(1)
+    finish({ matched: true })
+    await expect(pending).resolves.toEqual({ kind: 'success' })
+  })
+
+  it('opens a blank tab for a bare /login line', async () => {
+    const tab = { closed: false, location: { href: 'about:blank' } }
+    const open = vi.fn(() => tab)
+    vi.stubGlobal('window', { open })
+    const { source, warm } = await loginBench()
+    await warm(proj('s1'))
+    await submitLogin(source, '')
+    expect(open).toHaveBeenCalledWith('about:blank', 'dsh-openai-codex-login')
+  })
+
+  it('does not open a tab for /plan or /login anthropic', async () => {
+    const open = vi.fn()
+    vi.stubGlobal('window', { open })
+    const { source, warm, executeCalls } = await loginBench()
+    await warm(proj('s1'))
+    await source.matchEnter!(proj('s1'), '/plan', new AbortController().signal)
+    await submitLogin(source, 'anthropic')
+    expect(open).not.toHaveBeenCalled()
+    expect(executeCalls).toEqual([
+      { sessionId: sid('s1'), line: '/plan' },
+      { sessionId: sid('s1'), line: '/login anthropic' },
+    ])
+  })
+
+  it('ignores non-https and invalid commands/open-url values', async () => {
+    const tab = { closed: false, location: { href: 'about:blank' } }
+    vi.stubGlobal('window', { open: vi.fn(() => tab) })
+    let finish!: (value: ExecuteValue) => void
+    const { ctx, source, warm } = await loginBench(() => new Promise((resolve) => { finish = resolve }))
+    await warm(proj('s1'))
+    const pending = submitLogin(source, '')
+    ctx.remote.$dispatch('commands/open-url', ['http://localhost:1455/auth/callback'])
+    ctx.remote.$dispatch('commands/open-url', ['javascript:alert(1)'])
+    ctx.remote.$dispatch('commands/open-url', ['not a url'])
+    expect(tab.location.href).toBe('about:blank')
+    finish({ matched: true })
+    await pending
+  })
+
+  it('opens the authorize URL when the gesture tab was blocked', async () => {
+    const open = vi.fn(() => null)
+    vi.stubGlobal('window', { open })
+    let finish!: (value: ExecuteValue) => void
+    const { ctx, source, warm } = await loginBench(() => new Promise((resolve) => { finish = resolve }))
+    await warm(proj('s1'))
+    const pending = submitLogin(source, 'openai-codex')
+    expect(open).toHaveBeenCalledWith('about:blank', 'dsh-openai-codex-login')
+    ctx.remote.$dispatch('commands/open-url', [CODEX_AUTH_URL])
+    expect(open).toHaveBeenLastCalledWith(CODEX_AUTH_URL, 'dsh-openai-codex-login')
+    finish({ matched: true })
+    await pending
+  })
+
+  it('opens the authorize URL when the prepared tab was already closed', async () => {
+    const tab = { closed: false, location: { href: 'about:blank' } }
+    const open = vi.fn(() => tab)
+    vi.stubGlobal('window', { open })
+    let finish!: (value: ExecuteValue) => void
+    const { ctx, source, warm } = await loginBench(() => new Promise((resolve) => { finish = resolve }))
+    await warm(proj('s1'))
+    const pending = submitLogin(source, 'openai-codex')
+    tab.closed = true
+    ctx.remote.$dispatch('commands/open-url', [CODEX_AUTH_URL])
+    expect(open).toHaveBeenLastCalledWith(CODEX_AUTH_URL, 'dsh-openai-codex-login')
+    finish({ matched: true })
+    await pending
+  })
+
+  it('reuses the open tab instead of blanking it on a second /login', async () => {
+    const tab = { closed: false, location: { href: 'about:blank' } }
+    const open = vi.fn(() => tab)
+    vi.stubGlobal('window', { open })
+    const hanging: Array<(value: ExecuteValue) => void> = []
+    const { source, warm } = await loginBench(() => new Promise((resolve) => { hanging.push(resolve) }))
+    await warm(proj('s1'))
+    const first = submitLogin(source, 'openai-codex')
+    const second = submitLogin(source, 'openai-codex')
+    expect(open).toHaveBeenCalledTimes(1)
+    hanging[0]!({ matched: true })
+    hanging[1]!({ matched: true })
+    await first
+    await second
+  })
+
+  it('does not throw when /login runs without a window', async () => {
+    let finish!: (value: ExecuteValue) => void
+    const { ctx, source, warm } = await loginBench(() => new Promise((resolve) => { finish = resolve }))
+    await warm(proj('s1'))
+    const pending = submitLogin(source, 'openai-codex')
+    ctx.remote.$dispatch('commands/open-url', [CODEX_AUTH_URL])
+    finish({ matched: true })
+    await expect(pending).resolves.toEqual({ kind: 'success' })
   })
 })

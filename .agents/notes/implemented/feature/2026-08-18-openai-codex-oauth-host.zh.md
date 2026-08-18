@@ -18,7 +18,9 @@ Status: implemented
 
 `/login [openai-codex]` 与 `/logout [openai-codex]` 通过 `ctx.inject(['commands'])` 注册，因为 base bundle 里 `commands` 在 `llm-pi-ai` 之后加载。空输入表示 `openai-codex`；其他名字失败。只提供浏览器登录：interaction 始终选择 pi-ai 的 `browser` id，打开授权 URL，并让 `manual_code` 挂起直到 localhost 回调中止它。不提供 device-code 登录。
 
-宿主把该 URL 作为单一 argv 打开：macOS 用 `open`，桌面 Linux 用 `xdg-open`，Windows 与 WSL 用带单引号字面量的 PowerShell `Start-Process`。`cmd /c start` 会在 `&` 处拆开命令，从而丢掉 `client_id` 和其余 OAuth 查询，OpenAI 就会渲染 `missing_required_parameter`。授权 URL 也会写到 stderr，浏览器标签被截断时可以把整段 URL 粘贴回去；其中只有 PKCE challenge 与 state，没有 access 或 refresh token。
+宿主把该 URL 作为单一 argv 打开：macOS 用 `open`，桌面 Linux 用 `xdg-open`，Windows 与 WSL 用 `rundll32.exe url.dll,FileProtocolHandler`。`cmd /c start` 会在 `&` 处拆开命令，从而丢掉 `client_id` 和其余 OAuth 查询，OpenAI 就会渲染 `missing_required_parameter`。第一次登录仍在等待时，第二次 `/login` 会被拒绝，避免两条授权 URL 共用 pi-ai 的 `127.0.0.1:1455` 回调（那种 mismatch 就是 OpenAI 的 **Authentication failed / State mismatch** 页）。授权 URL 以 `commands/open-url` 发出（转发到 Web 客户端；绝不是会话日志事件），并写到 stderr，浏览器标签被截断时可以把整段 URL 粘贴回去；其中只有 PKCE challenge 与 state，没有 access 或 refresh token。
+
+Web 客户端在提交 `/login` 的按键手势里打开空白标签，并在收到 `commands/open-url` 时导航到授权页。授权 URL 到达后再 `window.open` 会被弹窗拦截；Node 里的 `dsh web` 进程也无法可靠地在已经打开的浏览器里再开标签。CLI 与 ACP 仍使用操作系统 opener。命名标签会被复用，因此第二次 `/login` 不会把进行中的授权页换成 `about:blank`。
 
 已存储的 `openai-codex` oauth 凭据会向适配器注册表注入一条无 settings 的 live 路由，模型选择器因此可以列出 pi-ai catalog 模型。可配置提供方目录仍然不提供仅 OAuth 的 catalog 卡片，这是不予提供那条笔记的决策；settings 里已存储的 profile 仍会出现在目录中，以便编辑或删除。live 路由不点名 `apiKeyEnv`，因此首次引导在 Codex 登录之前仍要求有一个可用的 API 密钥提供方。
 
@@ -36,14 +38,16 @@ Status: implemented
 
 **把 OAuth JSON 放进 `$DSH_HOME/.credentials.yaml` 或环境变量。** 否决：那份文档是 API 密钥层；pi-ai 刷新需要按提供方 id 索引的 `CredentialStore`，且 refresh token 不得出现在进程列表或日志里。
 
+**只从 Node 进程打开授权 URL。** 对 `dsh web` 否决：服务进程无法可靠地在已经打开的浏览器里再开标签，授权 URL 到达后再 `window.open` 会被弹窗拦截。Web 客户端在 `/login` 按键手势里打开空白标签，Host 转发 `commands/open-url` 以便该标签导航。CLI 仍使用操作系统 opener。
+
 **在模型页重新提供 `openai-codex`。** 否决：密钥字段仍然无法完成 ChatGPT 登录。在出现 Web「登录」控件之前，斜杠命令就是宿主登录。
 
 ## 后果
 
-CLI 或 ACP 会话可以运行 `/login openai-codex`，完成 ChatGPT 浏览器登录，然后选择 `openai-codex` 模型。agent 循环、工具、审批与会话日志仍由 harness 拥有；PKCE、刷新与 Codex Responses 由 pi-ai 拥有。Codex 后端不是一份与公开 API 同等稳定的契约——OpenAI 侧变更时更新的是 pi-ai 适配器，而不是 harness 自有的协议解析器。
+CLI、ACP 或 Web 会话可以运行 `/login openai-codex`，完成 ChatGPT 浏览器登录，然后选择 `openai-codex` 模型。agent 循环、工具、审批与会话日志仍由 harness 拥有；PKCE、刷新与 Codex Responses 由 pi-ai 拥有。Codex 后端不是一份与公开 API 同等稳定的契约——OpenAI 侧变更时更新的是 pi-ai 适配器，而不是 harness 自有的协议解析器。
 
 device-code／SSH 登录、模型页「登录」按钮、`dsh auth login` 启动器子命令、图片输入，以及其他仅 OAuth 的 catalog 提供方仍不提供。
 
 ## 测试
 
-`tests/oauth-store.spec.ts` 钉住永不引用秘密的解析拒绝、属主独占持久化、`modify`／`delete`／`list`、并发写入，以及 POSIX 下拒绝他人可读。`tests/oauth-login.spec.ts` 钉住仅浏览器 interaction、`/login`／`/logout`、无目录卡片的 live 路由注入、从已存文件启动、冲突路由的包容、无存储 token 的无密钥 Codex 流得到 `MISSING_CREDENTIAL`，以及 opener argv 在 Windows／WSL 上让含 `&` 的 URL 保持为单个参数。插件 apply 测试会 stub `$DSH_HOME`，避免开发者本机凭据文件注入 live 路由。`tests/catalog.spec.ts` 中的目录不予提供测试保留：除非 settings profile 点名该路由，否则卡片仍不出现。授权 URL 的 stderr 行由该包测试钉住；无密钥的装配快照无法重放 ChatGPT 登录。
+`tests/oauth-store.spec.ts` 钉住永不引用秘密的解析拒绝、属主独占持久化、`modify`／`delete`／`list`、并发写入，以及 POSIX 下拒绝他人可读。`tests/oauth-login.spec.ts` 钉住仅浏览器 interaction、`/login`／`/logout`、重叠 `/login` 拒绝、`commands/open-url` 发出、无目录卡片的 live 路由注入、从已存文件启动、冲突路由的包容、无存储 token 的无密钥 Codex 流得到 `MISSING_CREDENTIAL`，以及 opener argv 在 Windows／WSL 上让含 `&` 的 URL 保持为单个参数（`rundll32`）。`packages/client/ui-commands/tests/service.client.spec.ts` 钉住 Web 的「先开空白标签再导航」、仅 https 导航，以及命名标签复用。插件 apply 测试会 stub `$DSH_HOME`，避免开发者本机凭据文件注入 live 路由。`tests/catalog.spec.ts` 中的目录不予提供测试保留：除非 settings profile 点名该路由，否则卡片仍不出现。授权 URL 的 stderr 行由该包测试钉住；无密钥的装配快照无法重放 ChatGPT 登录。

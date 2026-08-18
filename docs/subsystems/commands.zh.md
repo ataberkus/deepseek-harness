@@ -184,4 +184,24 @@ A command was registered or unregistered. This is an unfiltered registry notific
 ```
 
 Source: [`packages/interaction/commands/src/types.ts:72`](../../packages/interaction/commands/src/types.ts)
+
+<a id="commandsopen-url--emit"></a>
+
+#### `commands/open-url` — emit
+
+Ask connected browsers to open `url` in a tab. CLI has no subscriber and still uses the host OS opener. The Web client opens a blank tab during the `/login` keystroke and navigates it here so popup blockers do not swallow the authorize page. The URL is https only.
+
+```ts cordis-catalog
+/**
+ * Ask connected browsers to open `url` in a tab. CLI has no subscriber
+ * and still uses the host OS opener. The Web client opens a blank tab
+ * during the `/login` keystroke and navigates it here so popup blockers
+ * do not swallow the authorize page. The URL is https only.
+ * @mode emit
+ * @param url - absolute https authorize URL.
+ */
+'commands/open-url'(url: string): void
+```
+
+Source: [`packages/interaction/commands/src/types.ts:81`](../../packages/interaction/commands/src/types.ts)
 <!-- END GENERATED cordis-surface -->
