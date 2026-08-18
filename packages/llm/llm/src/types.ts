@@ -194,10 +194,10 @@ export interface LlmConfigurableProvider {
  */
 export interface LlmModelDiscoveryRequest {
   /**
-   * Route the draft is editing, when it edits an existing one. A route whose
-   * adapter already knows its models answers from that knowledge instead of
-   * asking the endpoint — the adapter's own registry is the better answer, and
-   * it costs no network call.
+   * Route the draft is editing, when it edits an existing one. A catalog
+   * route answers from the installed registry, plus any live listing the
+   * owning adapter overlays; a route the catalog does not describe is asked
+   * over the wire.
    */
   provider?: string
   /**
