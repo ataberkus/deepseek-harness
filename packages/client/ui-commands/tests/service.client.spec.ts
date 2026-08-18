@@ -763,7 +763,7 @@ describe('openai-codex login tab', () => {
   async function loginBench(execute?: BenchOptions['execute']) {
     return await bench({
       commands: () => Promise.resolve({ commands: LOGIN_CMDS }),
-      execute,
+      ...(execute === undefined ? {} : { execute }),
     })
   }
 
