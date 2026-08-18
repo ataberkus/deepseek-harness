@@ -40,7 +40,7 @@ const NAMESPACES = [
 ]
 
 function api(overrides: {
-  providers?: () => Promise<RpcResponse<{ providers: typeof DIRECTORY }>>
+  providers?: () => Promise<RpcResponse<{ providers: Array<typeof DIRECTORY[number] & { auth?: 'oauth'; connected?: boolean }> }>>
   describeSettings?: () => Promise<RpcResponse<{ writable: boolean; namespaces: typeof NAMESPACES }>>
   describeCredentials?: (refs: string[]) => Promise<RpcResponse<{ credentials: Record<string, unknown> }>>
 } = {}) {
@@ -96,6 +96,31 @@ describe('ModelsSettingsStore', () => {
     expect(byProvider.get('anthropic')?.apiKeyEnv).toBeUndefined()
     expect(byProvider.get('ghost')).toMatchObject({ configured: false, removable: false })
     expect(state.namespaces.get('llm-pi-ai')?.ns).toBe('llm-pi-ai')
+  })
+
+  it('treats an OAuth live route as configured without a settings address', async () => {
+    const { face, seenRefs } = api({
+      providers: () => Promise.resolve(ok({
+        providers: [
+          ...DIRECTORY,
+          {
+            provider: 'openai-codex',
+            displayName: 'OpenAI Codex',
+            settingsNs: '',
+            settingsPath: [],
+            active: true,
+            auth: 'oauth',
+            connected: true,
+          },
+        ],
+      })),
+    })
+    const store = new ModelsSettingsStore(face)
+    await store.load()
+    const byProvider = new Map(store.store.getSnapshot().rows.map(row => [row.entry.provider, row]))
+    expect(byProvider.get('ghost')).toMatchObject({ configured: false, removable: false })
+    expect(byProvider.get('openai-codex')).toMatchObject({ configured: true, removable: false })
+    expect(seenRefs).toEqual([['DEEPSEEK_API_KEY', 'OPENAI_API_KEY']])
   })
 
   it('degrades the credential badge, not the page, when the credential domain fails', async () => {

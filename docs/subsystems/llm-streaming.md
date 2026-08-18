@@ -381,6 +381,12 @@ interface LlmProviderInfo {
   id: string
   /** Human-readable provider name for selectors and diagnostics. */
   name: string
+  /**
+   * How this live route authenticates when it is not an API-key profile.
+   * `oauth` means a stored OAuth credential registered the route. Omit for
+   * API-key and provider-native discovery routes.
+   */
+  auth?: 'oauth'
 }
 ```
 

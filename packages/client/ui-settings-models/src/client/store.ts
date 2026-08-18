@@ -23,7 +23,11 @@ const PROBE_ROUTE = '\u0000probe'
 export interface ProviderRow {
   /** The directory entry (route id, display name, settings address, live state). */
   entry: ConfigurableProviderView
-  /** Whether any layer configures this provider (its profile resolves). */
+  /**
+   * Whether the page treats this provider as present: its settings profile
+   * resolves, or it is an OAuth live route (`auth: oauth`) with no settings
+   * address.
+   */
   configured: boolean
   /** Whether the user layer alone carries the profile (removal restores the base). */
   removable: boolean
@@ -143,8 +147,9 @@ export class ModelsSettingsStore {
     const namespaces = new Map(views.map(view => [view.ns, view]))
     const rows: ProviderRow[] = providers.map((entry) => {
       const namespace = namespaces.get(entry.settingsNs)
-      const configured = namespace !== undefined
-        && (entry.settingsPath.length === 0 || getPath(namespace.value, entry.settingsPath) !== undefined)
+      const configured = (namespace !== undefined
+        && (entry.settingsPath.length === 0 || getPath(namespace.value, entry.settingsPath) !== undefined))
+        || entry.auth === 'oauth'
       const removable = namespace !== undefined
         && entry.settingsPath.length > 0
         && hasPath(namespace.user, entry.settingsPath)

@@ -1,8 +1,9 @@
 /**
  * Models settings section: the provider rows joined from the configurable
  * directory, settings namespaces, and credential states, with one editor
- * card at a time. Rows expose only confirmed API-key state through accessible
- * solid configured or missing dots. A whole-section provider without a
+ * card at a time. Rows expose confirmed API-key state through accessible
+ * solid configured or missing dots, and an OAuth live route as a read-only
+ * signed-in row (name plus connected dot, no editor). A whole-section provider without a
  * configured key renders as its open setup card instead of a row, but only in
  * the first-run posture — no provider on the page can serve requests yet — and
  * only until the user closes that card; the add flow is a card carrying the
@@ -285,6 +286,23 @@ function Loaded({ injected }: { injected: ModelsSectionInjected }): ReactNode {
         )}
       <ul className={styles['rows']}>
         {configured.map((row) => {
+          if (row.entry.auth === 'oauth' && row.entry.settingsNs === '') {
+            return (
+              <li key={row.entry.provider} className={styles['rowCard']}>
+                <div className={styles['rowHead']}>
+                  <span className={styles['rowIdentity']}>
+                    <span className={styles['rowName']}>{row.entry.displayName}</span>
+                    <span
+                      className={`${styles['credentialDot']} ${styles['credentialDotConfigured']}`}
+                      role="img"
+                      aria-label={t('oauthConfigured')}
+                      title={t('oauthConfigured')}
+                    />
+                  </span>
+                </div>
+              </li>
+            )
+          }
           const target = targetOf(row)
           const namespace = state.namespaces.get(target.settingsNs)
           /* v8 ignore next -- the join marks a row configured only when its namespace resolved */

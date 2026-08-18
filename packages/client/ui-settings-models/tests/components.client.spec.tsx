@@ -260,6 +260,31 @@ describe('ModelsSection', () => {
     expect(screen.getByLabelText(en.keyInput)).toBeTruthy()
   })
 
+  it('renders a read-only signed-in row for an OAuth live route', async () => {
+    const scripted = scriptedFace()
+    scripted.face.llm.providers.mockImplementation(() => Promise.resolve(ok({
+      providers: [
+        { provider: 'openai', displayName: 'openai', settingsNs: 'llm-pi-ai', settingsPath: ['providers', 'openai'], active: true },
+        {
+          provider: 'openai-codex',
+          displayName: 'OpenAI Codex',
+          settingsNs: '',
+          settingsPath: [],
+          active: true,
+          auth: 'oauth',
+          connected: true,
+        },
+      ],
+    })))
+    await mountFace(scripted)
+    expect(screen.getByText('OpenAI Codex')).toBeTruthy()
+    const signedIn = screen.getByRole('img', { name: en.oauthConfigured })
+    expect(signedIn.getAttribute('title')).toBe(en.oauthConfigured)
+    expect(signedIn.className).toContain('credentialDotConfigured')
+    expect(screen.queryByRole('button', { name: 'Edit OpenAI Codex' })).toBeNull()
+    expect(screen.queryByLabelText(en.keyInput)).toBeNull()
+  })
+
   it('marks only a confirmed missing reference and leaves native or unavailable state unmarked', async () => {
     const { face } = scriptedFace()
     face.credentials.describe.mockImplementation((payload: { refs: string[] }) => Promise.resolve(ok({

@@ -3329,6 +3329,7 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
             settingsNs: '',
             settingsPath: [],
             active: true,
+            ...provider.auth === 'oauth' ? { auth: 'oauth' as const, connected: true } : {},
           })
         }
         return Promise.resolve(ok(request, { providers: views }))

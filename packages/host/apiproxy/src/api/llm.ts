@@ -29,6 +29,18 @@ export interface ConfigurableProviderView {
    * surface must treat absence as "unknown", not as "shipped".
    */
   declared?: boolean
+  /**
+   * How this live route authenticates when it is not configured through an
+   * API-key profile. `oauth` is a stored ChatGPT (or similar) login. Omit for
+   * directory API-key rows.
+   */
+  auth?: 'oauth'
+  /**
+   * Whether an OAuth live route currently has a stored credential. Present
+   * only with {@link auth} `oauth`; registration of that route already means
+   * a credential is stored.
+   */
+  connected?: boolean
 }
 
 /** Llm-domain unary methods (the map keys llm.* of RpcMethodMap). */
@@ -37,7 +49,8 @@ export interface LlmApi {
    * List every configurable provider with its live/dormant state, in
    * directory declaration order. Routes registered outside the directory
    * (an adapter that never declared configurability) are appended with their
-   * registration identity and no settings address.
+   * registration identity and no settings address. An OAuth-injected live
+   * route additionally carries `auth: 'oauth'` and `connected: true`.
    */
   providers(request: RpcRequest<{}>): Promise<RpcResponse<{ providers: ConfigurableProviderView[] }>>
 

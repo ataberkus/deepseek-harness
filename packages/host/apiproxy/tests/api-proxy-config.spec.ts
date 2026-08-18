@@ -640,6 +640,33 @@ describe('llm domain', () => {
     ])
   })
 
+  it('marks an undeclared OAuth live route as connected without a settings address', async () => {
+    class OAuthAdapter extends CatalogAdapter {
+      override providerInfo(provider: string): LlmProviderInfo {
+        return { id: provider, name: 'OpenAI Codex', auth: 'oauth' }
+      }
+    }
+    const ctx = await harness({ configurableProviders: false })
+    ctx.llm.registerConfigurableProviders([
+      { provider: 'deepseek-official', displayName: 'DeepSeek', settingsNs: 'llm-deepseek', settingsPath: [] },
+    ])
+    ctx.llm.registerAdapter(['openai-codex'], new OAuthAdapter('OpenAI Codex', ['gpt-5']))
+    const api = createApiProxy(ctx, DEFAULTS)
+    const value = expectOk(await api.llm.providers(request({})))
+    expect(value.providers).toEqual([
+      { provider: 'deepseek-official', displayName: 'DeepSeek', settingsNs: 'llm-deepseek', settingsPath: [], active: false },
+      {
+        provider: 'openai-codex',
+        displayName: 'OpenAI Codex',
+        settingsNs: '',
+        settingsPath: [],
+        active: true,
+        auth: 'oauth',
+        connected: true,
+      },
+    ])
+  })
+
   it('serves the host-scoped catalog with per-provider failures contained', async () => {
     const ctx = await harness()
     ctx.llm.registerAdapter(['deepseek-official'], new CatalogAdapter('DeepSeek', ['deepseek-v4-flash', 'deepseek-v4-pro']))

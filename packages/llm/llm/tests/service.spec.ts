@@ -554,6 +554,13 @@ describe('LlmRuntime', () => {
     await expect(ctx.llm.resolveModelInfo('missing', 'm')).rejects.toMatchObject({ code: 'NO_ADAPTER' })
   })
 
+  it('preserves optional oauth auth metadata through registration', async () => {
+    const ctx = new Context()
+    await ctx.plugin(LlmRuntime)
+    ctx.llm.registerAdapter(['codex'], new CatalogAdapter({ id: 'codex', name: 'Codex', auth: 'oauth' }, []))
+    expect(ctx.llm.listProviders()).toEqual([{ id: 'codex', name: 'Codex', auth: 'oauth' }])
+  })
+
   it.each([
     [{ provider: 1, id: 'model', name: 'Model' }, 'non-string provider'],
     [{ provider: 'other', id: 'model', name: 'Model' }, 'mismatched provider'],
