@@ -166,6 +166,12 @@ export interface ResolvedPiAiProviderProfile
    * own, so a catalog capability must not appear here.
    */
   configuredMaxTokens: ReadonlyMap<string, number>
+  /**
+   * Whether this route serves the installed catalog (absent or empty `models`)
+   * rather than an explicit replacement list. Live OpenRouter listings overlay
+   * only this case, so a narrowed `models:` list stays the source of truth.
+   */
+  servesInstalledCatalog: boolean
 }
 
 /** Plugin configuration: the provider routes this instance owns. */
@@ -358,6 +364,7 @@ export function resolveProfiles(
       ...rest.headers === undefined ? {} : { headers: { ...rest.headers } },
       ...rest.thinkingBudgets === undefined ? {} : { thinkingBudgets: { ...rest.thinkingBudgets } },
       configuredMaxTokens: catalog.configuredMaxTokens,
+      servesInstalledCatalog: (source.models?.length ?? 0) === 0,
       piProvider: buildProvider({
         provider,
         displayName,

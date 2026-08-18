@@ -6,6 +6,7 @@ import LlmRuntime, { userAgent } from '@deepseek-ai/dsh-llm'
 import * as LlmPiAi from '@deepseek-ai/dsh-llm-pi-ai'
 import { getBuiltinModels } from '@earendil-works/pi-ai/providers/all'
 import { discoverModels } from '../src/discovery.ts'
+import { resetModelListingCache } from '../src/listing.ts'
 import { isolateDshHome, removeIsolatedHomes } from './dsh-home.ts'
 
 const servers: Server[] = []
@@ -20,6 +21,7 @@ afterEach(async () => {
   // A no-op when the test never stubbed `fetch`; only 'probe key format'
   // below installs one.
   vi.unstubAllGlobals()
+  resetModelListingCache()
   for (const name of touchedEnv.splice(0)) Reflect.deleteProperty(process.env, name)
   await Promise.all(servers.splice(0).map(server => new Promise(resolve => server.close(resolve))))
   await removeIsolatedHomes()
@@ -92,6 +94,52 @@ describe('catalog-route model discovery', () => {
       .toEqual(getBuiltinModels('deepseek').map(model => model.id).sort())
     expect(models.every(model => (model.contextWindow ?? 0) > 0 && (model.maxTokens ?? 0) > 0)).toBe(true)
     expect(server.paths).toEqual([])
+  })
+
+  it('overlays live-only tool-capable ids onto a catalog route and falls back when listing fails', async () => {
+    const known = getBuiltinModels('openrouter')[0]
+    if (known === undefined) throw new Error('expected an OpenRouter catalog model')
+    const server = await listingServer({
+      body: JSON.stringify({
+        data: [
+          { id: 'vendor/live-only', supported_parameters: ['tools'] },
+          { id: 'vendor/no-tools', supported_parameters: ['temperature'] },
+        ],
+      }),
+    })
+    const ctx = await harness()
+    const models = await ctx.llm.discoverModels('llm-pi-ai', { provider: 'openrouter', baseURL: server.url })
+    expect(models.map(model => model.id)).toContain(known.id)
+    expect(models.map(model => model.id)).toContain('vendor/live-only')
+    expect(models.map(model => model.id)).not.toContain('vendor/no-tools')
+
+    const fallback = await ctx.llm.discoverModels('llm-pi-ai', {
+      provider: 'openrouter',
+      baseURL: 'http://127.0.0.1:9/v1',
+    })
+    expect(fallback.map(model => model.id).sort())
+      .toEqual(getBuiltinModels('openrouter').map(model => model.id).sort())
+
+    const catalogEndpoint = await ctx.llm.discoverModels('llm-pi-ai', { provider: 'openrouter' })
+    expect(catalogEndpoint.map(model => model.id).sort())
+      .toEqual(getBuiltinModels('openrouter').map(model => model.id).sort())
+
+    const aborted = AbortSignal.abort('test cancellation')
+    await expect(ctx.llm.discoverModels('llm-pi-ai', {
+      provider: 'openrouter',
+      baseURL: 'http://127.0.0.1:9/v1',
+      signal: aborted,
+    })).rejects.toMatchObject({ code: 'ABORTED' })
+
+    const named = await listingServer({
+      body: JSON.stringify({ data: [{ id: 'vendor/via-api', supported_parameters: ['tools'] }] }),
+    })
+    const viaApi = await ctx.llm.discoverModels('llm-pi-ai', {
+      provider: 'openrouter',
+      api: 'openai-completions',
+      baseURL: named.url,
+    })
+    expect(viaApi.map(model => model.id)).toContain('vendor/via-api')
   })
 
   it('needs no endpoint for a route the catalog describes', async () => {
@@ -299,7 +347,7 @@ describe('draft-provider model discovery', () => {
       }))
     })
     const probe = ctx.llm.discoverModels('llm-pi-ai', {
-      baseURL: 'https://slow.example/v1',
+      baseURL: 'http://127.0.0.1/v1',
       signal: controller.signal,
     })
     await bodyRead.promise
@@ -375,7 +423,7 @@ describe('probe key format', () => {
       })
     })
 
-    await discoverModels({ baseURL: 'https://acme.test', api: 'openai-completions' })
+    await discoverModels({ baseURL: 'http://127.0.0.1/v1', api: 'openai-completions' })
 
     const headers = new Headers(requests[0]?.headers)
     expect(headers.has('authorization')).toBe(false)

@@ -52,8 +52,17 @@ import type {
 } from '@deepseek-ai/dsh-llm'
 import type { AttachmentStore } from '@deepseek-ai/dsh-attachment'
 import { idleWatchdog, timeoutOf } from '@deepseek-ai/dsh-timeout'
-import type { ResolvedPiAiProviderProfile } from './config.ts'
+import {
+  DEFAULT_CONTEXT_WINDOW,
+  DEFAULT_MAX_TOKENS,
+  type ResolvedPiAiProviderProfile,
+} from './config.ts'
 import { toPiContext } from './context.ts'
+import {
+  catalogListingTarget,
+  fetchModelListing,
+  overlayLiveCatalogModels,
+} from './listing.ts'
 import { rethrowPiAiError, toStreamChunks } from './stream.ts'
 
 /** One resolution's frozen view: the profiles and the collection built from them. */
@@ -237,10 +246,49 @@ export class PiAiAdapter extends LlmAdapter {
     return profile
   }
 
+  /**
+   * Models this route currently serves: the installed catalog plus a live
+   * OpenRouter listing overlay when the profile has no explicit `models` list.
+   * An explicit list is left untouched. Listing failure returns the installed
+   * set so a picker never goes empty.
+   */
+  private async servedModels(snapshot: PiAiSnapshot, provider: string): Promise<readonly Model<Api>[]> {
+    const profile = this.profileOf(snapshot, provider)
+    const installed = snapshot.models.getModels(provider)
+    if (!profile.servesInstalledCatalog) return installed
+    const target = catalogListingTarget(provider, {
+      ...profile.api === undefined ? {} : { api: profile.api },
+      ...profile.baseURL === undefined ? {} : { baseURL: profile.baseURL },
+    })
+    if (target === undefined) return installed
+    let apiKey: string | undefined
+    try {
+      apiKey = await this.config.resolveApiKey(provider, profile)
+    } catch (listingCredential) {
+      if (!(listingCredential instanceof LlmError)
+        || (listingCredential.code !== 'MISSING_CREDENTIAL' && listingCredential.code !== 'INVALID_CREDENTIAL')) {
+        throw listingCredential
+      }
+    }
+    try {
+      const live = await fetchModelListing({
+        baseURL: target.baseURL,
+        ...apiKey === undefined ? {} : { apiKey },
+      })
+      return overlayLiveCatalogModels(installed, live, {
+        contextWindow: profile.defaultContextWindow ?? DEFAULT_CONTEXT_WINDOW,
+        maxTokens: profile.defaultMaxTokens ?? DEFAULT_MAX_TOKENS,
+      })
+    } catch (_listingFailure) {
+      // Picker and resolve must not fail because a listing was slow, unreachable,
+      // or cancelled; the installed catalog still serves.
+      return installed
+    }
+  }
+
   /** The configured descriptor for one exact route/model pair within one snapshot. */
-  private modelOf(snapshot: PiAiSnapshot, provider: string, model: string): Model<Api> {
-    this.profileOf(snapshot, provider)
-    const resolved = snapshot.models.getModel(provider, model)
+  private async modelOf(snapshot: PiAiSnapshot, provider: string, model: string): Promise<Model<Api>> {
+    const resolved = (await this.servedModels(snapshot, provider)).find(entry => entry.id === model)
     if (resolved === undefined) {
       throw new LlmError(`pi-ai provider "${provider}" has no configured model "${model}"`, 'UNKNOWN_MODEL')
     }
@@ -263,42 +311,38 @@ export class PiAiAdapter extends LlmAdapter {
     return this.current().profiles.get(provider)?.retryPolicy
   }
 
-  override listModels(provider: string): Promise<readonly LlmModelInfo[]> {
-    return Promise.resolve().then(() => {
-      const snapshot = this.current()
-      this.profileOf(snapshot, provider)
-      return snapshot.models.getModels(provider).map(model => ({
-        provider,
-        id: model.id,
-        name: model.name,
-        inputModalities: [...model.input],
-      }))
-    })
+  override async listModels(provider: string): Promise<readonly LlmModelInfo[]> {
+    const snapshot = this.current()
+    const models = await this.servedModels(snapshot, provider)
+    return models.map(model => ({
+      provider,
+      id: model.id,
+      name: model.name,
+      inputModalities: [...model.input],
+    }))
   }
 
-  override resolveModel(
+  override async resolveModel(
     provider: string,
     model: string,
     _signal?: AbortSignal,
   ): Promise<LlmResolvedModelInfo> {
-    return Promise.resolve().then(() => {
-      const snapshot = this.current()
-      const profile = this.profileOf(snapshot, provider)
-      const resolvedModel = this.modelOf(snapshot, provider, model)
-      const defaultLevel = describableReasoningLevel(resolvedModel, profile.reasoning)
-      // Only a cap the deployment configured is a request default; the
-      // catalog's `maxTokens` sizes the model and stops there.
-      const configuredMaxTokens = profile.configuredMaxTokens.get(model)
-      return {
-        provider,
-        id: model,
-        name: resolvedModel.name,
-        inputModalities: [...resolvedModel.input],
-        context: { contextWindow: resolvedModel.contextWindow },
-        ...configuredMaxTokens === undefined ? {} : { defaultMaxTokens: configuredMaxTokens },
-        ...reasoningInfo(resolvedModel, defaultLevel),
-      }
-    })
+    const snapshot = this.current()
+    const profile = this.profileOf(snapshot, provider)
+    const resolvedModel = await this.modelOf(snapshot, provider, model)
+    const defaultLevel = describableReasoningLevel(resolvedModel, profile.reasoning)
+    // Only a cap the deployment configured is a request default; the
+    // catalog's `maxTokens` sizes the model and stops there.
+    const configuredMaxTokens = profile.configuredMaxTokens.get(model)
+    return {
+      provider,
+      id: model,
+      name: resolvedModel.name,
+      inputModalities: [...resolvedModel.input],
+      context: { contextWindow: resolvedModel.contextWindow },
+      ...configuredMaxTokens === undefined ? {} : { defaultMaxTokens: configuredMaxTokens },
+      ...reasoningInfo(resolvedModel, defaultLevel),
+    }
   }
 
   async * stream(options: GenerateOptions): AsyncIterable<StreamChunk> {
@@ -312,7 +356,7 @@ export class PiAiAdapter extends LlmAdapter {
     // the one it started with and the next call picks up the new one.
     const snapshot = this.current()
     const profile = this.profileOf(snapshot, options.provider)
-    const model = this.modelOf(snapshot, options.provider, options.model)
+    const model = await this.modelOf(snapshot, options.provider, options.model)
     const reasoning = resolveReasoningLevel(
       model,
       options.reasoningEffort ?? profile.reasoning,
