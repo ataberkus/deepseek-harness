@@ -111,9 +111,10 @@ describe('web e2e: the composer model switch is the default for later sessions',
     const filter = page.getByRole('textbox', { name: '筛选模型' })
     await filter.waitFor({ timeout: 10_000 })
     await filter.fill('Acme')
-    await expect(page.getByRole('menuitemradio', { name: 'Acme Large' })).toBeVisible()
-    await expect(page.getByRole('menuitemradio', { name: 'Origin Large' })).toHaveCount(0)
-    await page.getByRole('menuitemradio', { name: 'Acme Large' }).click()
+    const acme = page.getByRole('menuitemradio', { name: 'Acme Large' })
+    await acme.waitFor({ timeout: 10_000 })
+    expect(await page.getByRole('menuitemradio', { name: 'Origin Large' }).count()).toBe(0)
+    await acme.click()
 
     // The switch is what sets the default: the shared Agent-route settings section
     // now names it, beside the provider profiles the Models page writes.
