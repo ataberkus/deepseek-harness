@@ -37,6 +37,7 @@ export function mapUsage(usage: PiUsage): TokenUsage {
 // If pi-ai ever forwards the original Error (or a fetch/dispatcher hook that lets
 // us capture the cause ourselves), classify on `code`/`cause` instead of text.
 function classifyPiAiError(message: string): string {
+  if (/provider is not configured/i.test(message)) return 'MISSING_CREDENTIAL'
   if (/\b(?:401|403)\b/.test(message)) return 'AUTH'
   if (isQuotaExceededError(message)) return QUOTA_EXCEEDED_CODE
   if (/\b429\b|rate.?limit/i.test(message)) return 'RATE_LIMIT'
@@ -59,6 +60,25 @@ function classifyPiAiError(message: string): string {
     return 'TRANSPORT'
   }
   return 'PI_AI_ERROR'
+}
+
+/**
+ * Map a thrown pi-ai failure onto a harness error when the wording is one this
+ * adapter owns. Unrecognized failures are rethrown unchanged.
+ * @param error - the value `streamSimple` or the event iterator rejected with.
+ * @returns never; always throws.
+ * @throws {LlmError} `MISSING_CREDENTIAL` when pi-ai reports an unconfigured provider.
+ */
+export function rethrowPiAiError(error: unknown): never {
+  const message = error instanceof Error ? error.message : String(error)
+  if (/provider is not configured/i.test(message)) {
+    throw new LlmError(
+      `${message}; configure credentials for this provider, or sign in with /login openai-codex`,
+      'MISSING_CREDENTIAL',
+      { cause: error instanceof Error ? error : undefined },
+    )
+  }
+  throw error
 }
 
 /**

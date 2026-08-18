@@ -12,6 +12,15 @@
       "path": "../../util/launch-environment"
     },
     {
+      "path": "../../util/atomic-write"
+    },
+    {
+      "path": "../../util/home-paths"
+    },
+    {
+      "path": "../../interaction/commands"
+    },
+    {
       "path": "../../../vendor/cosmokit"
     },
     {

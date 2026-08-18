@@ -13,10 +13,12 @@
  * way down: switching models mid-reply takes effect on the next step, never
  * inside the one in flight.
  *
- * Credentials stay outside that collection. The harness resolves a route's key
- * through its own seam and passes it as the request's `apiKey` option, which
- * pi-ai treats as the highest-priority auth override — so `Models` never holds
- * a credential store and the harness keeps its fail-loud reference semantics.
+ * API-key credentials stay outside that collection. The harness resolves a
+ * route's key through its own seam and passes it as the request's `apiKey`
+ * option, which pi-ai treats as the highest-priority auth override, so a named
+ * `apiKeyEnv` keeps fail-loud reference semantics. OAuth credentials use the
+ * optional collection store: pi-ai refreshes them under `CredentialStore.modify`,
+ * and a missing stored token fails as `Provider is not configured`.
  *
  * @module dsh-llm-pi-ai/adapter
  */
@@ -24,6 +26,7 @@
 import { createModels, getSupportedThinkingLevels } from '@earendil-works/pi-ai'
 import type {
   Api,
+  CredentialStore,
   Model,
   Models,
   ModelThinkingLevel,
@@ -51,7 +54,7 @@ import type { AttachmentStore } from '@deepseek-ai/dsh-attachment'
 import { idleWatchdog, timeoutOf } from '@deepseek-ai/dsh-timeout'
 import type { ResolvedPiAiProviderProfile } from './config.ts'
 import { toPiContext } from './context.ts'
-import { toStreamChunks } from './stream.ts'
+import { rethrowPiAiError, toStreamChunks } from './stream.ts'
 
 /** One resolution's frozen view: the profiles and the collection built from them. */
 interface PiAiSnapshot {
@@ -74,6 +77,12 @@ export interface PiAiAdapterOptions {
    * `MISSING_CREDENTIAL` rather than falling back.
    */
   resolveApiKey: (provider: string, profile: ResolvedPiAiProviderProfile) => Promise<string | undefined>
+  /**
+   * Persistent OAuth credential store shared across snapshots. API keys still
+   * arrive per request through {@link resolveApiKey}; this store is how
+   * `openai-codex` (and any future OAuth-only catalog route) authenticates.
+   */
+  credentials?: CredentialStore
   /** Resolve the optional durable attachment service at request time. */
   resolveAttachments?: () => AttachmentStore | undefined
   /**
@@ -204,7 +213,9 @@ export class PiAiAdapter extends LlmAdapter {
   private current(): PiAiSnapshot {
     const profiles = this.config.profiles()
     if (this.snapshot?.profiles === profiles) return this.snapshot
-    const models: MutableModels = createModels()
+    const models: MutableModels = createModels(
+      this.config.credentials === undefined ? {} : { credentials: this.config.credentials },
+    )
     for (const profile of profiles.values()) models.setProvider(profile.piProvider)
     this.snapshot = { profiles, models }
     return this.snapshot
@@ -358,7 +369,7 @@ export class PiAiAdapter extends LlmAdapter {
       if (options.signal?.aborted) {
         throw new LlmError('pi-ai request aborted by caller', 'ABORTED', { cause: error })
       }
-      throw error
+      rethrowPiAiError(error)
     } finally {
       consumer.abort('pi-ai stream consumer stopped')
     }

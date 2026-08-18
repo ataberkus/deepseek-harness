@@ -2292,6 +2292,14 @@ export const EVENT_API: readonly EventApiEntry[] = [
     parameters: [],
   },
   {
+    name: 'commands/open-url',
+    mode: 'emit',
+    signature: '\'commands/open-url\'(url: string): void',
+    summary: 'Ask connected browsers to open `url` in a tab.',
+    description: 'Ask connected browsers to open `url` in a tab. CLI has no subscriber and still uses the host OS opener. The Web client opens a blank tab during the `/login` keystroke and navigates it here so popup blockers do not swallow the authorize page. The URL is https only.',
+    parameters: [{ name: 'url', description: 'absolute https authorize URL.' }],
+  },
+  {
     name: 'cordis/dynamic-package',
     mode: 'emit',
     signature: '\'cordis/dynamic-package\'(pkg: DynamicCordisPackage): void',

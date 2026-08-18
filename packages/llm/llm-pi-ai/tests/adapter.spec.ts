@@ -14,11 +14,17 @@ import { MAX_TIMER_DELAY_MS } from '@deepseek-ai/dsh-timeout'
 import { getBuiltinModels } from '@earendil-works/pi-ai/providers/all'
 import { resolveProfiles } from '../src/config.ts'
 import { assemble } from './assemble.ts'
+import { isolateDshHome, removeIsolatedHomes } from './dsh-home.ts'
 import { closeMockServers, mockServer, textEvents } from './mock-server.ts'
+
+beforeEach(async () => {
+  await isolateDshHome()
+})
 
 afterEach(async () => {
   vi.unstubAllEnvs()
   await closeMockServers()
+  await removeIsolatedHomes()
 })
 
 const IMAGE_REF: ImageAttachmentRef = {

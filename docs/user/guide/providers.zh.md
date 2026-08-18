@@ -16,7 +16,19 @@
 
 选择**添加提供方**，选取 Anthropic 或 OpenAI 等提供方，输入其 API 密钥并保存。已安装目录会提供端点、协议和模型列表。
 
-使用原生认证的提供方需要各自的原生凭据。Bedrock、Vertex、Azure 和 Codex 分别使用 AWS 凭据与区域、ADC 项目、`api-version` 和 OAuth；只填写 API 密钥字段无法完成配置。
+使用原生认证的提供方需要各自的原生凭据。Bedrock、Vertex 和 Azure 分别使用 AWS 凭据与区域、ADC 项目和 `api-version`。Codex 通过 `/login openai-codex` 使用 ChatGPT OAuth；只填写 API 密钥字段无法完成配置。
+
+## 登录 OpenAI Codex
+
+Codex 使用 ChatGPT 订阅，而不是 API 密钥。在 Web UI、CLI 或 ACP 对话中运行一次 `/login openai-codex`，完成 ChatGPT 登录，然后选择一个 `openai-codex` 模型。`/logout openai-codex` 删除已存储的 token。
+
+Web UI 会在这次按键手势里打开新标签。若标签没有出现，请允许 dsh 源的弹出式窗口。第一次标签仍在等待时，第二次 `/login` 会被拒绝。不要把终端里更早的授权 URL 粘贴回去：每次尝试都有自己的 `state`，mismatch 会显示 OpenAI 的 **Authentication failed** 页。
+
+若授权页报告 `missing_required_parameter`，把服务器终端里打印的完整 URL 粘贴到地址栏。点击被换行截断的链接会丢掉 `client_id` 和其余查询参数。
+
+token 存放在 `$DSH_HOME/oauth-credentials.json`（仅属主可读）。它们不是环境变量，也绝不会出现在日志里。模型页不提供 Codex 密钥卡片。
+
+本构建不包含无界面／SSH 的 device-code 登录。
 
 ## 添加自定义提供方
 
@@ -87,7 +99,7 @@ llm-pi-ai:
 
 ## 排错
 
-- **`MISSING_CREDENTIAL`**：通过模型页存储提供方密钥，或提供被引用的环境变量。
+- **`MISSING_CREDENTIAL`**：通过模型页存储提供方密钥，提供被引用的环境变量，或对 Codex 运行 `/login openai-codex`。
 - **`UNKNOWN_MODEL`**：选择已配置的模型，或向自定义提供方添加缺失的模型。
 - **获取可用模型返回 401**：检查密钥。模型发现会调用 OpenAI 兼容的 `GET /models` 端点；对于不提供该端点的服务，请手动输入模型。
 - **图片在发送前被拒绝**：该模型未声明图片模态。请给自定义提供方的模型加上 `input: [text, image]`；DeepSeek 自身的 chat-completions 路由是纯文本的，且无法通过配置改变。

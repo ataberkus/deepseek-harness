@@ -15,6 +15,7 @@ import type { Api, Model, OpenAICompletionsCompat, Provider } from '@earendil-wo
 import { resolveProfiles } from '../src/config.ts'
 import { buildProvider, supportedProtocols } from '../src/provider.ts'
 import { assemble } from './assemble.ts'
+import { isolateDshHome, removeIsolatedHomes } from './dsh-home.ts'
 import { closeMockServers, mockServer, textEvents } from './mock-server.ts'
 
 const homes: string[] = []
@@ -24,14 +25,16 @@ const homes: string[] = []
 // mounted credentials seam.
 const KEY_ENV = 'PI_TEST_KEY'
 
-beforeEach(() => {
+beforeEach(async () => {
   vi.stubEnv(KEY_ENV, 'test-key')
+  await isolateDshHome()
 })
 
 afterEach(async () => {
   vi.unstubAllEnvs()
   await closeMockServers()
   await Promise.all(homes.splice(0).map(dir => rm(dir, { recursive: true, force: true })))
+  await removeIsolatedHomes()
 })
 
 /** A throwaway $DSH_HOME with an empty settings document. */
@@ -578,9 +581,9 @@ describe('catalog routes with per-model configuration', () => {
   })
 
   it('leaves an OAuth-only catalog route unconfigured when its profile names no key', () => {
-    // Nothing to add: this adapter resolves credentials through its own seam
-    // and holds no OAuth store, so declaring the provider configured would
-    // trade a truthful refusal for an endpoint's 401.
+    // A keyless OAuth-only profile keeps the catalog's OAuth method alone.
+    // Authentication then requires a stored credential in the collection's
+    // CredentialStore; without one, pi-ai reports the provider unconfigured.
     const resolved = resolveProfiles({ 'openai-codex': {} })
     expect(resolved.get('openai-codex')?.piProvider.auth.apiKey).toBeUndefined()
   })
@@ -938,13 +941,10 @@ describe('configurable-provider directory', () => {
     const ctx = await harness({})
     const offered = ctx.llm.listConfigurableProviders().map(entry => entry.provider)
 
-    // `openai-codex` is the one installed provider that authenticates through
-    // OAuth alone. pi-ai resolves OAuth only from a *stored* credential, this
-    // adapter constructs its collection with no credential store, and nothing
-    // here runs a login flow — so every request on such a route fails with
-    // `Provider is not configured` before it goes out. Offering it would put a
-    // provider on the settings page that no amount of configuration can make
-    // work.
+    // `openai-codex` authenticates through OAuth alone. A Models-page key field
+    // cannot complete that login, so the directory withholds the card. `/login
+    // openai-codex` stores the OAuth credential and registers a live route
+    // without inventing a key card.
     expect(offered).not.toContain('openai-codex')
     // A provider that offers OAuth *beside* an api-key method keeps its entry:
     // the key is a path this adapter can serve.
