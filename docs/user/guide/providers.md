@@ -22,6 +22,8 @@ Providers with native authentication need their native credentials instead. Bedr
 
 Codex uses a ChatGPT subscription, not an API key. In CLI or ACP chat, run `/login openai-codex`, complete the browser login, then select an `openai-codex` model. `/logout openai-codex` deletes the stored tokens.
 
+If the browser shows OpenAI's **Authentication Error** with `missing_required_parameter`, paste the full authorize URL printed in the terminal into the address bar. Clicking a line-wrapped link drops `client_id` and the rest of the query.
+
 Tokens live in `$DSH_HOME/oauth-credentials.json` (owner-only). They are not environment variables and never appear in logs. The Models page does not offer a Codex key card.
 
 Headless and SSH device-code login is not in this build.

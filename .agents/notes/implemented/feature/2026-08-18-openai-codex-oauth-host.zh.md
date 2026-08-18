@@ -18,6 +18,8 @@ Status: implemented
 
 `/login [openai-codex]` 与 `/logout [openai-codex]` 通过 `ctx.inject(['commands'])` 注册，因为 base bundle 里 `commands` 在 `llm-pi-ai` 之后加载。空输入表示 `openai-codex`；其他名字失败。只提供浏览器登录：interaction 始终选择 pi-ai 的 `browser` id，打开授权 URL，并让 `manual_code` 挂起直到 localhost 回调中止它。不提供 device-code 登录。
 
+宿主把该 URL 作为单一 argv 打开：macOS 用 `open`，桌面 Linux 用 `xdg-open`，Windows 与 WSL 用带单引号字面量的 PowerShell `Start-Process`。`cmd /c start` 会在 `&` 处拆开命令，从而丢掉 `client_id` 和其余 OAuth 查询，OpenAI 就会渲染 `missing_required_parameter`。授权 URL 也会写到 stderr，浏览器标签被截断时可以把整段 URL 粘贴回去；其中只有 PKCE challenge 与 state，没有 access 或 refresh token。
+
 已存储的 `openai-codex` oauth 凭据会向适配器注册表注入一条无 settings 的 live 路由，模型选择器因此可以列出 pi-ai catalog 模型。可配置提供方目录仍然不提供仅 OAuth 的 catalog 卡片，这是不予提供那条笔记的决策；settings 里已存储的 profile 仍会出现在目录中，以便编辑或删除。live 路由不点名 `apiKeyEnv`，因此首次引导在 Codex 登录之前仍要求有一个可用的 API 密钥提供方。
 
 `Provider is not configured` 映射为 `LlmError('MISSING_CREDENTIAL')`，并点名 `/login openai-codex`。
@@ -44,4 +46,4 @@ device-code／SSH 登录、模型页「登录」按钮、`dsh auth login` 启动
 
 ## 测试
 
-`tests/oauth-store.spec.ts` 钉住永不引用秘密的解析拒绝、属主独占持久化、`modify`／`delete`／`list`、并发写入，以及 POSIX 下拒绝他人可读。`tests/oauth-login.spec.ts` 钉住仅浏览器 interaction、`/login`／`/logout`、无目录卡片的 live 路由注入、从已存文件启动、冲突路由的包容，以及无存储 token 的无密钥 Codex 流得到 `MISSING_CREDENTIAL`。插件 apply 测试会 stub `$DSH_HOME`，避免开发者本机凭据文件注入 live 路由。`tests/catalog.spec.ts` 中的目录不予提供测试保留：除非 settings profile 点名该路由，否则卡片仍不出现。
+`tests/oauth-store.spec.ts` 钉住永不引用秘密的解析拒绝、属主独占持久化、`modify`／`delete`／`list`、并发写入，以及 POSIX 下拒绝他人可读。`tests/oauth-login.spec.ts` 钉住仅浏览器 interaction、`/login`／`/logout`、无目录卡片的 live 路由注入、从已存文件启动、冲突路由的包容、无存储 token 的无密钥 Codex 流得到 `MISSING_CREDENTIAL`，以及 opener argv 在 Windows／WSL 上让含 `&` 的 URL 保持为单个参数。插件 apply 测试会 stub `$DSH_HOME`，避免开发者本机凭据文件注入 live 路由。`tests/catalog.spec.ts` 中的目录不予提供测试保留：除非 settings profile 点名该路由，否则卡片仍不出现。授权 URL 的 stderr 行由该包测试钉住；无密钥的装配快照无法重放 ChatGPT 登录。

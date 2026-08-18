@@ -22,6 +22,8 @@
 
 Codex 使用 ChatGPT 订阅，而不是 API 密钥。在 CLI 或 ACP 对话中运行 `/login openai-codex`，完成浏览器登录，然后选择一个 `openai-codex` 模型。`/logout openai-codex` 删除已存储的 token。
 
+如果浏览器显示 OpenAI 的 **Authentication Error** 且错误码为 `missing_required_parameter`，把终端里打印的完整授权 URL 粘贴到地址栏。点击被换行截断的链接会丢掉 `client_id` 和其余查询参数。
+
 token 存放在 `$DSH_HOME/oauth-credentials.json`（仅属主可读）。它们不是环境变量，也绝不会出现在日志里。模型页不提供 Codex 密钥卡片。
 
 本构建不包含无界面／SSH 的 device-code 登录。

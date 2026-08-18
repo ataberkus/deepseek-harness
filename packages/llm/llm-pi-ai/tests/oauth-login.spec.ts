@@ -1,7 +1,7 @@
 import { EventEmitter } from 'node:events'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { mkdtemp, readFile, writeFile } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
+import { tmpdir, release as osRelease } from 'node:os'
 import { join } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
@@ -12,6 +12,8 @@ import * as LlmPiAi from '@deepseek-ai/dsh-llm-pi-ai'
 import { getBuiltinModels } from '@earendil-works/pi-ai/providers/all'
 import * as catalog from '../src/catalog.ts'
 import {
+  authUrlFallbackMessage,
+  browserOpenArgv,
   createBrowserOAuthInteraction,
   loginOpenaiCodex,
   OPENAI_CODEX_BROWSER_LOGIN_METHOD,
@@ -77,8 +79,10 @@ describe('oauthProviderProfiles', () => {
 describe('createBrowserOAuthInteraction', () => {
   it('selects browser login, opens the authorize URL, and hangs manual_code until abort', async () => {
     const opened: string[] = []
+    const written: string[] = []
     const interaction = createBrowserOAuthInteraction({
       openUrl: async (url) => { opened.push(url) },
+      writeAuthUrl: (url) => { written.push(url) },
     })
     await expect(interaction.prompt({
       type: 'select',
@@ -92,6 +96,7 @@ describe('createBrowserOAuthInteraction', () => {
     interaction.notify({ type: 'info', message: 'starting' })
     interaction.notify({ type: 'auth_url', url: 'https://auth.example/authorize' })
     await vi.waitFor(() => expect(opened).toEqual(['https://auth.example/authorize']))
+    expect(written).toEqual(['https://auth.example/authorize'])
 
     const ac = new AbortController()
     const hanging = interaction.prompt({
@@ -119,6 +124,7 @@ describe('createBrowserOAuthInteraction', () => {
   it('fails the hanging manual_code prompt when opening the URL fails', async () => {
     const interaction = createBrowserOAuthInteraction({
       openUrl: async () => { throw new Error('no browser') },
+      writeAuthUrl: () => undefined,
     })
     interaction.notify({ type: 'auth_url', url: 'https://auth.example/authorize' })
     await Promise.resolve()
@@ -129,6 +135,7 @@ describe('createBrowserOAuthInteraction', () => {
   it('wraps a non-Error opener failure', async () => {
     const interaction = createBrowserOAuthInteraction({
       openUrl: async () => { throw 'nope' },
+      writeAuthUrl: () => undefined,
     })
     interaction.notify({ type: 'auth_url', url: 'https://auth.example/authorize' })
     await Promise.resolve()
@@ -140,11 +147,20 @@ describe('createBrowserOAuthInteraction', () => {
     let rejectOpen: (error: Error) => void = () => undefined
     const interaction = createBrowserOAuthInteraction({
       openUrl: () => new Promise((_, reject) => { rejectOpen = reject }),
+      writeAuthUrl: () => undefined,
     })
     const hanging = interaction.prompt({ type: 'manual_code', message: 'paste' })
     interaction.notify({ type: 'auth_url', url: 'https://auth.example/authorize' })
     rejectOpen(new Error('no browser'))
     await expect(hanging).rejects.toThrow(/no browser/)
+  })
+
+  it('writes the authorize URL to stderr when no writer is supplied', () => {
+    const write = vi.spyOn(process.stderr, 'write').mockReturnValue(true)
+    const interaction = createBrowserOAuthInteraction({ openUrl: async () => undefined })
+    const url = 'https://auth.example/authorize?response_type=code&client_id=app'
+    interaction.notify({ type: 'auth_url', url })
+    expect(write).toHaveBeenCalledWith(authUrlFallbackMessage(url))
   })
 
   it('rejects an already-aborted prompt signal on manual_code', async () => {
@@ -187,7 +203,61 @@ describe('createBrowserOAuthInteraction', () => {
   })
 })
 
+describe('browserOpenArgv', () => {
+  const url = 'https://auth.openai.com/oauth/authorize?response_type=code&client_id=app_test'
+
+  it('uses open on darwin and xdg-open on desktop linux', () => {
+    expect(browserOpenArgv(url, { platform: 'darwin' })).toEqual({ command: 'open', args: [url] })
+    expect(browserOpenArgv(url, { platform: 'linux', env: {}, osRelease: '6.8.0-generic' }))
+      .toEqual({ command: 'xdg-open', args: [url] })
+    expect(browserOpenArgv(url, {
+      platform: 'linux',
+      env: { WSL_DISTRO_NAME: '', WSL_INTEROP: '' },
+      osRelease: '6.8.0-generic',
+    })).toEqual({ command: 'xdg-open', args: [url] })
+  })
+
+  it('uses PowerShell Start-Process on Windows and WSL so `&` stays in one argument', () => {
+    const expected = {
+      command: 'powershell.exe',
+      args: ['-NoProfile', '-NonInteractive', '-Command', `Start-Process '${url}'`],
+    }
+    expect(browserOpenArgv(url, { platform: 'win32' })).toEqual(expected)
+    expect(browserOpenArgv(url, { platform: 'linux', env: { WSL_DISTRO_NAME: 'Ubuntu' }, osRelease: '6.8.0-generic' }))
+      .toEqual(expected)
+    expect(browserOpenArgv(url, { platform: 'linux', env: { WSL_INTEROP: '/run/WSL/1' }, osRelease: '6.8.0-generic' }))
+      .toEqual(expected)
+    expect(browserOpenArgv(url, { platform: 'linux', env: {}, osRelease: '5.15.153.1-microsoft-standard-WSL2' }))
+      .toEqual(expected)
+  })
+
+  it('escapes single quotes in the PowerShell literal', () => {
+    const quoted = "https://example.test/oauth?q=a'b&c=d"
+    expect(browserOpenArgv(quoted, { platform: 'win32' }).args.at(-1))
+      .toBe("Start-Process 'https://example.test/oauth?q=a''b&c=d'")
+  })
+
+  it('samples ambient WSL markers and kernel release when internals omit them', () => {
+    const env = process.env
+    const ambientWsl = (env.WSL_DISTRO_NAME !== undefined && env.WSL_DISTRO_NAME !== '')
+      || (env.WSL_INTEROP !== undefined && env.WSL_INTEROP !== '')
+      || osRelease().toLowerCase().includes('microsoft')
+    expect(browserOpenArgv(url, { platform: 'linux' }).command)
+      .toBe(ambientWsl ? 'powershell.exe' : 'xdg-open')
+  })
+})
+
+describe('authUrlFallbackMessage', () => {
+  it('prints the full authorize URL and warns against clicking a wrapped link', () => {
+    const url = 'https://auth.openai.com/oauth/authorize?response_type=code&client_id=app_test'
+    expect(authUrlFallbackMessage(url)).toContain(url)
+    expect(authUrlFallbackMessage(url)).toMatch(/do not click a line-wrapped terminal link/)
+  })
+})
+
 describe('openUrl', () => {
+  const linuxDesktop = { platform: 'linux' as const, env: {}, osRelease: '6.8.0-generic' }
+
   it('spawns the platform opener and detaches', async () => {
     const child = new EventEmitter() as EventEmitter & { unref: () => void }
     child.unref = vi.fn()
@@ -195,10 +265,12 @@ describe('openUrl', () => {
       queueMicrotask(() => child.emit('spawn'))
       return child
     })
-    await openUrl('https://auth.example/authorize')
+    await openUrl('https://auth.example/authorize', linuxDesktop)
     expect(spawn).toHaveBeenCalled()
     expect(child.unref).toHaveBeenCalled()
-    expect(spawn.mock.calls[0]?.[1]).toContain('https://auth.example/authorize')
+    expect(spawn.mock.calls[0]?.[0]).toBe('xdg-open')
+    expect(spawn.mock.calls[0]?.[1]).toEqual(['https://auth.example/authorize'])
+    expect(spawn.mock.calls[0]?.[2]).toMatchObject({ stdio: 'ignore', detached: true, windowsHide: true })
   })
 
   it('rejects when the opener fails to spawn', async () => {
@@ -207,28 +279,38 @@ describe('openUrl', () => {
       queueMicrotask(() => child.emit('error', new Error('ENOENT')))
       return child
     })
-    await expect(openUrl('https://auth.example/authorize')).rejects.toThrow(/ENOENT/)
+    await expect(openUrl('https://auth.example/authorize', linuxDesktop)).rejects.toThrow(/ENOENT/)
   })
 
-  it('uses open on darwin and cmd start on win32', async () => {
+  it('uses open on darwin and PowerShell Start-Process on win32', async () => {
     const child = new EventEmitter() as EventEmitter & { unref: () => void }
     child.unref = vi.fn()
     spawn.mockImplementation(() => {
       queueMicrotask(() => child.emit('spawn'))
       return child
     })
-    const original = process.platform
-    Object.defineProperty(process, 'platform', { configurable: true, value: 'darwin' })
-    try {
-      await openUrl('https://auth.example/authorize')
-      expect(spawn.mock.calls.at(-1)?.[0]).toBe('open')
-      Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
-      await openUrl('https://auth.example/authorize')
-      expect(spawn.mock.calls.at(-1)?.[0]).toBe('cmd')
-      expect(spawn.mock.calls.at(-1)?.[1]).toEqual(['/c', 'start', '', 'https://auth.example/authorize'])
-    } finally {
-      Object.defineProperty(process, 'platform', { configurable: true, value: original })
-    }
+    const url = 'https://auth.example/authorize?response_type=code&client_id=app'
+    await openUrl(url, { platform: 'darwin' })
+    expect(spawn.mock.calls.at(-1)?.[0]).toBe('open')
+    await openUrl(url, { platform: 'win32' })
+    expect(spawn.mock.calls.at(-1)?.[0]).toBe('powershell.exe')
+    expect(spawn.mock.calls.at(-1)?.[1]).toEqual([
+      '-NoProfile',
+      '-NonInteractive',
+      '-Command',
+      `Start-Process '${url}'`,
+    ])
+  })
+
+  it('reads process.platform when internals omit it', async () => {
+    const child = new EventEmitter() as EventEmitter & { unref: () => void }
+    child.unref = vi.fn()
+    spawn.mockImplementation(() => {
+      queueMicrotask(() => child.emit('spawn'))
+      return child
+    })
+    await openUrl('https://auth.example/authorize')
+    expect(['open', 'xdg-open', 'powershell.exe']).toContain(spawn.mock.calls[0]?.[0])
   })
 })
 

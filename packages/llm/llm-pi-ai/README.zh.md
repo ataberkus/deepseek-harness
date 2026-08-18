@@ -190,7 +190,7 @@ pi-ai 事件会变为 harness 推理、文本、工具调用、usage 与 finish 
 
 ## 已知限制与暂缓事项
 
-- **模型页不提供仅 OAuth 的 catalog 卡片**：密钥字段无法认证 `openai-codex`。使用 `/login openai-codex` 登录（ChatGPT 浏览器 PKCE）；token 持久化在 `$DSH_HOME/oauth-credentials.json`，并由 pi-ai 刷新。登录后 live 路由出现在模型选择器中，而不是模型页卡片。settings 文档已经点名的路由仍保留目录条目，以便编辑或删除；`apiKeyEnv` 也仍能用该密钥认证（若没有其他环节刷新，该 token 会过期）。不提供 device-code 登录、Web「登录」按钮，以及其他仅 OAuth 的 catalog 提供方。
+- **模型页不提供仅 OAuth 的 catalog 卡片**：密钥字段无法认证 `openai-codex`。使用 `/login openai-codex` 登录（ChatGPT 浏览器 PKCE）；token 持久化在 `$DSH_HOME/oauth-credentials.json`，并由 pi-ai 刷新。登录后 live 路由出现在模型选择器中，而不是模型页卡片。settings 文档已经点名的路由仍保留目录条目，以便编辑或删除；`apiKeyEnv` 也仍能用该密钥认证（若没有其他环节刷新，该 token 会过期）。不提供 device-code 登录、Web「登录」按钮，以及其他仅 OAuth 的 catalog 提供方。若 OpenAI 授权页报告 `missing_required_parameter`，把 stderr 写出的完整 URL 粘贴到地址栏；点击被换行截断的链接会丢掉查询串。
 - **提供方自带的凭据发现只读进程环境**：不指定凭据的路由交由 catalog 提供方自行解析，而它探测的是环境变量（`AZURE_OPENAI_API_KEY`、`AWS_PROFILE`、`AWS_ACCESS_KEY_ID` 以及各提供方自己的那一组）。它不读任何本地凭据目录，因此只有 `~/.aws/credentials` 而未导出 `AWS_PROFILE` 会被解析为未配置；由 harness 凭据 seam 保管的值，除非进程环境里也有，否则对它不可见。
 - **settings 能新增或覆盖路由，但不能移除组合路由**：用户层合并在组合 `base` 之上，因此删除 `cordis.yml` 提供的提供方属于组合变更；对该 namespace 执行 `replace` 只会重置用户层。
 - **分层合并对字典键没有删除语义**：settings seam 把组合 `base` 与用户层按键递归合并，因此 base 声明的某个 `reasoningEfforts` 档位、`modelOverrides` 条目或 `compat` 字段，用户层只能覆盖、无法移除——而 `reasoningEfforts` 里缺席本身*就是*语义（「不提供」），于是 base 声明过的档位会一直被提供。只有 `cordis.yml` entry config 为用户层正在编辑的同一模型声明了按模型推理字段才会触发；受支持的姿态是把这些字段留给 settings 文档（shipped 组合以 dormant 方式挂载该适配器），且 `models` 列表是数组、整体替换，这是带内的解决办法。

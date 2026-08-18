@@ -11,6 +11,7 @@
  */
 
 import { spawn } from 'node:child_process'
+import { release as osRelease } from 'node:os'
 import { createModels } from '@earendil-works/pi-ai'
 import type { AuthEvent, AuthInteraction, AuthPrompt, CredentialInfo, CredentialStore } from '@earendil-works/pi-ai'
 import type { Context } from '@deepseek-ai/cordis'
@@ -50,19 +51,78 @@ export function oauthProviderProfiles(
   return profiles
 }
 
+/** Injectable platform facts so tests do not depend on the host OS. */
+export interface BrowserOpenInternals {
+  /** `process.platform` override. */
+  platform?: NodeJS.Platform
+  /** Kernel release override used to distinguish WSL from desktop Linux. */
+  osRelease?: string
+  /** Environment used for WSL markers. */
+  env?: NodeJS.ProcessEnv
+}
+
+/** Whether one environment marker is set to a non-empty value. */
+function present(value: string | undefined): boolean {
+  return value !== undefined && value !== ''
+}
+
+/** Distinguish WSL from desktop Linux using its process and kernel markers. */
+function isWsl(internals: BrowserOpenInternals): boolean {
+  const env = internals.env ?? process.env
+  if (present(env.WSL_DISTRO_NAME) || present(env.WSL_INTEROP)) return true
+  return (internals.osRelease ?? osRelease()).toLowerCase().includes('microsoft')
+}
+
+/** PowerShell single-quoted literal (doubles embedded quotes). */
+function powershellLiteral(value: string): string {
+  return `'${value.replace(/'/g, "''")}'`
+}
+
+/**
+ * Platform browser-helper argv for `url`.
+ *
+ * The authorize URL's query string must stay one argument. `cmd /c start`
+ * splits on `&`, which drops `client_id` and the remaining OAuth query and
+ * makes OpenAI render `missing_required_parameter`.
+ * @param url - the authorize URL pi-ai emitted.
+ * @param internals - platform and environment overrides for tests.
+ * @returns the helper command and argv.
+ */
+export function browserOpenArgv(
+  url: string,
+  internals: BrowserOpenInternals = {},
+): { command: string; args: readonly string[] } {
+  const platform = internals.platform ?? process.platform
+  if (platform === 'darwin') return { command: 'open', args: [url] }
+  if (platform === 'win32' || (platform === 'linux' && isWsl(internals))) {
+    return {
+      command: 'powershell.exe',
+      args: ['-NoProfile', '-NonInteractive', '-Command', `Start-Process ${powershellLiteral(url)}`],
+    }
+  }
+  return { command: 'xdg-open', args: [url] }
+}
+
+/**
+ * Stderr instructions when the opened tab is the authorize URL with a
+ * truncated query. The URL carries PKCE challenge and state, never tokens.
+ * @param url - the authorize URL pi-ai emitted.
+ * @returns the diagnostic including a trailing newline.
+ */
+export function authUrlFallbackMessage(url: string): string {
+  return `If the OpenAI login page reports a missing parameter, paste this entire URL into the address bar (do not click a line-wrapped terminal link):\n${url}\n`
+}
+
 /**
  * Open `url` with the platform browser helper. The child is detached so a
  * hanging helper cannot pin the login command.
  * @param url - the authorize URL pi-ai emitted.
+ * @param internals - platform and environment overrides for tests.
  */
-export async function openUrl(url: string): Promise<void> {
-  const { command, args } = process.platform === 'darwin'
-    ? { command: 'open', args: [url] }
-    : process.platform === 'win32'
-      ? { command: 'cmd', args: ['/c', 'start', '', url] }
-      : { command: 'xdg-open', args: [url] }
+export async function openUrl(url: string, internals: BrowserOpenInternals = {}): Promise<void> {
+  const { command, args } = browserOpenArgv(url, internals)
   await new Promise<void>((resolve, reject) => {
-    const child = spawn(command, args, { stdio: 'ignore', detached: true })
+    const child = spawn(command, [...args], { stdio: 'ignore', detached: true, windowsHide: true })
     child.once('error', reject)
     child.once('spawn', () => {
       child.unref()
@@ -77,19 +137,24 @@ export interface BrowserOAuthInteractionOptions {
   openUrl?: (url: string) => Promise<void>
   /** Aborts the whole login, including a hanging manual-code prompt. */
   signal?: AbortSignal
+  /** Write the authorize URL for paste recovery; defaults to stderr. */
+  writeAuthUrl?: (url: string) => void
 }
 
 /**
  * Auth interaction that always selects browser login, opens the authorize
  * URL, and hangs the manual-code prompt until pi-ai's localhost callback
  * aborts it. Device-code login is not offered.
- * @param options - optional URL opener and abort signal.
+ * @param options - optional URL opener, abort signal, and authorize-URL writer.
  * @returns the interaction pi-ai's `Models.login` drives.
  */
 export function createBrowserOAuthInteraction(
   options: BrowserOAuthInteractionOptions = {},
 ): AuthInteraction {
   const open = options.openUrl ?? openUrl
+  const writeAuthUrl = options.writeAuthUrl ?? ((url: string) => {
+    process.stderr.write(authUrlFallbackMessage(url))
+  })
   let openError: Error | undefined
   let cancelManual: ((reason: unknown) => void) | undefined
   const interaction: AuthInteraction = {
@@ -128,6 +193,7 @@ export function createBrowserOAuthInteraction(
     },
     notify: (event: AuthEvent): void => {
       if (event.type !== 'auth_url') return
+      writeAuthUrl(event.url)
       void open(event.url).catch((error: unknown) => {
         openError = error instanceof Error ? error : new Error('Failed to open the login page')
         cancelManual?.(openError)
