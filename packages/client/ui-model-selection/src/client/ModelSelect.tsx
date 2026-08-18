@@ -7,7 +7,9 @@
  * ToggleButton) shows both: model name + effort in the caption tone.
  * Data and submission ride the SAME per-session ModelDirectory as the
  * /model popup; exact-model reasoning metadata and the selected effort come
- * from the Host rather than a client-owned vocabulary. A rejected selection
+ * from the Host rather than a client-owned vocabulary. The model pane
+ * filters advertised groups locally as the user types; `/model` already
+ * filters through the shared popupSelect shell. A rejected selection
  * announces through the shared transient Toast anchored to the composer
  * card; the in-menu strip with Retry remains the catalog-load surface.
  */
@@ -23,6 +25,7 @@ import {
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ModelSelectInjected } from './slots.ts'
+import { filterModelGroups } from './filter.ts'
 import css from './ModelSelect.module.css'
 
 /** Which pane the dropdown shows: the two-row root or one drilled-in list. */
@@ -52,6 +55,7 @@ export function ModelSelect(
   )
   const [open, setOpen] = useState(false)
   const [pane, setPane] = useState<Pane>('root')
+  const [query, setQuery] = useState('')
   // The in-menu error strip serves catalog loads (its Retry re-runs the
   // load); a rejected SELECTION announces through the transient toast
   // instead, so the strip renders only while the latest failure-capable
@@ -61,6 +65,7 @@ export function ModelSelect(
   const toastSeq = useRef(0)
   const rootRef = useRef<HTMLDivElement | null>(null)
   const triggerRef = useRef<HTMLButtonElement | null>(null)
+  const searchRef = useRef<HTMLInputElement | null>(null)
   const itemRefs = useRef<(HTMLButtonElement | null)[]>([])
   const id = useId()
 
@@ -76,6 +81,10 @@ export function ModelSelect(
           : { reasoningEffort: model.reasoning.defaultEffort },
       } satisfies ModelSelection,
     }))), [state.groups])
+  const filteredGroups = useMemo(
+    () => filterModelGroups(state.groups, query),
+    [state.groups, query],
+  )
   const selectedIndex = state.current === null
     ? -1
     : choices.findIndex(c => c.selection.provider === state.current?.provider && c.selection.model === state.current.model)
@@ -118,16 +127,25 @@ export function ModelSelect(
   useEffect(() => {
     if (!open) return
     const closeOutside = (event: MouseEvent): void => {
-      if (!rootRef.current?.contains(event.target as Node)) setOpen(false)
+      if (!rootRef.current?.contains(event.target as Node)) {
+        setOpen(false)
+        setPane('root')
+        setQuery('')
+      }
     }
     document.addEventListener('mousedown', closeOutside)
     return () => { document.removeEventListener('mousedown', closeOutside) }
   }, [open])
 
+  useEffect(() => {
+    if (open && pane === 'model') searchRef.current?.focus()
+  }, [open, pane])
+
   if (!available) return null
 
   const show = (): void => {
     setPane('root')
+    setQuery('')
     setOpen(true)
     reload()
   }
@@ -135,14 +153,28 @@ export function ModelSelect(
   const close = (restoreFocus = false): void => {
     setOpen(false)
     setPane('root')
+    setQuery('')
     if (restoreFocus) queueMicrotask(() => { triggerRef.current?.focus() })
+  }
+
+  const showRoot = (): void => {
+    setPane('root')
+    setQuery('')
   }
 
   const moveFocus = (offset: number): void => {
     const items = itemRefs.current.filter(item => item !== null)
     if (items.length === 0) return
     const active = items.findIndex(item => item === document.activeElement)
-    const next = (Math.max(active, 0) + offset + items.length) % items.length
+    if (active === -1) {
+      items[offset > 0 ? 0 : items.length - 1]?.focus()
+      return
+    }
+    if (active === 0 && offset < 0 && pane === 'model' && searchRef.current !== null) {
+      searchRef.current.focus()
+      return
+    }
+    const next = (active + offset + items.length) % items.length
     items[next]?.focus()
   }
 
@@ -150,7 +182,7 @@ export function ModelSelect(
     if (event.key === 'Escape' && open) {
       event.preventDefault()
       // Escape backs out of a drilled pane first, then closes.
-      if (pane !== 'root') setPane('root')
+      if (pane !== 'root') showRoot()
       else close(true)
       return
     }
@@ -268,6 +300,16 @@ export function ModelSelect(
 
           {pane === 'model' && (
             <>
+              <input
+                ref={searchRef}
+                className={css.search}
+                type="text"
+                value={query}
+                placeholder={t('search.placeholder')}
+                aria-label={t('search.aria')}
+                disabled={busy}
+                onChange={(event) => { setQuery(event.currentTarget.value) }}
+              />
               {state.status === 'loading' && (
                 <div className={css.status}>{t('status.loading')}</div>
               )}
@@ -284,7 +326,7 @@ export function ModelSelect(
                 </div>
               ))}
               <div className={clsx(css.groups, 'scrollable')}>
-                {state.groups.map((group) => {
+                {filteredGroups.map((group) => {
                   const headingId = `${id}-${group.id}`
                   return (
                     <section role="group" aria-labelledby={headingId} className={css.group} key={group.id}>
@@ -321,6 +363,9 @@ export function ModelSelect(
               </div>
               {state.status === 'ready' && choices.length === 0 && (
                 <div className={css.empty}>{t('empty.models')}</div>
+              )}
+              {state.status === 'ready' && choices.length > 0 && filteredGroups.length === 0 && (
+                <div className={css.empty}>{t('empty.search')}</div>
               )}
             </>
           )}

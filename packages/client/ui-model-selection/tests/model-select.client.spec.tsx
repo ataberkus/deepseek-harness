@@ -182,3 +182,103 @@ describe('ModelSelect reasoning effort', () => {
     expect(load).not.toHaveBeenCalled()
   })
 })
+
+describe('ModelSelect model search', () => {
+  const groups = [
+    {
+      id: 'deepseek-official',
+      name: 'DeepSeek',
+      models: [
+        { id: 'deepseek-v4-flash', name: 'DeepSeek-V4-Flash', reasoning },
+        { id: 'deepseek-v4-pro', name: 'DeepSeek-V4-Pro', description: 'Long-context reasoning' },
+      ],
+    },
+    {
+      id: 'acme-gateway',
+      name: 'Acme Gateway',
+      models: [{ id: 'acme-large', name: 'Acme Large' }],
+    },
+  ]
+
+  function openModelPane(overrides: Partial<ModelDirectoryState> = {}) {
+    const directory = createSnapshotStore(state({ groups, ...overrides }))
+    const select = vi.fn().mockResolvedValue(true)
+    render(<ModelSelect
+      locked={false}
+      available
+      directory={directory}
+      load={vi.fn()}
+      select={select}
+      t={t}
+    />)
+    fireEvent.click(screen.getByRole('button', { name: /选择模型|当前/ }))
+    fireEvent.click(screen.getByRole('menuitem', { name: /模型/ }))
+    return { select, search: screen.getByRole('textbox', { name: '筛选模型' }) }
+  }
+
+  it('focuses the filter and keeps unmatched rows out of the list', () => {
+    const { search } = openModelPane()
+    expect(document.activeElement).toBe(search)
+    expect(screen.getByRole('menuitemradio', { name: 'DeepSeek-V4-Flash' })).toBeTruthy()
+    fireEvent.change(search, { target: { value: 'Acme' } })
+    expect(screen.getByRole('menuitemradio', { name: 'Acme Large' })).toBeTruthy()
+    expect(screen.queryByRole('menuitemradio', { name: 'DeepSeek-V4-Flash' })).toBeNull()
+  })
+
+  it('shows the unmatched copy when the query hits nothing', () => {
+    const { search } = openModelPane()
+    fireEvent.change(search, { target: { value: 'zzz' } })
+    expect(screen.getByText('没有匹配的模型。')).toBeTruthy()
+    expect(screen.queryByRole('menuitemradio')).toBeNull()
+  })
+
+  it('moves from the filter into the first remaining row and back', () => {
+    const { search } = openModelPane()
+    const menu = screen.getByRole('menu')
+    fireEvent.keyDown(menu, { key: 'ArrowDown' })
+    expect(document.activeElement).toBe(screen.getByRole('menuitemradio', { name: 'DeepSeek-V4-Flash' }))
+    fireEvent.keyDown(menu, { key: 'ArrowUp' })
+    expect(document.activeElement).toBe(search)
+    fireEvent.keyDown(menu, { key: 'ArrowUp' })
+    expect(document.activeElement).toBe(screen.getByRole('menuitemradio', { name: 'Acme Large' }))
+  })
+
+  it('does not move focus when the filter hides every row', () => {
+    const { search } = openModelPane()
+    fireEvent.change(search, { target: { value: 'zzz' } })
+    fireEvent.keyDown(screen.getByRole('menu'), { key: 'ArrowDown' })
+    expect(document.activeElement).toBe(search)
+  })
+
+  it('clears the filter when backing out of the model pane', () => {
+    const { search } = openModelPane()
+    fireEvent.change(search, { target: { value: 'Acme' } })
+    fireEvent.keyDown(screen.getByRole('menu'), { key: 'Escape' })
+    fireEvent.click(screen.getByRole('menuitem', { name: /模型/ }))
+    expect((screen.getByRole('textbox', { name: '筛选模型' }) as HTMLInputElement).value).toBe('')
+    expect(screen.getByRole('menuitemradio', { name: 'DeepSeek-V4-Flash' })).toBeTruthy()
+  })
+
+  it('keeps every model in a provider that matches the query', () => {
+    const { search } = openModelPane()
+    fireEvent.change(search, { target: { value: 'DeepSeek' } })
+    expect(screen.getByRole('menuitemradio', { name: 'DeepSeek-V4-Flash' })).toBeTruthy()
+    expect(screen.getByRole('menuitemradio', { name: /DeepSeek-V4-Pro/ })).toBeTruthy()
+    expect(screen.queryByRole('menuitemradio', { name: 'Acme Large' })).toBeNull()
+  })
+
+  it('shows the empty-catalog copy when nothing is advertised', () => {
+    openModelPane({ groups: [] })
+    expect(screen.getByText('没有可用的模型。')).toBeTruthy()
+    expect(screen.getByRole('textbox', { name: '筛选模型' })).toBeTruthy()
+  })
+
+  it('submits the filtered row', async () => {
+    const { search, select } = openModelPane()
+    fireEvent.change(search, { target: { value: 'Pro' } })
+    fireEvent.click(screen.getByRole('menuitemradio', { name: /DeepSeek-V4-Pro/ }))
+    await waitFor(() => {
+      expect(select).toHaveBeenCalledWith({ provider: 'deepseek-official', model: 'deepseek-v4-pro' })
+    })
+  })
+})

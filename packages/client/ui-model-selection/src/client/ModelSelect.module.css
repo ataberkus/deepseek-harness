@@ -128,6 +128,26 @@
   cursor: pointer;
 }
 
+.search {
+  margin: 2px 2px 4px;
+  padding: 6px 8px;
+  border: 1px solid var(--dsw-alias-border-inverted);
+  border-radius: 8px;
+  background: transparent;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--dsw-alias-label-primary);
+  outline: none;
+}
+
+.search:focus-visible {
+  box-shadow: 0 0 0 2px var(--dsw-alias-border-l3);
+}
+
+.search::placeholder {
+  color: var(--dsw-alias-label-tertiary);
+}
+
 .groups {
   min-height: 0;
   overflow-y: auto;
