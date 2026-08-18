@@ -104,7 +104,7 @@ function parseApiKeyCredential(
     if (record.env === null || typeof record.env !== 'object' || Array.isArray(record.env)) {
       throw new Error(`llm-pi-ai: OAuth credential store at ${filename} entry "${providerId}" has a non-object env`)
     }
-    credential.env = record.env as ApiKeyCredential['env']
+    credential.env = record.env as Exclude<ApiKeyCredential['env'], undefined>
   }
   return credential
 }

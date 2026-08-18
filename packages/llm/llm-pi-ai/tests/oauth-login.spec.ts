@@ -398,7 +398,9 @@ describe('login and logout commands', () => {
     expect(logged.mock.calls.some(([value]) =>
       typeof value === 'string' && value.includes('OAuth credential change'),
     )).toBe(true)
-    expect(ctx.llm.providerInfo(OPENAI_CODEX_PROVIDER).name).not.toBe(provider.name)
+    expect(ctx.llm.listProviders()).toEqual([
+      { id: OPENAI_CODEX_PROVIDER, name: OPENAI_CODEX_PROVIDER },
+    ])
   })
 
   it('maps a keyless openai-codex stream without a stored token to MISSING_CREDENTIAL', async () => {
