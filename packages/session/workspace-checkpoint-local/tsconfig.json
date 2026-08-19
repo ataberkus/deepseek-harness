@@ -15,7 +15,19 @@
       "path": "../../../vendor/cordis"
     },
     {
+      "path": "../../../vendor/schemastery"
+    },
+    {
       "path": "../workspace-checkpoint"
+    },
+    {
+      "path": "../../core/session"
+    },
+    {
+      "path": "../../storage/storage-domain"
+    },
+    {
+      "path": "../../util/home-paths"
     },
     {
       "path": "../../runtime-diagnostics/invariants"

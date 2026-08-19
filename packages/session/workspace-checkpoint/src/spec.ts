@@ -31,6 +31,15 @@ export const checkpointRecordSchema = z.object({
   fileCount: nonNegativeSafeInteger,
   restoreEligible: z.boolean(),
   labelIndex: z.number().int().nonnegative(),
+  entries: z.array(z.object({
+    relativePath: z.string().min(1),
+    kind: z.enum(['file', 'directory', 'symlink']),
+    mode: z.number().int().optional(),
+    size: nonNegativeSafeInteger,
+    hash: z.string().min(1).optional(),
+    linkTarget: z.string().optional(),
+    restoreSafe: z.boolean(),
+  })),
 })
 
 /** Runtime schema for one session's checkpoint index sidecar. */
