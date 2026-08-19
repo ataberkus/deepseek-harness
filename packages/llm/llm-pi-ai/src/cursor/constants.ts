@@ -1,0 +1,42 @@
+/**
+ * Fixed Cursor AgentService identifiers. These are protocol constants, not
+ * deployment tunables: the unofficial Connect/protobuf backend names them.
+ *
+ * @module dsh-llm-pi-ai/cursor/constants
+ */
+
+/** Provider route key and `CredentialStore` key. */
+export const CURSOR_PROVIDER = 'cursor'
+
+/** Selector and Models-page label. */
+export const CURSOR_DISPLAY_NAME = 'Cursor'
+
+/** pi-ai `Model.api` for the hosted Cursor provider. */
+export const CURSOR_API = 'cursor-agent'
+
+/** Default AgentService origin. */
+export const CURSOR_BASE_URL = 'https://api2.cursor.sh'
+
+/** Browser login page; query carries PKCE challenge and uuid, never tokens. */
+export const CURSOR_LOGIN_URL = 'https://cursor.com/loginDeepControl'
+
+/** Poll until the browser login completes. */
+export const CURSOR_POLL_URL = 'https://api2.cursor.sh/auth/poll'
+
+/** Refresh an access token from a stored refresh token. */
+export const CURSOR_REFRESH_URL = 'https://api2.cursor.sh/auth/exchange_user_api_key'
+
+/** Connect RPC that streams one agent turn. */
+export const CURSOR_RUN_PATH = '/agent.v1.AgentService/Run'
+
+/** Connect RPC that lists models the signed-in account may use. */
+export const CURSOR_MODELS_PATH = '/agent.v1.AgentService/GetUsableModels'
+
+/** `x-cursor-client-type` the unofficial CLI clients send. */
+export const CURSOR_CLIENT_TYPE = 'cli'
+
+/**
+ * `x-cursor-client-version` the unofficial CLI clients send. Cursor may reject
+ * an unrecognized spelling; this is the value community clients currently use.
+ */
+export const CURSOR_CLIENT_VERSION = '1.0.0'

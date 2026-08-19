@@ -15,16 +15,20 @@ import {
   authUrlFallbackMessage,
   browserOpenArgv,
   createBrowserOAuthInteraction,
+  loginHostedOAuth,
   loginOpenaiCodex,
   OPENAI_CODEX_BROWSER_LOGIN_METHOD,
   OPENAI_CODEX_DISPLAY_NAME,
-  OPENAI_CODEX_LOGIN_IN_PROGRESS,
   OPENAI_CODEX_PROVIDER,
+  OAUTH_LOGIN_IN_PROGRESS,
+  OAUTH_LOGIN_UNSUPPORTED,
+  OAUTH_LOGOUT_UNSUPPORTED,
   oauthProviderProfiles,
   openUrl,
   parseOAuthProvider,
 } from '../src/oauth-login.ts'
 import { FileOAuthStore, OAUTH_CREDENTIALS_FILENAME } from '../src/oauth-store.ts'
+import * as oauthHosts from '../src/oauth-hosts.ts'
 import { assemble } from './assemble.ts'
 import { isolateDshHome, removeIsolatedHomes } from './dsh-home.ts'
 import { rethrowPiAiError } from '../src/stream.ts'
@@ -50,21 +54,24 @@ function fakeAgent(): Agent {
 }
 
 describe('parseOAuthProvider', () => {
-  it('defaults empty input to openai-codex and rejects any other name', () => {
+  it('defaults empty input to openai-codex, accepts cursor, and rejects any other name', () => {
     expect(parseOAuthProvider('')).toBe(OPENAI_CODEX_PROVIDER)
     expect(parseOAuthProvider('  openai-codex  ')).toBe(OPENAI_CODEX_PROVIDER)
+    expect(parseOAuthProvider('cursor')).toBe('cursor')
     expect(parseOAuthProvider('anthropic')).toBeUndefined()
   })
 })
 
 describe('oauthProviderProfiles', () => {
-  it('injects only a stored openai-codex oauth credential', () => {
+  it('injects stored hosted oauth credentials and ignores other catalog oauth', () => {
     expect(oauthProviderProfiles([
       { providerId: 'openai-codex', type: 'oauth' },
+      { providerId: 'cursor', type: 'oauth' },
       { providerId: 'anthropic', type: 'oauth' },
       { providerId: 'openai-codex', type: 'api_key' },
     ])).toEqual({
       'openai-codex': { displayName: catalog.catalogProvider('openai-codex')?.name ?? 'OpenAI Codex' },
+      cursor: { displayName: catalog.catalogProvider('cursor')?.name ?? 'Cursor' },
     })
     expect(oauthProviderProfiles([])).toEqual({})
   })
@@ -360,6 +367,44 @@ describe('login and logout commands', () => {
     expect(ctx.llm.listProviders()).toEqual([])
   })
 
+  it('signs in with /login cursor, injects a live route, and keeps the key card withheld', async () => {
+    const home = await isolateDshHome()
+    const provider = catalog.catalogProvider('cursor')
+    if (provider?.auth.oauth === undefined) throw new Error('expected cursor oauth')
+    vi.spyOn(provider.auth.oauth, 'login').mockImplementation(async (interaction) => {
+      interaction.notify({ type: 'auth_url', url: 'https://cursor.com/loginDeepControl?challenge=x&uuid=y' })
+      return {
+        type: 'oauth',
+        access: 'cursor-access',
+        refresh: 'cursor-refresh',
+        expires: Date.now() + 60_000,
+      }
+    })
+    const ctx = new Context()
+    contexts.push(ctx)
+    await ctx.plugin(LlmRuntime)
+    await ctx.plugin(CommandRuntime)
+    await ctx.plugin(LlmPiAi, {})
+    expect(ctx.llm.listConfigurableProviders().map(entry => entry.provider)).not.toContain('cursor')
+    const login = await ctx.commands.execute(fakeAgent(), '/login cursor', AbortSignal.timeout(5_000))
+    expect(login?.result).toEqual({
+      kind: 'success',
+      text: 'Signed in to Cursor. Select a cursor model to use the Cursor subscription.',
+    })
+    expect(ctx.llm.listProviders()).toEqual([
+      { id: 'cursor', name: provider.name, auth: 'oauth' },
+    ])
+    expect(ctx.llm.listConfigurableProviders().map(entry => entry.provider)).not.toContain('cursor')
+    const models = await ctx.llm.listModels('cursor')
+    expect(models.length).toBeGreaterThan(0)
+    expect(models[0]?.provider).toBe('cursor')
+    const stored = JSON.parse(await readFile(join(home, OAUTH_CREDENTIALS_FILENAME), 'utf8'))
+    expect(stored.cursor).toMatchObject({ type: 'oauth', refresh: 'cursor-refresh' })
+    const logout = await ctx.commands.execute(fakeAgent(), '/logout cursor', AbortSignal.timeout(5_000))
+    expect(logout?.result).toEqual({ kind: 'success', text: 'Signed out of Cursor.' })
+    expect(ctx.llm.listProviders()).toEqual([])
+  })
+
   it('rejects login and logout for any provider other than openai-codex', async () => {
     await isolateDshHome()
     const ctx = new Context()
@@ -369,9 +414,23 @@ describe('login and logout commands', () => {
     await ctx.plugin(LlmPiAi, {})
     const agent = fakeAgent()
     expect((await ctx.commands.execute(agent, '/login anthropic', AbortSignal.timeout(1_000)))?.result)
-      .toEqual({ kind: 'error', text: 'Only /login openai-codex is supported.' })
+      .toEqual({ kind: 'error', text: OAUTH_LOGIN_UNSUPPORTED })
     expect((await ctx.commands.execute(agent, '/logout anthropic', AbortSignal.timeout(1_000)))?.result)
-      .toEqual({ kind: 'error', text: 'Only /logout openai-codex is supported.' })
+      .toEqual({ kind: 'error', text: OAUTH_LOGOUT_UNSUPPORTED })
+  })
+
+  it('treats a hosted id that disappears from the table as unsupported', async () => {
+    await isolateDshHome()
+    vi.spyOn(oauthHosts, 'hostedOAuthProvider').mockReturnValue(undefined)
+    const ctx = new Context()
+    contexts.push(ctx)
+    await ctx.plugin(LlmRuntime)
+    await ctx.plugin(CommandRuntime)
+    await ctx.plugin(LlmPiAi, {})
+    expect((await ctx.commands.execute(fakeAgent(), '/login openai-codex', AbortSignal.timeout(1_000)))?.result)
+      .toEqual({ kind: 'error', text: OAUTH_LOGIN_UNSUPPORTED })
+    expect((await ctx.commands.execute(fakeAgent(), '/logout openai-codex', AbortSignal.timeout(1_000)))?.result)
+      .toEqual({ kind: 'error', text: OAUTH_LOGOUT_UNSUPPORTED })
   })
 
   it('emits commands/open-url with the authorize URL and still writes stderr', async () => {
@@ -442,7 +501,7 @@ describe('login and logout commands', () => {
     const first = ctx.commands.execute(agent, '/login openai-codex', AbortSignal.timeout(5_000))
     await vi.waitFor(() => expect(login).toHaveBeenCalledTimes(1))
     expect((await ctx.commands.execute(agent, '/login', AbortSignal.timeout(1_000)))?.result)
-      .toEqual({ kind: 'error', text: OPENAI_CODEX_LOGIN_IN_PROGRESS })
+      .toEqual({ kind: 'error', text: OAUTH_LOGIN_IN_PROGRESS })
     expect(login).toHaveBeenCalledTimes(1)
     release({
       type: 'oauth',
@@ -476,6 +535,28 @@ describe('login and logout commands', () => {
     expect(ctx.llm.listConfigurableProviders().map(entry => entry.provider)).not.toContain(OPENAI_CODEX_PROVIDER)
   })
 
+  it('registers cursor from a stored credential at boot without a settings profile', async () => {
+    const home = await isolateDshHome()
+    await writeFile(join(home, OAUTH_CREDENTIALS_FILENAME), `${JSON.stringify({
+      cursor: {
+        type: 'oauth',
+        access: 'access-token',
+        refresh: 'refresh-token',
+        expires: Date.now() + 60_000,
+      },
+    }, null, 2)}\n`, { mode: 0o600 })
+    const ctx = new Context()
+    contexts.push(ctx)
+    await ctx.plugin(LlmRuntime)
+    await ctx.plugin(LlmPiAi, {})
+    expect(ctx.llm.listProviders()).toEqual([{
+      id: 'cursor',
+      name: catalog.catalogProvider('cursor')?.name ?? 'Cursor',
+      auth: 'oauth',
+    }])
+    expect(ctx.llm.listConfigurableProviders().map(entry => entry.provider)).not.toContain('cursor')
+  })
+
   it('does not mark a settings-declared openai-codex route as oauth-injected', async () => {
     const home = await isolateDshHome()
     await writeFile(join(home, OAUTH_CREDENTIALS_FILENAME), `${JSON.stringify({
@@ -493,6 +574,26 @@ describe('login and logout commands', () => {
     expect(ctx.llm.listProviders()).toEqual([{
       id: OPENAI_CODEX_PROVIDER,
       name: OPENAI_CODEX_PROVIDER,
+    }])
+  })
+
+  it('does not mark a settings-declared cursor route as oauth-injected', async () => {
+    const home = await isolateDshHome()
+    await writeFile(join(home, OAUTH_CREDENTIALS_FILENAME), `${JSON.stringify({
+      cursor: {
+        type: 'oauth',
+        access: 'access-token',
+        refresh: 'refresh-token',
+        expires: Date.now() + 60_000,
+      },
+    }, null, 2)}\n`, { mode: 0o600 })
+    const ctx = new Context()
+    contexts.push(ctx)
+    await ctx.plugin(LlmRuntime)
+    await ctx.plugin(LlmPiAi, { providers: { cursor: { apiKeyEnv: 'CURSOR_TOKEN' } } })
+    expect(ctx.llm.listProviders()).toEqual([{
+      id: 'cursor',
+      name: 'cursor',
     }])
   })
 
@@ -616,6 +717,24 @@ describe('login and logout commands', () => {
     })
     expect(result.finish).toMatchObject({ kind: 'error', failure: { code: 'MISSING_CREDENTIAL' } })
   })
+
+  it('maps a keyless cursor stream without a stored token to MISSING_CREDENTIAL', async () => {
+    await isolateDshHome()
+    const ctx = new Context()
+    contexts.push(ctx)
+    await ctx.plugin(LlmRuntime)
+    await ctx.plugin(LlmPiAi, { providers: { cursor: {} } })
+    const result = await assemble(ctx, {
+      provider: 'cursor',
+      model: 'composer-1.5',
+      messages: [createUserMessage({
+        content: [{ type: 'text', text: 'hi' }],
+        source: { kind: 'plugin', plugin: 'test' },
+      })],
+    })
+    expect(result.finish).toMatchObject({ kind: 'error', failure: { code: 'MISSING_CREDENTIAL' } })
+    expect(JSON.stringify(result.finish)).toMatch(/\/login cursor/)
+  })
 })
 
 describe('loginOpenaiCodex', () => {
@@ -642,6 +761,25 @@ describe('loginOpenaiCodex', () => {
     await expect(loginOpenaiCodex(store, createBrowserOAuthInteraction({ openUrl: async () => undefined })))
       .rejects.toThrow(/does not ship openai-codex/)
   })
+
+  it('refuses hosted login when the provider offers no OAuth method', async () => {
+    vi.spyOn(catalog, 'catalogProvider').mockReturnValue({
+      id: 'cursor',
+      name: 'Cursor',
+      auth: {},
+      getModels: () => [],
+      stream: () => {
+        throw new Error('unused')
+      },
+      streamSimple: () => {
+        throw new Error('unused')
+      },
+    })
+    const dir = await mkdtemp(join(tmpdir(), 'dsh-oauth-login-'))
+    const store = new FileOAuthStore(join(dir, OAUTH_CREDENTIALS_FILENAME))
+    await expect(loginHostedOAuth('cursor', store, createBrowserOAuthInteraction({ openUrl: async () => undefined })))
+      .rejects.toThrow(/does not offer OAuth/)
+  })
 })
 
 describe('rethrowPiAiError', () => {
@@ -652,6 +790,12 @@ describe('rethrowPiAiError', () => {
     } catch (error) {
       expect(error).toMatchObject({ code: 'MISSING_CREDENTIAL' })
       expect(String(error)).toMatch(/\/login openai-codex/)
+    }
+    try {
+      rethrowPiAiError(new Error('Provider is not configured: cursor'))
+    } catch (cursorError) {
+      expect(cursorError).toMatchObject({ code: 'MISSING_CREDENTIAL' })
+      expect(String(cursorError)).toMatch(/\/login cursor/)
     }
   })
 

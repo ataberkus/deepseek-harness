@@ -781,7 +781,7 @@ describe('openai-codex login tab', () => {
     const { ctx, source, warm } = await loginBench(() => new Promise((resolve) => { finish = resolve }))
     await warm(proj('s1'))
     const pending = submitLogin(source, 'openai-codex')
-    expect(open).toHaveBeenCalledWith('about:blank', 'dsh-openai-codex-login')
+    expect(open).toHaveBeenCalledWith('about:blank', 'dsh-oauth-login')
     ctx.remote.$dispatch('commands/open-url', [CODEX_AUTH_URL])
     expect(tab.location.href).toBe(CODEX_AUTH_URL)
     expect(open).toHaveBeenCalledTimes(1)
@@ -796,7 +796,17 @@ describe('openai-codex login tab', () => {
     const { source, warm } = await loginBench()
     await warm(proj('s1'))
     await submitLogin(source, '')
-    expect(open).toHaveBeenCalledWith('about:blank', 'dsh-openai-codex-login')
+    expect(open).toHaveBeenCalledWith('about:blank', 'dsh-oauth-login')
+  })
+
+  it('opens a blank tab for /login cursor', async () => {
+    const tab = { closed: false, location: { href: 'about:blank' } }
+    const open = vi.fn(() => tab)
+    vi.stubGlobal('window', { open })
+    const { source, warm } = await loginBench()
+    await warm(proj('s1'))
+    await submitLogin(source, 'cursor')
+    expect(open).toHaveBeenCalledWith('about:blank', 'dsh-oauth-login')
   })
 
   it('does not open a tab for /plan or /login anthropic', async () => {
@@ -835,9 +845,9 @@ describe('openai-codex login tab', () => {
     const { ctx, source, warm } = await loginBench(() => new Promise((resolve) => { finish = resolve }))
     await warm(proj('s1'))
     const pending = submitLogin(source, 'openai-codex')
-    expect(open).toHaveBeenCalledWith('about:blank', 'dsh-openai-codex-login')
+    expect(open).toHaveBeenCalledWith('about:blank', 'dsh-oauth-login')
     ctx.remote.$dispatch('commands/open-url', [CODEX_AUTH_URL])
-    expect(open).toHaveBeenLastCalledWith(CODEX_AUTH_URL, 'dsh-openai-codex-login')
+    expect(open).toHaveBeenLastCalledWith(CODEX_AUTH_URL, 'dsh-oauth-login')
     finish({ matched: true })
     await pending
   })
@@ -852,7 +862,7 @@ describe('openai-codex login tab', () => {
     const pending = submitLogin(source, 'openai-codex')
     tab.closed = true
     ctx.remote.$dispatch('commands/open-url', [CODEX_AUTH_URL])
-    expect(open).toHaveBeenLastCalledWith(CODEX_AUTH_URL, 'dsh-openai-codex-login')
+    expect(open).toHaveBeenLastCalledWith(CODEX_AUTH_URL, 'dsh-oauth-login')
     finish({ matched: true })
     await pending
   })

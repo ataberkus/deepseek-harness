@@ -16,7 +16,7 @@ Status: implemented
 
 目录只提供模型页密钥字段能够认证的东西。`catalogProviderTakesApiKey(provider)` 回答已安装 catalog 提供方是否声明了 api-key 方法——这是页面能喂进去的唯一方法，因为它经 harness 凭据层解析密钥并作为请求的 `apiKey` 覆盖交出——`directoryEntries()` 跳过通不过该项的 catalog 路由。
 
-`openai-codex` 的宿主 OAuth 是另一条登录路径：[[2026-08-18-openai-codex-oauth-host]] 持久化 `CredentialStore`，并在 `/login openai-codex` 之后注册 live 路由。那条路径不会加一张密钥卡片，因此本项不予提供仍然成立。在没有已存 token 时始终注册该路由，会在没有可用 API 密钥提供方时把引导标成就绪。
+`openai-codex` 的宿主 OAuth 是另一条登录路径：[[2026-08-18-openai-codex-oauth-host]] 持久化 `CredentialStore`，并在 `/login openai-codex` 之后注册 live 路由。托管的 `cursor` 以同样方式不予提供：它不在 `catalogProviderIds()` 里，且 `catalogProviderTakesApiKey('cursor')` 为 false（[[2026-08-18-cursor-oauth-host]]）。那些路径不会加一张密钥卡片，因此本项不予提供仍然成立。在没有已存 token 时始终注册该路由，会在没有可用 API 密钥提供方时把引导标成就绪。
 
 两条边界把「不提供」的范围收窄：
 

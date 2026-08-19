@@ -85,6 +85,7 @@ export type {
 } from './config.ts'
 export { supportedProtocols } from './provider.ts'
 export { OPENAI_CODEX_DISPLAY_NAME, OPENAI_CODEX_PROVIDER } from './oauth-login.ts'
+export { CURSOR_DISPLAY_NAME, CURSOR_PROVIDER } from './cursor/constants.ts'
 export { OAUTH_CREDENTIALS_FILENAME } from './oauth-store.ts'
 
 export const name = 'llm-pi-ai'
@@ -193,7 +194,7 @@ export function apply(ctx: Context, config: Config): void {
     resolveMemo()
     return memoizedSettings as ReadonlyMap<string, ResolvedPiAiProviderProfile>
   }
-  /** Profiles the adapter serves, including a stored `openai-codex` OAuth route. */
+  /** Profiles the adapter serves, including stored hosted OAuth routes. */
   const profiles = (): ReadonlyMap<string, ResolvedPiAiProviderProfile> => {
     resolveMemo()
     return memoizedLive as ReadonlyMap<string, ResolvedPiAiProviderProfile>

@@ -285,6 +285,28 @@ describe('ModelsSection', () => {
     expect(screen.queryByLabelText(en.keyInput)).toBeNull()
   })
 
+  it('renders Cursor signed-in copy on a cursor OAuth live route', async () => {
+    const scripted = scriptedFace()
+    scripted.face.llm.providers.mockImplementation(() => Promise.resolve(ok({
+      providers: [
+        {
+          provider: 'cursor',
+          displayName: 'Cursor',
+          settingsNs: '',
+          settingsPath: [],
+          active: true,
+          auth: 'oauth',
+          connected: true,
+        },
+      ],
+    })))
+    await mountFace(scripted)
+    expect(screen.getByText('Cursor')).toBeTruthy()
+    const signedIn = screen.getByRole('img', { name: en.oauthConfiguredCursor })
+    expect(signedIn.getAttribute('title')).toBe(en.oauthConfiguredCursor)
+    expect(screen.queryByRole('button', { name: 'Edit Cursor' })).toBeNull()
+  })
+
   it('marks only a confirmed missing reference and leaves native or unavailable state unmarked', async () => {
     const { face } = scriptedFace()
     face.credentials.describe.mockImplementation((payload: { refs: string[] }) => Promise.resolve(ok({
