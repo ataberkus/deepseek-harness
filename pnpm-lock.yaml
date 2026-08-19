@@ -6657,6 +6657,18 @@ importers:
         specifier: workspace:^
         version: link:../../workspace/workspace
 
+  packages/session/workspace-checkpoint-local:
+    devDependencies:
+      '@deepseek-ai/cordis':
+        specifier: workspace:^
+        version: link:../../../vendor/cordis
+      '@deepseek-ai/dsh-invariants':
+        specifier: workspace:^
+        version: link:../../runtime-diagnostics/invariants
+      '@deepseek-ai/dsh-workspace-checkpoint':
+        specifier: workspace:^
+        version: link:../workspace-checkpoint
+
   packages/settings/settings:
     dependencies:
       '@deepseek-ai/schemastery':
