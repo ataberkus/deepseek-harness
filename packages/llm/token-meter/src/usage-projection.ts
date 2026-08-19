@@ -157,7 +157,7 @@ ProjectionDefinition<'tokenUsage', TokenUsageState> = {
     }
   },
   view: state => state.totals,
-  stateVersion: 1,
+  stateVersion: 2,
 }
 
 /**
