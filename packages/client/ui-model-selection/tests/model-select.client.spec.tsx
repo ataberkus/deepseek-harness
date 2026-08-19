@@ -82,6 +82,31 @@ describe('ModelSelect reasoning effort', () => {
     })
   })
 
+  it('closes the menu as soon as an effort click is submitted', () => {
+    const directory = createSnapshotStore<ModelDirectoryState>(state())
+    const select = vi.fn(() => new Promise<boolean>(() => { /* host still in flight */ }))
+    render(<ModelSelect
+      locked={false}
+      available
+      directory={directory}
+      load={vi.fn()}
+      select={select}
+      t={t}
+    />)
+
+    fireEvent.click(screen.getByRole('button', {
+      name: '选择模型，当前 DeepSeek-V4-Flash，推理等级 High',
+    }))
+    fireEvent.click(screen.getByRole('menuitem', { name: /推理等级/ }))
+    fireEvent.click(screen.getByRole('menuitemradio', { name: /Max/ }))
+    expect(select).toHaveBeenCalledWith({
+      provider: 'deepseek-official',
+      model: 'deepseek-v4-flash',
+      reasoningEffort: 'max',
+    })
+    expect(screen.queryByRole('menu')).toBeNull()
+  })
+
   it('offers provider default only when the adapter does not configure a model default', () => {
     const directory = createSnapshotStore(state({
       groups: [{

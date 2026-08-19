@@ -352,7 +352,7 @@ function Loaded({ injected }: { injected: ModelsSectionInjected }): ReactNode {
                         setDeleteTarget(oauthTarget)
                       }}
                     >
-                      {t('oauthSignOut')}
+                      {t('remove')}
                     </button>
                   </span>
                 </div>

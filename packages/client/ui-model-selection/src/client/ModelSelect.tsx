@@ -7,7 +7,9 @@
  * ToggleButton) shows both: model name + effort in the caption tone.
  * Data and submission ride the SAME per-session ModelDirectory as the
  * /model popup; exact-model reasoning metadata and the selected effort come
- * from the Host rather than a client-owned vocabulary. The model pane
+ * from the Host rather than a client-owned vocabulary. The seat closes as
+ * soon as a click is submitted; the directory echoes the selection so the
+ * trigger updates without waiting for `session.selectModel`. The model pane
  * filters advertised groups locally as the user types; `/model` already
  * filters through the shared popupSelect shell. A rejected selection
  * announces through the shared transient Toast anchored to the composer
@@ -216,6 +218,7 @@ export function ModelSelect(
       return
     }
     lastActionRef.current = 'select'
+    close(true)
     void select(selection).then(settleSelection)
   }
 
@@ -231,6 +234,7 @@ export function ModelSelect(
       ...effort === undefined ? {} : { reasoningEffort: effort },
     }
     lastActionRef.current = 'select'
+    close(true)
     void select(selection).then(settleSelection)
   }
 

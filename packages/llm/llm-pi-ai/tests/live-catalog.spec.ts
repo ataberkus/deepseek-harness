@@ -68,6 +68,25 @@ describe('live catalog overlay', () => {
     expect(server.paths).toContain('/models')
   })
 
+  it('reuses one listing overlay across listModels and per-id resolveModelInfo', async () => {
+    const catalog = getBuiltinModels('openrouter')
+    const known = catalog[0]
+    if (known === undefined) throw new Error('expected an OpenRouter catalog model')
+    const server = await listingServer({
+      data: [
+        { id: known.id, supported_parameters: ['tools'] },
+        { id: 'vendor/live-only', name: 'Live Only', supported_parameters: ['tools'] },
+      ],
+    })
+    const ctx = new Context()
+    await ctx.plugin(LlmRuntime)
+    await ctx.plugin(LlmPiAi, { providers: { openrouter: { baseURL: server.url } } })
+    const listed = await ctx.llm.listModels('openrouter')
+    const before = server.paths.length
+    await Promise.all(listed.map(model => ctx.llm.resolveModelInfo('openrouter', model.id)))
+    expect(server.paths.length).toBe(before)
+  })
+
   it('exposes OpenRouter efforts for a live-only row that discloses reasoning', async () => {
     const catalog = getBuiltinModels('openrouter')
     const known = catalog[0]

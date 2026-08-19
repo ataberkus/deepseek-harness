@@ -34,4 +34,4 @@ pi-ai profile 的 `models` 列表就在卡片上编辑：一行一个模型，�
 - **凭据清理范围刻意保持狭窄**：删除一行时，仅当其引用与页面派生的 `<ROUTE>_API_KEY` 目标完全一致，才会清除已配置且可写的凭据。自定义引用、环境凭据和无法识别的目标会保留，因为该行无法证明自己拥有它们。
 - **只有 pi-ai 路由可以手工声明**：自定义提供方卡片写入 `llm-pi-ai`——唯一一个其 profile 描述整个提供方的 namespace。`llm-deepseek` 路由是组合面的事实，不是本页能创建的东西。
 - **询问只覆盖 OpenAI 兼容端点**：适配器只读这种模型列表响应格式，因此讲其他协议的网关会报告自己无法被询问，其模型需手工填写。
-- **未声明的存活路由无处渲染，OAuth 已连接路由除外**：未附带可配置提供方声明即注册的通用适配器没有 settings 地址，不会出现在本页。`auth: oauth` 存活路由（`/login openai-codex` 之后的 ChatGPT Codex，或 `/login cursor` 之后的 Cursor）渲染为已登录行：名称加上已连接圆点，没有密钥字段，也没有 Sign-in 按钮。退出登录会调用 `llm.logout` 并删除已存储的登录（与 `/logout openai-codex` 或 `/logout cursor` 删除同一份存储）。
+- **未声明的存活路由无处渲染，OAuth 已连接路由除外**：未附带可配置提供方声明即注册的通用适配器没有 settings 地址，不会出现在本页。`auth: oauth` 存活路由（`/login openai-codex` 之后的 ChatGPT Codex，或 `/login cursor` 之后的 Cursor）渲染为已登录行：名称加上已连接圆点，没有密钥字段，也没有 Sign-in 按钮。删除会调用 `llm.logout` 并删除已存储的登录（与 `/logout openai-codex` 或 `/logout cursor` 删除同一份存储）。

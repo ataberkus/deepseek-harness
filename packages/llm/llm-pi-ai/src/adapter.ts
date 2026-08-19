@@ -73,6 +73,12 @@ interface PiAiSnapshot {
   profiles: ReadonlyMap<string, ResolvedPiAiProviderProfile>
   /** Providers for exactly those profiles; never mutated once published. */
   models: Models
+  /**
+   * Overlay (or installed catalog) for one route, memoized for this snapshot.
+   * `session.models` resolves every advertised id; without this, each
+   * `resolveModel` rebuilds the live listing overlay.
+   */
+  served: Map<string, Promise<readonly Model<Api>[]>>
 }
 
 /** Constructor options for {@link PiAiAdapter}: the two resolution hooks the plugin owns. */
@@ -243,7 +249,7 @@ export class PiAiAdapter extends LlmAdapter {
       this.config.credentials === undefined ? {} : { credentials: this.config.credentials },
     )
     for (const profile of profiles.values()) models.setProvider(profile.piProvider)
-    this.snapshot = { profiles, models }
+    this.snapshot = { profiles, models, served: new Map() }
     return this.snapshot
   }
 
@@ -264,6 +270,21 @@ export class PiAiAdapter extends LlmAdapter {
    * set so a picker never goes empty.
    */
   private async servedModels(snapshot: PiAiSnapshot, provider: string): Promise<readonly Model<Api>[]> {
+    const cached = snapshot.served.get(provider)
+    if (cached !== undefined) return cached
+    const pending = this.loadServedModels(snapshot, provider)
+    snapshot.served.set(provider, pending)
+    return pending
+  }
+
+  /**
+   * Compute {@link servedModels} for one route. Listing failure returns the
+   * installed set so a picker never goes empty.
+   * @param snapshot Frozen profiles and collection.
+   * @param provider Route id.
+   * @returns Models this route currently serves.
+   */
+  private async loadServedModels(snapshot: PiAiSnapshot, provider: string): Promise<readonly Model<Api>[]> {
     const profile = this.profileOf(snapshot, provider)
     const installed = snapshot.models.getModels(provider)
     if (!profile.servesInstalledCatalog) return installed

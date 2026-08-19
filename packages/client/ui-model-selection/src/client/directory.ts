@@ -1,9 +1,9 @@
 /**
  * Per-session model directory: the ONE state both selection entries share.
  * The /model popup and the composer-seat selector load through the same
- * controller and submit through the same selectModel call, so the host stays
- * the single fact source and the store is one shared echo — a switch made in
- * either entry is what the other shows next.
+ * controller and submit through the same selectModel call. The store echoes a
+ * click immediately, then the Host-accepted selection; a switch made in either
+ * entry is what the other shows next.
  */
 import type {
   IApiClient, ModelCatalogFailure, ModelProviderGroup, ModelSelection, SessionId, SessionModels,
@@ -63,7 +63,14 @@ export class ModelDirectory {
   async load(): Promise<SessionModels> {
     this.assertAvailable()
     const generation = ++this.generation
-    this.store.update((s) => { s.status = 'loading'; s.error = null })
+    const refreshInPlace = this.store.getSnapshot().groups.length > 0
+    this.store.update((s) => {
+      // A picker that already has groups keeps showing them while the Host
+      // rebuilds a large live overlay; flipping to `loading` would freeze
+      // the checkmark until that round trip returns.
+      if (!refreshInPlace) s.status = 'loading'
+      s.error = null
+    })
     const { result } = await this.sessions.models({ sessionId: this.sessionId })
     if (this.disposed || generation !== this.generation) {
       if (!result.ok) throw new Error(`${result.error.code}: ${result.error.message}`)
@@ -86,15 +93,23 @@ export class ModelDirectory {
   }
 
   /**
-   * Select the complete provider/model/reasoning selection (both entries submit through here). Success
-   * updates the shared current; failure surfaces on the store and throws so
-   * each entry's own retry surface engages.
+   * Select the complete provider/model/reasoning selection (both entries submit through here).
+   * The shared current echoes the click immediately so the composer checkmark
+   * does not wait on `session.selectModel`; a Host refusal restores the
+   * previous current. Failure surfaces on the store and throws so each entry's
+   * own retry surface engages.
    * @param selection - provider, provider-owned model id, and optional adapter-owned effort.
  */
   async select(selection: ModelSelection): Promise<void> {
     this.assertAvailable()
     const generation = ++this.generation
-    this.store.update((s) => { s.status = 'selecting'; s.error = null })
+    const previous = this.store.getSnapshot()
+    this.store.update((s) => {
+      s.current = selection
+      s.routable = true
+      s.status = 'selecting'
+      s.error = null
+    })
     const { result } = await this.sessions.selectModel({
       sessionId: this.sessionId,
       provider: selection.provider,
@@ -108,11 +123,17 @@ export class ModelDirectory {
       return
     }
     if (!result.ok) {
-      this.store.update((s) => { s.status = 'error'; s.error = `${result.error.code}: ${result.error.message}` })
+      this.store.update((s) => {
+        s.current = previous.current
+        s.routable = previous.routable
+        s.status = 'error'
+        s.error = `${result.error.code}: ${result.error.message}`
+      })
       throw new Error(`session.selectModel failed: ${result.error.code}: ${result.error.message}`)
     }
     // The Host validated the route before accepting it, so a selection that
-    // landed is by construction one it can serve.
+    // landed is by construction one it can serve. Its effort may be the
+    // adapter default when the click omitted one.
     this.store.update((s) => {
       s.current = result.value.selected
       s.routable = true
