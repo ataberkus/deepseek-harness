@@ -6,6 +6,7 @@ import { Fragment, memo, useLayoutEffect, useMemo, useRef, useState } from 'reac
 import { Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { ConversationSnapshot, UseProjection } from '@deepseek-ai/dsh-client-runtime/client'
 import type { SnapshotSelectorHook } from '@deepseek-ai/dsh-client-ui-slots'
+import { formatUsdCost } from '@deepseek-ai/dsh-llm'
 // Type-only: merges the sessionStats key into SessionProjectionMap for useProjection.
 import type {} from '@deepseek-ai/dsh-session-stats/client'
 import type { ContextPressureProjection, TokenUsageProjection } from '@deepseek-ai/dsh-token-meter/client'
@@ -202,6 +203,19 @@ export const StatsLine = memo(function StatsLine({ useSession, useProjection, t 
       input: formatTokens(billedInputTokens(usage)),
       output: formatTokens(usage.outputTokens),
     }))
+  }
+  const usageTokens = usage === undefined ? 0 : billedInputTokens(usage) + usage.outputTokens
+  const unpricedSteps = usage?.unpricedSteps ?? (usageTokens > 0 ? 1 : 0)
+  const approximateSteps = usage?.approximateSteps ?? 0
+  if (usage !== undefined && (usageTokens > 0 || unpricedSteps > 0)) {
+    if (unpricedSteps > 0) {
+      groups.push(t('stats.costUnavailable'))
+    } else {
+      groups.push(t(
+        approximateSteps > 0 ? 'stats.approximateCost' : 'stats.estimatedCost',
+        { cost: formatUsdCost(usage.estimatedCostUsd ?? 0) },
+      ))
+    }
   }
   const line = groups.join(' | ')
   // The row elides with ellipsis when overlong; a delayed hover tooltip carries

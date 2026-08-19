@@ -1,5 +1,17 @@
 import type { TokenCostBasis, TokenPricing, TokenUsage } from './types.ts'
 
+/** Shared fixed-density text estimate used when a provider omits input usage. */
+export function estimateTextTokens(text: string): number {
+  return Math.ceil(text.length / 4)
+}
+
+/** Format a non-negative USD estimate with magnitude-sensitive precision. */
+export function formatUsdCost(cost: number): string {
+  if (cost < 0.01) return `$${cost.toFixed(4)}`
+  if (cost < 1) return `$${cost.toFixed(3)}`
+  return `$${cost.toFixed(2)}`
+}
+
 /**
  * Apply a per-million-token rate card to disjoint provider usage buckets.
  * Missing rates make a non-empty bucket unpriced and leave the usage unchanged.

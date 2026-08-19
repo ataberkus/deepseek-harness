@@ -7,6 +7,7 @@ import { act, cleanup, fireEvent, render } from '@testing-library/react'
 import type {
   AssistantMessageNode, ConversationSnapshot, SessionId, ToolResultNode,
 } from '@deepseek-ai/dsh-client-runtime/client'
+import { formatUsdCost } from '@deepseek-ai/dsh-llm'
 import { EMPTY_CONVERSATION_VIEWS } from '@deepseek-ai/dsh-client-runtime/client'
 import { bindSnapshotSelector } from '@deepseek-ai/dsh-client-web-react'
 import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
@@ -166,10 +167,24 @@ describe('formatters', () => {
     expect(formatDuration(45_230)).toBe('45.2s')
     expect(formatDuration(162_000)).toBe('2m42s')
   })
+
+  it('formats estimated USD cost using magnitude-sensitive precision', () => {
+    expect(formatUsdCost(0.00123)).toBe('$0.0012')
+    expect(formatUsdCost(0.1234)).toBe('$0.123')
+    expect(formatUsdCost(1.234)).toBe('$1.23')
+  })
 })
 
 describe('StatsLine', () => {
-  const USAGE = { uncachedInputTokens: 10, outputTokens: 5, cacheReadTokens: 90, cacheWriteTokens: 0 }
+  const USAGE = {
+    uncachedInputTokens: 10,
+    outputTokens: 5,
+    cacheReadTokens: 90,
+    cacheWriteTokens: 0,
+    estimatedCostUsd: 0,
+    unpricedSteps: 1,
+    approximateSteps: 0,
+  }
 
   /** A whole-log sessionStats value: zeros plus overrides. */
   function sessionStats(overrides: Record<string, number>): Record<string, number> {
@@ -196,13 +211,51 @@ describe('StatsLine', () => {
     const view = render(<StatsLine {...props(source)} />)
     // No timing on the fixture: the duration group drops out whole. Tokens come
     // from the projection, so paging the window cannot change them.
-    expect(view.container.textContent).toBe('1 turns · 1 steps| Cache hit 90%| Input 100 tok · Output 5 tok')
+    expect(view.container.textContent).toBe('1 turns · 1 steps| Cache hit 90%| Input 100 tok · Output 5 tok| Estimated cost unavailable')
     const empty = makeSource()
     const emptyView = render(<StatsLine {...props(empty.source, {
-      tokenUsage: { uncachedInputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 },
+      tokenUsage: {
+        uncachedInputTokens: 0,
+        outputTokens: 0,
+        cacheReadTokens: 0,
+        cacheWriteTokens: 0,
+        estimatedCostUsd: 0,
+        unpricedSteps: 0,
+        approximateSteps: 0,
+      },
       contextPressure: {},
     })} />)
     expect(emptyView.container.textContent).toBe('')
+  })
+
+  it('renders estimated, approximate, and unavailable session cost', () => {
+    const { source } = makeSource({ nodes: [assistant(1, 1)] })
+    const view = render(<StatsLine {...props(source, {
+      tokenUsage: {
+        ...USAGE,
+        estimatedCostUsd: 0.0123,
+        unpricedSteps: 0,
+        approximateSteps: 0,
+      },
+    })} />)
+    expect(view.container.textContent).toContain('Estimated cost $0.012')
+    view.unmount()
+
+    const approximate = render(<StatsLine {...props(source, {
+      tokenUsage: {
+        ...USAGE,
+        estimatedCostUsd: 0.0123,
+        unpricedSteps: 0,
+        approximateSteps: 1,
+      },
+    })} />)
+    expect(approximate.container.textContent).toContain('Approx. cost $0.012')
+    approximate.unmount()
+
+    const unavailable = render(<StatsLine {...props(source, {
+      tokenUsage: { ...USAGE, estimatedCostUsd: 0, unpricedSteps: 1, approximateSteps: 0 },
+    })} />)
+    expect(unavailable.container.textContent).toContain('Estimated cost unavailable')
   })
 
   it('reveals the full line in a delayed hover tooltip only while the row is clipped', () => {
@@ -217,7 +270,7 @@ describe('StatsLine', () => {
     expect(view.container.querySelector('[role="tooltip"]')).toBeNull()
     act(() => { vi.advanceTimersByTime(1) })
     expect(view.container.querySelector('[role="tooltip"]')?.textContent)
-      .toBe('1 turns · 1 steps | Cache hit 90% | Input 100 tok · Output 5 tok')
+      .toBe('1 turns · 1 steps | Cache hit 90% | Input 100 tok · Output 5 tok | Estimated cost unavailable')
   })
 
   it('suppresses the tooltip while the row fits without truncation', () => {
@@ -247,7 +300,7 @@ describe('StatsLine', () => {
     const { source } = makeSource({ nodes: [timed] })
     const view = render(<StatsLine {...props(source)} t={t} />)
     expect(view.container.textContent)
-      .toBe('1 轮 · 1 步| LLM 3.8s| 首 token 平均 0.8s · 20 tok/s| 缓存命中 90%| 输入 100 tok · 输出 5 tok')
+      .toBe('1 轮 · 1 步| LLM 3.8s| 首 token 平均 0.8s · 20 tok/s| 缓存命中 90%| 输入 100 tok · 输出 5 tok| 预计费用不可用')
   })
 
   it('renders without ResizeObserver support', () => {
@@ -264,7 +317,7 @@ describe('StatsLine', () => {
     })} />)
     // Context occupancy lives on the composer's ContextMeter ring, not here.
     expect(view.container.textContent)
-      .toBe('Cache hit 90%| Input 100 tok · Output 5 tok')
+      .toBe('Cache hit 90%| Input 100 tok · Output 5 tok| Estimated cost unavailable')
   })
 
   it('computes context occupancy only when both a numerator and capacity are known', () => {
@@ -300,7 +353,7 @@ describe('StatsLine', () => {
       sessionStats: sessionStats({ turns: 10, steps: 89 }),
     })} />)
     expect(view.container.textContent)
-      .toBe('10 turns · 89 steps| Cache hit 90%| Input 100 tok · Output 5 tok')
+      .toBe('10 turns · 89 steps| Cache hit 90%| Input 100 tok · Output 5 tok| Estimated cost unavailable')
   })
 
   it('treats a defined zero-count projection as empty, not as fallback', () => {
@@ -334,7 +387,7 @@ describe('StatsLine', () => {
       sessionStats: sessionStats({ turns: 7, steps: 44 }),
     })} />)
     expect(view.container.textContent)
-      .toBe('7 turns · 44 steps| Cache hit 90%| Input 100 tok · Output 5 tok')
+      .toBe('7 turns · 44 steps| Cache hit 90%| Input 100 tok · Output 5 tok| Estimated cost unavailable')
   })
 
   it('renders whole-log wall times and speeds from the projection, not the loaded window', () => {
@@ -350,7 +403,7 @@ describe('StatsLine', () => {
       }),
     })} />)
     expect(view.container.textContent).toBe(
-      '200 turns · 200 steps| LLM 1m40s · Tool call 1m2s| TTFT avg 0.8s · 20 tok/s| Cache hit 90%| Input 100 tok · Output 5 tok',
+      '200 turns · 200 steps| LLM 1m40s · Tool call 1m2s| TTFT avg 0.8s · 20 tok/s| Cache hit 90%| Input 100 tok · Output 5 tok| Estimated cost unavailable',
     )
   })
 
@@ -359,7 +412,7 @@ describe('StatsLine', () => {
     const view = render(<StatsLine {...props(source, {
       tokenUsage: { uncachedInputTokens: 0, outputTokens: 7, cacheReadTokens: 0, cacheWriteTokens: 0 },
     })} />)
-    expect(view.container.textContent).toBe('1 turns · 1 steps| Input 0 tok · Output 7 tok')
+    expect(view.container.textContent).toBe('1 turns · 1 steps| Input 0 tok · Output 7 tok| Estimated cost unavailable')
   })
 
   it('includes cache writes in billed input and the cache-hit denominator', () => {
@@ -373,7 +426,7 @@ describe('StatsLine', () => {
       },
     })} />)
     expect(view.container.textContent)
-      .toBe('1 turns · 1 steps| Cache hit 45%| Input 200 tok · Output 7 tok')
+      .toBe('1 turns · 1 steps| Cache hit 45%| Input 200 tok · Output 7 tok| Estimated cost unavailable')
   })
 
   it('renders ZERO times during streaming chunk frames (RFC hard acceptance)', () => {

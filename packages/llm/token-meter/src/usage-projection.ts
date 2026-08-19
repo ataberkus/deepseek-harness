@@ -14,9 +14,6 @@ interface UsageSample {
   turn: number
   step: number
   buckets: TokenUsageProjection
-  estimatedCostUsd: number
-  unpricedSteps: number
-  approximateSteps: number
 }
 
 interface TokenUsageState {
