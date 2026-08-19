@@ -21,7 +21,7 @@ import type {
 } from '@deepseek-ai/dsh-workspace-checkpoint'
 import type { StoredCheckpointRecord, StoredSessionCheckpointIndex } from '@deepseek-ai/dsh-workspace-checkpoint'
 import { buildManifest } from './manifest.ts'
-import { blobExists, putBlob, totalBlobBytes } from './objects.ts'
+import { blobExists, putBlob } from './objects.ts'
 import { canonicalizeCwd, fromManifestPath } from './paths.ts'
 
 /** Test hook: replace `buildManifest` to inject concurrent-write failures. */
@@ -52,6 +52,7 @@ export async function captureCheckpoint(
     readonly captureRetryCount: number
     readonly captureRetryDelayMs: number
     readonly domain: CheckpointDomain
+    emitChanged?(sessionId: SessionId): void
   },
 ): Promise<CheckpointRecord> {
   const workspaceKey = await canonicalizeCwd(request.cwd)
@@ -100,9 +101,12 @@ export async function captureCheckpoint(
   await sessions.put(sessionId, {
     checkpointIds: [...index?.checkpointIds ?? [], id],
     ...index?.appliedCheckpointId === undefined ? {} : { appliedCheckpointId: index.appliedCheckpointId },
-    ...index?.emergencyCheckpointId === undefined ? {} : { emergencyCheckpointId: index.emergencyCheckpointId },
+    ...request.role === 'emergency'
+      ? { emergencyCheckpointId: id }
+      : index?.emergencyCheckpointId === undefined ? {} : { emergencyCheckpointId: index.emergencyCheckpointId },
     ...index?.recoveryRequired === undefined ? {} : { recoveryRequired: index.recoveryRequired },
   })
+  options.emitChanged?.(sessionId)
   return toRecord(stored)
 }
 
@@ -126,6 +130,18 @@ export function loadStoredCheckpoint(id: CheckpointId, domain: CheckpointDomain)
  */
 export function inspectCheckpoint(id: CheckpointId, domain: CheckpointDomain): CheckpointRecord {
   return toRecord(loadStoredCheckpoint(id, domain))
+}
+
+/**
+ * @param sessionId - owning session.
+ * @param domain - open domain.
+ * @returns the session index row, when present.
+ */
+export function loadSessionIndex(
+  sessionId: SessionId,
+  domain: CheckpointDomain,
+): StoredSessionCheckpointIndex | undefined {
+  return domain.table('sessions').get(sessionId)
 }
 
 /**
@@ -193,8 +209,7 @@ async function admitBlobs(
     newHashes.add(entry.hash)
     added += entry.size
   }
-  const current = await totalBlobBytes(objectRoot)
-  if (current + added > maxTotalBytes) return 'quota-exhausted'
+  if (added > maxTotalBytes) return 'quota-exhausted'
   for (const entry of files) {
     const path = fromManifestPath(cwd, entry.relativePath)
     const bytes = await readFile(path)

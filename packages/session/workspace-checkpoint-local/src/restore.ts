@@ -19,7 +19,6 @@ import { WorkspaceCheckpointError } from '@deepseek-ai/dsh-workspace-checkpoint'
 import type {
   RestoreRequest,
   RestoreResult,
-  WorkspaceLease,
 } from '@deepseek-ai/dsh-workspace-checkpoint'
 import type { StoredCheckpointRecord } from '@deepseek-ai/dsh-workspace-checkpoint'
 import type { Domain } from '@deepseek-ai/dsh-storage-domain'
@@ -27,6 +26,7 @@ import { workspaceCheckpointDomainSpec } from '@deepseek-ai/dsh-workspace-checkp
 import { buildManifest } from './manifest.ts'
 import { readBlob } from './objects.ts'
 import { canonicalizeCwd, fromManifestPath } from './paths.ts'
+import { SessionId } from '@deepseek-ai/dsh-session'
 import { loadStoredCheckpoint } from './store.ts'
 import {
   backupDir,
@@ -59,9 +59,9 @@ export async function restoreCheckpoint(
   options: {
     readonly domain: CheckpointDomain
     readonly objectRoot: string
-    acquireLease(workspaceKey: string): Promise<WorkspaceLease>
     markRecoveryRequired(workspaceKey: string, reason: string): Promise<void>
     clearRecoveryRequired(workspaceKey: string): Promise<void>
+    emitChanged?(sessionId: SessionId): void
   },
 ): Promise<RestoreResult> {
   if (request.signal?.aborted) {
@@ -72,7 +72,6 @@ export async function restoreCheckpoint(
   if (stored.status.kind !== 'ready' || !stored.restoreEligible) {
     throw new WorkspaceCheckpointError('checkpoint is not restorable', 'CHECKPOINT_UNAVAILABLE')
   }
-  const lease = await options.acquireLease(cwd)
   let mutated = false
   let journal: RestoreJournal | undefined
   try {
@@ -98,6 +97,16 @@ export async function restoreCheckpoint(
     await rm(staging, { recursive: true, force: true })
     await rm(backup, { recursive: true, force: true })
     await removeJournal(journalPath(options.objectRoot, cwd))
+    const sessions = options.domain.table('sessions')
+    const sessionId = SessionId(stored.sessionId)
+    const index = sessions.get(sessionId)
+    await sessions.put(sessionId, {
+      checkpointIds: index?.checkpointIds ?? [stored.id],
+      appliedCheckpointId: stored.id,
+      ...index?.emergencyCheckpointId === undefined ? {} : { emergencyCheckpointId: index.emergencyCheckpointId },
+      ...index?.recoveryRequired === undefined ? {} : { recoveryRequired: index.recoveryRequired },
+    })
+    options.emitChanged?.(sessionId)
     return { checkpointId: stored.id, fileCount: stored.fileCount }
   } catch (error) {
     if (mutated && journal !== undefined) {
@@ -109,8 +118,6 @@ export async function restoreCheckpoint(
       }
     }
     throw error
-  } finally {
-    lease.release()
   }
 }
 

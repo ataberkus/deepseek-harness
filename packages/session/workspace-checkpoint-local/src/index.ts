@@ -22,8 +22,11 @@ import type {
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { Domain } from '@deepseek-ai/dsh-storage-domain'
 import { Config as ConfigSchema, type Config as ProviderConfig } from './config.ts'
+import { WorkspaceLeaseTable } from './lease.ts'
 import { resolveObjectRoot } from './objects.ts'
-import { captureCheckpoint, inspectCheckpoint, listCheckpoints } from './store.ts'
+import { canonicalizeCwd } from './paths.ts'
+import { evictCheckpoints } from './retention.ts'
+import { captureCheckpoint, inspectCheckpoint, listCheckpoints, loadSessionIndex } from './store.ts'
 import { restoreCheckpoint } from './restore.ts'
 
 export { Config } from './config.ts'
@@ -33,8 +36,19 @@ export { buildManifest } from './manifest.ts'
 export type { ManifestBuildOptions } from './manifest.ts'
 export { fileStatsRaced, throwIfFileRaced } from './manifest.ts'
 export { canonicalizeCwd, fromManifestPath, isContained, toManifestPath } from './paths.ts'
-export { captureInternals } from './store.ts'
+export { captureInternals, loadSessionIndex } from './store.ts'
 export { restoreInternals } from './restore.ts'
+
+declare module '@deepseek-ai/cordis' {
+  interface Events {
+    /**
+     * Durable checkpoint metadata or workspace association changed.
+     * @param sessionId - session whose index or records changed.
+     * @mode emit
+     */
+    'workspace-checkpoint/changed'(sessionId: SessionId): void
+  }
+}
 
 /**
  * Harness-home implementation of `ctx.workspaceCheckpoint`.
@@ -46,7 +60,7 @@ export class LocalWorkspaceCheckpoint extends WorkspaceCheckpoint {
   private readonly config: ProviderConfig
   private readonly objectRoot: string
   private domain?: Domain<typeof workspaceCheckpointDomainSpec>
-  private readonly leases = new Map<string, WorkspaceLease>()
+  private readonly leases = new WorkspaceLeaseTable()
   private readonly recovery = new Map<string, string>()
   private captureTail: Promise<void> = Promise.resolve()
 
@@ -74,14 +88,18 @@ export class LocalWorkspaceCheckpoint extends WorkspaceCheckpoint {
    * @returns the stored record; `status.kind` may be `unavailable` on fail-soft capture.
    */
   override capture(request: CaptureRequest): Promise<CheckpointRecord> {
-    return this.enqueue(async () => captureCheckpoint(request, {
-      objectRoot: this.objectRoot,
-      maxTotalBytes: this.config.maxTotalBytes,
-      excludeGlobs: this.config.excludeGlobs,
-      captureRetryCount: this.config.captureRetryCount,
-      captureRetryDelayMs: this.config.captureRetryDelayMs,
-      domain: this.requireDomain(),
-    }))
+    return this.enqueue(async () => {
+      const key = await canonicalizeCwd(request.cwd)
+      return this.leases.withLease(key, () => captureCheckpoint(request, {
+        objectRoot: this.objectRoot,
+        maxTotalBytes: this.config.maxTotalBytes,
+        excludeGlobs: this.config.excludeGlobs,
+        captureRetryCount: this.config.captureRetryCount,
+        captureRetryDelayMs: this.config.captureRetryDelayMs,
+        domain: this.requireDomain(),
+        emitChanged: sessionId => this.ctx.emit('workspace-checkpoint/changed', sessionId),
+      }), false)
+    })
   }
 
   /**
@@ -105,13 +123,16 @@ export class LocalWorkspaceCheckpoint extends WorkspaceCheckpoint {
    * @returns the restored checkpoint id and restored file count.
    */
   override restore(request: RestoreRequest): Promise<RestoreResult> {
-    return this.enqueue(async () => restoreCheckpoint(request, {
-      domain: this.requireDomain(),
-      objectRoot: this.objectRoot,
-      acquireLease: workspaceKey => this.acquireLease(workspaceKey),
-      markRecoveryRequired: (workspaceKey, reason) => this.markRecoveryRequired(workspaceKey, reason),
-      clearRecoveryRequired: workspaceKey => this.clearRecoveryRequired(workspaceKey),
-    }))
+    return this.enqueue(async () => {
+      const key = await canonicalizeCwd(request.cwd)
+      return this.leases.withLease(key, () => restoreCheckpoint(request, {
+        domain: this.requireDomain(),
+        objectRoot: this.objectRoot,
+        markRecoveryRequired: (workspaceKey, reason) => this.markRecoveryRequired(workspaceKey, reason),
+        clearRecoveryRequired: workspaceKey => this.clearRecoveryRequired(workspaceKey),
+        emitChanged: sessionId => this.ctx.emit('workspace-checkpoint/changed', sessionId),
+      }), true)
+    })
   }
 
   /**
@@ -119,17 +140,7 @@ export class LocalWorkspaceCheckpoint extends WorkspaceCheckpoint {
    * @returns a lease whose `release()` is idempotent.
    */
   override acquireLease(workspaceKey: string): Promise<WorkspaceLease> {
-    if (this.leases.has(workspaceKey)) {
-      return Promise.reject(new WorkspaceCheckpointError('workspace lease is held', 'CHECKPOINT_LEASE_HELD'))
-    }
-    const lease: WorkspaceLease = {
-      workspaceKey,
-      release: () => {
-        if (this.leases.get(workspaceKey) === lease) this.leases.delete(workspaceKey)
-      },
-    }
-    this.leases.set(workspaceKey, lease)
-    return Promise.resolve(lease)
+    return Promise.resolve().then(() => this.leases.acquire(workspaceKey))
   }
 
   /**
@@ -157,9 +168,23 @@ export class LocalWorkspaceCheckpoint extends WorkspaceCheckpoint {
     return Promise.resolve()
   }
 
-  /** Retention lands in a later task; this is a successful no-op. */
+  /**
+   * Apply retention until the blob store fits `maxTotalBytes`.
+   */
   override evict(): Promise<void> {
-    return Promise.resolve()
+    return this.enqueue(async () => {
+      const changed = await evictCheckpoints(this.requireDomain(), this.objectRoot, this.config.maxTotalBytes)
+      for (const sessionId of changed) this.ctx.emit('workspace-checkpoint/changed', sessionId)
+    })
+  }
+
+  /**
+   * Read the durable per-session checkpoint index.
+   * @param sessionId - owning session.
+   * @returns the index row, when present.
+   */
+  sessionIndex(sessionId: SessionId): ReturnType<typeof loadSessionIndex> {
+    return loadSessionIndex(sessionId, this.requireDomain())
   }
 
   private requireDomain(): Domain<typeof workspaceCheckpointDomainSpec> {
