@@ -734,6 +734,13 @@ declare abstract class LlmAdapter {
     _signal?: AbortSignal,
   ): Promise<LlmResolvedModelInfo>;
   /**
+   * Sign out of a hosted OAuth route this adapter injected. Default refuses:
+   * only adapters that persist OAuth credentials implement this.
+   * @param provider - a route passed to {@link LlmRuntime.registerAdapter}.
+   * @returns nothing; a successful call unregisters the live route.
+   */
+  logout(provider: string): Promise<void>;
+  /**
    * Stream one model call as raw chunks. The only required method.
    * @param options - the fully-assembled request; implementations must honor `options.signal`.
    * @returns the chunk stream, obeying the adapter contract documented on `StreamChunk`.
@@ -815,6 +822,13 @@ registerModelDiscovery( settingsNs: string, discover: (request: LlmModelDiscover
 async discoverModels( settingsNs: string, request: LlmModelDiscoveryRequest, ): Promise<LlmDiscoveredModel[]>
 
 /**
+ * Sign out of a hosted OAuth route owned by its registered adapter.
+ * @param provider - registered provider route to disconnect.
+ * @returns nothing; a successful call unregisters the live route.
+ */
+async logout(provider: string): Promise<void>
+
+/**
  * Resolve the retry policy captured when one provider route was registered.
  * @param provider - registered provider route to inspect.
  * @returns the provider-owned policy, with normal defaults already resolved.
@@ -876,7 +890,7 @@ async prepareCall(config: LlmCallConfig, signal?: AbortSignal): Promise<Prepared
 stream(options: GenerateOptions): AsyncIterable<StreamChunk>
 ```
 
-Source: [`packages/llm/llm/src/index.ts:284`](../../packages/llm/llm/src/index.ts)
+Source: [`packages/llm/llm/src/index.ts:297`](../../packages/llm/llm/src/index.ts)
 
 <a id="llm-events"></a>
 

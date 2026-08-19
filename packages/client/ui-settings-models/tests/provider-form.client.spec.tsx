@@ -490,7 +490,11 @@ describe('endpoint interrogation', () => {
 
   it('filters fetch candidates and selects or deselects the visible rows', async () => {
     const discover = vi.fn(() => Promise.resolve(ok({
-      models: [{ id: 'alpha-one' }, { id: 'beta-two' }, { id: 'alpha-three' }],
+      models: [
+        { id: 'alpha-one' },
+        { id: 'beta-two', name: 'Gamma Display' },
+        { id: 'alpha-three' },
+      ],
     })))
     await mountSection({ discover })
     openEditor('openai')
@@ -498,6 +502,10 @@ describe('endpoint interrogation', () => {
     await screen.findByText(en.fetchTitle)
 
     const search = screen.getByLabelText<HTMLInputElement>(en.fetchSearch)
+    fireEvent.change(search, { target: { value: 'gamma' } })
+    expect(screen.getByText('beta-two')).toBeTruthy()
+    expect(screen.queryByText('alpha-one')).toBeNull()
+
     fireEvent.change(search, { target: { value: 'alpha' } })
     expect(screen.getByText('alpha-one')).toBeTruthy()
     expect(screen.getByText('alpha-three')).toBeTruthy()
