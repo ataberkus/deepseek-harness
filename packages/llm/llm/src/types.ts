@@ -156,7 +156,7 @@ export interface TokenUsage {
    */
   estimatedCostUsd?: number
   /** Whether the estimate used complete provider usage or an input approximation. */
-  costBasis?: TokenCostBasis
+  costBasis?: 'reported-usage' | 'estimated-input'
 }
 
 /** Display metadata for one registered provider route. */

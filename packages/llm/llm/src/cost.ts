@@ -1,11 +1,19 @@
 import type { TokenCostBasis, TokenPricing, TokenUsage } from './types.ts'
 
-/** Shared fixed-density text estimate used when a provider omits input usage. */
+/**
+ * Shared fixed-density text estimate used when a provider omits input usage.
+ * @param text - serialized text to estimate.
+ * @returns estimated tokens at four characters per token.
+ */
 export function estimateTextTokens(text: string): number {
   return Math.ceil(text.length / 4)
 }
 
-/** Format a non-negative USD estimate with magnitude-sensitive precision. */
+/**
+ * Format a non-negative USD estimate with magnitude-sensitive precision.
+ * @param cost - non-negative estimated USD.
+ * @returns formatted USD value.
+ */
 export function formatUsdCost(cost: number): string {
   if (cost < 0.01) return `$${cost.toFixed(4)}`
   if (cost < 1) return `$${cost.toFixed(3)}`

@@ -287,8 +287,18 @@ interface TokenUsage {
   cacheReadTokens?: number
   cacheWriteTokens?: number
   reasoningTokens?: number
+  /**
+   * USD estimate for this call, when the provider/model rate and required
+   * token buckets are known. Historical sessions retain this value rather
+   * than recalculating it from current pricing.
+   */
+  estimatedCostUsd?: number
+  /** Whether the estimate used complete provider usage or an input approximation. */
+  costBasis?: 'reported-usage' | 'estimated-input'
 }
 ```
+
+`estimatedCostUsd` 是所选价格表覆盖每个非空用量桶时记录的逐调用 USD 估算。`reported-usage` 使用提供方完整用量；`estimated-input` 标记 Cursor 通过输出增量与序列化输入得到的近似值。缺少价格时该字段保持缺失，整段会话的费用估算也显示不可用。
 
 <a id="blockassembler"></a>
 
@@ -876,7 +886,7 @@ async prepareCall(config: LlmCallConfig, signal?: AbortSignal): Promise<Prepared
 stream(options: GenerateOptions): AsyncIterable<StreamChunk>
 ```
 
-Source: [`packages/llm/llm/src/index.ts:284`](../../packages/llm/llm/src/index.ts)
+Source: [`packages/llm/llm/src/index.ts:285`](../../packages/llm/llm/src/index.ts)
 
 <a id="llm-events"></a>
 
@@ -925,5 +935,5 @@ Waterfall around every streaming model call (retry, replay, routing). Bound to t
 'llm/stream'(this: LlmRuntime, options: GenerateOptions, next: () => AsyncIterable<StreamChunk>): AsyncIterable<StreamChunk>
 ```
 
-Source: [`packages/llm/llm/src/index.ts:64`](../../packages/llm/llm/src/index.ts)
+Source: [`packages/llm/llm/src/index.ts:65`](../../packages/llm/llm/src/index.ts)
 <!-- END GENERATED cordis-surface -->

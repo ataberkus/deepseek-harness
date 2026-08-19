@@ -60,6 +60,12 @@ function buildSeed(turns: number): string {
           content: [{ type: 'text', text: `r${turn}` }],
           source: { kind: 'model', provider: 'snapshot', model: 'snapshot-replier' },
         },
+        usage: {
+          inputTokens: 10,
+          outputTokens: 5,
+          estimatedCostUsd: 0.0123,
+          costBasis: 'reported-usage',
+        },
       },
       sourceEventSeqs: [],
       surfaceOp: 'append',
@@ -107,6 +113,7 @@ describe('web e2e: whole-session stats survive history paging', () => {
     // the sessionStats projection, not the window fold.
     expect(await page.getByText('m1', { exact: true }).count()).toBe(0)
     await expect.poll(() => page.getByText(FULL_COUNTS, { exact: false }).count(), { timeout: 10_000 }).toBe(1)
+    await expect.poll(() => page.getByText('Estimated cost $0.012', { exact: false }).count(), { timeout: 10_000 }).toBe(1)
     const strip = page.getByText(FULL_COUNTS, { exact: false }).locator('..')
     const stripBeforePaging = await strip.textContent()
 

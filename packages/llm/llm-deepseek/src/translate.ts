@@ -48,6 +48,7 @@ export function mapFinishReason(reason: string): FinishReason {
  * api/create-chat-completion); the harness TokenUsage convention is
  * DISJOINT counts, so cache reads are subtracted out of `inputTokens`.
  * @param usage - wire usage from the finish chunk or the trailing usage-only chunk.
+ * @param pricing - optional per-million-token model rates.
  * @returns disjoint harness counts; cache/reasoning fields present only when the wire reported them.
  */
 export function mapUsage(usage: WireUsage, pricing?: TokenPricing): TokenUsage {
@@ -80,6 +81,7 @@ function closeBlock(block: OpenBlock): ContentBlock {
  * Consume SSE data payloads (ending with `[DONE]`) and yield StreamChunks.
  * Malformed JSON payloads abort the stream with `MALFORMED_RESPONSE`.
  * @param payloads - SSE data payloads from {@link parseSse}, `[DONE]`-terminated.
+ * @param pricing - optional per-million-token model rates.
  * @returns deltas as they arrive; `block-end`s, `usage`, and `finish` are all deferred to the `[DONE]` sentinel.
  *   A `stop` (or absent) finish with no opened blocks is a degenerate provider completion and maps to an
  *   `EMPTY_RESPONSE` error finish instead of a successful empty message.

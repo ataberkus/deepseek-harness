@@ -18,6 +18,8 @@ import { toPiReplayState } from './replay.ts'
 /**
  * Map pi-ai usage (reasoning folded into output by pi-ai).
  * @param usage - cumulative usage from the terminal pi-ai event.
+ * @param pricingKnown - whether the resolved model has a usable rate card.
+ * @param costBasis - whether usage is provider-reported or input-estimated.
  * @returns harness counts; cache fields appear only when non-zero (pi-ai reports zeros, not absence).
  */
 export function mapUsage(
@@ -167,6 +169,8 @@ export function mapStopReason(message: AssistantMessage, contextWindow?: number)
  * `finish` chunks (the harness protocol's other error-delivery style).
  * @param events - one assistant turn's pi-ai event stream.
  * @param contextWindow - resolved catalog capacity for usage-based overflow detection.
+ * @param pricingKnown - whether the resolved model has a usable rate card.
+ * @param costBasis - whether usage is provider-reported or input-estimated.
  * @returns the harness chunks, ending with `usage` then `finish`; throws
  *   `LlmError` (`STREAM_CLOSED`) if the source ends without a terminal event.
  */
