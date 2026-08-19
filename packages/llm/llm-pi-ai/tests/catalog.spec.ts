@@ -947,6 +947,7 @@ describe('configurable-provider directory', () => {
     // without inventing a key card.
     expect(offered).not.toContain('openai-codex')
     expect(offered).not.toContain('cursor')
+    expect(offered).not.toContain('google-gemini-cli')
     // A provider that offers OAuth *beside* an api-key method keeps its entry:
     // the key is a path this adapter can serve.
     expect(offered).toContain('anthropic')
@@ -977,6 +978,17 @@ describe('configurable-provider directory', () => {
       displayName: 'cursor',
       settingsNs: 'llm-pi-ai',
       settingsPath: ['providers', 'cursor'],
+      declared: true,
+    })
+  })
+
+  it('still lists a settings-declared google-gemini-cli route, as a hand-declared route', async () => {
+    const ctx = await harness({ providers: { 'google-gemini-cli': { apiKeyEnv: KEY_ENV } } })
+    expect(ctx.llm.listConfigurableProviders()).toContainEqual({
+      provider: 'google-gemini-cli',
+      displayName: 'google-gemini-cli',
+      settingsNs: 'llm-pi-ai',
+      settingsPath: ['providers', 'google-gemini-cli'],
       declared: true,
     })
   })

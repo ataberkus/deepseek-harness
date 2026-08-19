@@ -16,7 +16,7 @@ Keys are write-only. The page receives a redacted descriptor after saving, never
 
 Choose **Add provider**, select a provider such as Anthropic or OpenAI, enter its API key, and save. The installed catalog supplies the endpoint, protocol, and model list.
 
-Providers with native authentication need their native credentials instead. Bedrock, Vertex, and Azure use AWS credentials and a region, an ADC project, and an `api-version` respectively. Codex uses ChatGPT OAuth via `/login openai-codex`; Cursor uses `/login cursor`. Filling only the API-key field does not configure either.
+Providers with native authentication need their native credentials instead. Bedrock, Vertex, and Azure use AWS credentials and a region, an ADC project, and an `api-version` respectively. Codex uses ChatGPT OAuth via `/login openai-codex`; Cursor uses `/login cursor`; Gemini CLI uses `/login google-gemini-cli`. Filling only the API-key field does not configure them.
 
 ## Sign in to OpenAI Codex
 
@@ -37,6 +37,14 @@ Cursor uses a Cursor subscription, not an API key. In the Web UI, CLI, or ACP ch
 The Web UI opens a new tab from that keystroke, the same way as Codex. A second `/login` while the first is still waiting is refused for either provider.
 
 This unofficial Cursor backend is not a public API; Cursor may change the wire or restrict accounts. Tokens live in the same `$DSH_HOME/oauth-credentials.json` file as Codex. The Models page does not offer a Cursor key card.
+
+## Sign in to Gemini CLI
+
+Gemini CLI uses a Google account and Cloud Code Assist, not a Gemini API key. In the Web UI, CLI, or ACP chat, run `/login google-gemini-cli` once, complete Google login, then select a `google-gemini-cli` model. `/logout google-gemini-cli` deletes the stored tokens.
+
+The Web UI opens a new tab from that keystroke, the same way as Codex. A second `/login` while the first is still waiting is refused for any hosted provider.
+
+Workspace Google accounts may need `GOOGLE_CLOUD_PROJECT` or `GOOGLE_CLOUD_PROJECT_ID` before login. This unofficial Cloud Code Assist backend is not a public API; Google may change the wire or restrict accounts. Tokens live in the same `$DSH_HOME/oauth-credentials.json` file. The Models page does not offer a Gemini CLI key card. This is not the installed `google` API-key catalog provider.
 
 ## Add a custom provider
 
@@ -107,7 +115,7 @@ If a saved default names a provider that was deleted, the composer displays **Se
 
 ## Troubleshooting
 
-- **`MISSING_CREDENTIAL`** — Store the provider key through the Models page, supply the referenced environment variable, or run `/login openai-codex` for Codex or `/login cursor` for Cursor.
+- **`MISSING_CREDENTIAL`** — Store the provider key through the Models page, supply the referenced environment variable, or run `/login openai-codex` for Codex, `/login cursor` for Cursor, or `/login google-gemini-cli` for Gemini CLI.
 - **`UNKNOWN_MODEL`** — Select a configured model or add the missing model to the custom provider.
 - **Fetching available models returns 401** — Check the key. Model discovery calls the OpenAI-compatible `GET /models` endpoint; enter models manually for endpoints that do not provide it.
 - **An image is refused before sending** — The model declares no image modality. Give a custom provider's model `input: [text, image]`; DeepSeek's own chat-completions route is text-only and cannot be configured otherwise.

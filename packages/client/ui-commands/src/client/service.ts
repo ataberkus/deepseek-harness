@@ -50,8 +50,9 @@ function submittedCommandName(line: string): string {
 }
 
 /**
- * `/login`, `/login openai-codex`, and `/login cursor` are hosted OAuth login
- * lines. `/login anthropic` and `/login-foo` are not.
+ * `/login`, `/login openai-codex`, `/login cursor`, and
+ * `/login google-gemini-cli` are hosted OAuth login lines. `/login anthropic`
+ * and `/login-foo` are not.
  */
 function isHostedOAuthLoginLine(line: string): boolean {
   const trimmed = line.trim()
@@ -59,7 +60,10 @@ function isHostedOAuthLoginLine(line: string): boolean {
   const name = separator === -1 ? trimmed : trimmed.slice(0, separator)
   if (name !== '/login') return false
   const rest = separator === -1 ? '' : trimmed.slice(separator).trim()
-  return rest.length === 0 || rest === 'openai-codex' || rest === 'cursor'
+  return rest.length === 0
+    || rest === 'openai-codex'
+    || rest === 'cursor'
+    || rest === 'google-gemini-cli'
 }
 
 /** Authorize URLs are https; `javascript:` and other schemes are ignored. */

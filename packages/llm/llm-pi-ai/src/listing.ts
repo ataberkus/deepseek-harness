@@ -31,7 +31,9 @@ import { attachThinking, openRouterThinkingFromListing, thinkingLevelMapFromOffe
 /**
  * One listing row plus OpenRouter capability flags the wire discovery view
  * does not carry. `reasoning` is set only when the endpoint named a reasoning
- * parameter or a `reasoning` object with selectable efforts.
+ * parameter or a `reasoning` object with selectable efforts. `input` is set
+ * only when the listing disclosed image input. Absence means the overlay
+ * must not invent a selector or an image claim.
  */
 export interface ListedModel extends LlmDiscoveredModel {
   /** Whether this id disclosed a selectable reasoning parameter. */
@@ -40,6 +42,8 @@ export interface ListedModel extends LlmDiscoveredModel {
   thinkingLevelMap?: ThinkingLevelMap
   /** Listing `default_effort` when it is one of the offered levels. */
   defaultEffort?: ModelThinkingLevel
+  /** Request modalities when the listing disclosed image input. */
+  input?: Model<Api>['input']
 }
 
 /** OpenRouter `supported_parameters` values that mean the model takes an effort. */
@@ -52,8 +56,9 @@ const REASONING_PARAMETERS = new Set(['reasoning', 'reasoning_effort'])
  * `api-version` query — and Codex authenticates through OAuth; guessing at
  * either would report an authentication failure as a provider with no models.
  * Hosted Cursor lists through GetUsableModels, not this OpenAI JSON protocol,
- * so `cursor-agent` is not listable here. pi-ai's remaining protocols are
- * absent for the same reason.
+ * so `cursor-agent` is not listable here. Hosted Gemini CLI has no OpenAI
+ * listing either, so `google-gemini-cli` is not listable here. pi-ai's
+ * remaining protocols are absent for the same reason.
  */
 export const LISTABLE_PROTOCOLS: ReadonlySet<string> = new Set([
   'openai-completions',
@@ -259,6 +264,28 @@ function listingRowSupportsTools(entry: ListingEntry): boolean {
 }
 
 /**
+ * Whether one listing row disclosed image input. OpenRouter names that in
+ * `architecture.input_modalities` or `architecture.modality` (`text+image->text`).
+ * Listings that omit architecture (generic OpenAI `GET /models`) do not claim
+ * image — inventing it would admit an attachment the endpoint then rejects.
+ * @param architecture - parsed `architecture` object, when any.
+ * @returns whether the overlay should mark the model as taking images.
+ */
+function listingRowSupportsImage(architecture: Record<string, unknown> | undefined): boolean {
+  if (architecture === undefined) return false
+  const declared = architecture['input_modalities']
+  if (Array.isArray(declared)) {
+    return declared.some(value => typeof value === 'string' && value.toLowerCase() === 'image')
+  }
+  const modality = architecture['modality']
+  if (typeof modality !== 'string') return false
+  const arrow = modality.indexOf('->')
+  const left = arrow === -1 ? modality : modality.slice(0, arrow)
+  const inputs = left.split('+').map(part => part.trim().toLowerCase())
+  return inputs.includes('image')
+}
+
+/**
  * Whether one listing row disclosed a selectable reasoning parameter.
  * Listings that omit `supported_parameters` (generic OpenAI `GET /models`)
  * do not claim reasoning — inventing a selector would offer levels the
@@ -308,6 +335,7 @@ export function readListing(body: unknown): ListedModel[] {
       architecture?.['output_length'],
     )
     const thinking = openRouterThinkingFromListing(entry.reasoning, listingRowSupportsReasoning(entry))
+    const image = listingRowSupportsImage(architecture)
     models.push({
       id,
       ...name === undefined ? {} : { name },
@@ -318,6 +346,7 @@ export function readListing(body: unknown): ListedModel[] {
         thinkingLevelMap: thinking.map,
         ...thinking.defaultEffort === undefined ? {} : { defaultEffort: thinking.defaultEffort },
       },
+      ...image ? { input: ['text', 'image'] } : {},
     })
   }
   return models
@@ -415,7 +444,7 @@ async function readListingFromNetwork(
  * Merge an installed catalog's discovered rows with a live listing. Installed
  * ids keep catalog name and capacities (a listing rarely matches those);
  * live-only ids append in listing order. Listing-only flags such as
- * `reasoning` are dropped so a discovery reply stays `LlmDiscoveredModel`.
+ * `reasoning` and `input` are dropped so a discovery reply stays `LlmDiscoveredModel`.
  * @param installed - catalog rows in catalog order.
  * @param live - tool-filtered listing rows.
  * @returns the union, catalog ids first.
@@ -455,7 +484,9 @@ export function discoveredFromListing(row: LlmDiscoveredModel): LlmDiscoveredMod
  * the first installed model's protocol and endpoint. A live-only id that
  * disclosed selectable efforts is marked reasoning with that map; others
  * stay non-reasoning so the composer does not offer a selector the endpoint
- * cannot honour.
+ * cannot honour. A live-only id that disclosed image input is marked
+ * `[text, image]`; others stay text-only so the harness does not admit an
+ * attachment the endpoint then rejects.
  * @param installed - models the route already serves.
  * @param live - tool-filtered listing rows.
  * @param fallback - capacities for a live-only id the listing did not size.
@@ -486,7 +517,7 @@ export function overlayLiveCatalogModels(
       reasoning: row.reasoning === true,
       contextWindow: row.contextWindow ?? fallback.contextWindow,
       maxTokens: row.maxTokens ?? fallback.maxTokens,
-      input: ['text'],
+      input: row.input ?? ['text'],
     }
     merged.push(applyLiveThinking(created, row))
   }

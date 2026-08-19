@@ -22,6 +22,12 @@ import { attachThinking, thinkingLevelMapFromOffered } from '../thinking-levels.
 
 const NO_COST = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }
 
+const TEXT_INPUT: Model<Api>['input'] = ['text']
+const VISION_INPUT: Model<Api>['input'] = ['text', 'image']
+
+/** Ids whose Cursor SKU is a coding model, not a vision chat model. */
+const CURSOR_TEXT_ONLY = /grok-code/
+
 /** Capacities assumed when GetUsableModels omits them. */
 export const CURSOR_DEFAULT_CONTEXT_WINDOW = 200_000
 /** Output cap assumed when GetUsableModels omits it. */
@@ -84,7 +90,8 @@ export function cursorFallbackModels(): Model<Api>[] {
  * @param name - display name.
  * @param reasoning - whether the model thinks.
  * @param contextWindow - input capacity.
- * @returns a pi-ai model.
+ * @returns a pi-ai model whose `input` is `[text, image]` for Cursor chat
+ *   families and `[text]` for `grok-code` and unknown ids.
  */
 export function cursorModel(
   id: string,
@@ -99,7 +106,7 @@ export function cursorModel(
     provider: CURSOR_PROVIDER,
     baseUrl: CURSOR_BASE_URL,
     reasoning,
-    input: ['text'],
+    input: inferCursorInput(id),
     cost: NO_COST,
     contextWindow,
     maxTokens: CURSOR_DEFAULT_MAX_TOKENS,
@@ -284,8 +291,26 @@ function inferCursorReasoning(id: string, thinkingDetails: boolean): boolean {
   if (thinkingDetails) return true
   const documented = FALLBACK_BY_ID.get(id)
   if (documented !== undefined) return documented.reasoning
+  return cursorChatFamily(id)
+}
+
+/**
+ * Whether this Cursor id is a vision chat model. GetUsableModels has no
+ * image-capability field, so the same family tokens as reasoning apply;
+ * `grok-code` stays text-only. Unknown ids stay text-only rather than
+ * admitting an image the unofficial backend would then reject.
+ * @param id - Cursor model id.
+ * @returns request modalities.
+ */
+function inferCursorInput(id: string): Model<Api>['input'] {
+  if (CURSOR_TEXT_ONLY.test(id.toLowerCase())) return TEXT_INPUT
+  if (FALLBACK_BY_ID.has(id) || cursorChatFamily(id)) return VISION_INPUT
+  return TEXT_INPUT
+}
+
+function cursorChatFamily(id: string): boolean {
   const lower = id.toLowerCase()
-  if (lower.includes('grok-code')) return false
+  if (CURSOR_TEXT_ONLY.test(lower)) return false
   return /grok|claude|gpt-|composer|gemini|kimi|glm|opus|sonnet/.test(lower)
 }
 

@@ -31,6 +31,7 @@ import {
   fieldString,
 } from './protobuf.ts'
 import {
+  collectContextImages,
   contextEndsWithToolResult,
   encodeAgentRunRequest,
   flattenContextText,
@@ -102,10 +103,12 @@ async function runCursorStream(
     let userText: string
     if (flatten) userText = flattenContextText(context)
     else userText = latestTurnText(context)
+    const images = collectContextImages(context, !flatten)
     const body = encodeAgentRunRequest({
       conversationId: session.conversationId,
       ...includeCheckpoint ? { checkpoint: session.checkpoint } : {},
       userText,
+      ...images.length === 0 ? {} : { images },
       ...context.systemPrompt === undefined ? {} : { systemPrompt: context.systemPrompt },
       modelId: model.id,
       modelName: model.name,

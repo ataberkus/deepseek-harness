@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-08-18-openrouter-live-catalog.md
-2026-08-18-openrouter-live-catalog.md: 87458bfbc74a3712610583c18b52b3f79a1e677e
-2026-08-18-openrouter-live-catalog.zh.md: 167587a295a254295b4b2ba7734aa731aee6f5a6
+2026-08-18-openrouter-live-catalog.md: d4ad143d7a0e81646f1c3051d34147008a12656c
+2026-08-18-openrouter-live-catalog.zh.md: 4189c9206c95794111c46e1e69c5153a24dfa7a9

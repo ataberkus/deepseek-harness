@@ -23,6 +23,20 @@ import {
 /** Identifier Cursor stores on MCP tools this adapter advertises. */
 export const CURSOR_MCP_PROVIDER = 'dsh'
 
+/**
+ * One raster image for Cursor `SelectedImage` (`uuid`/`path`/`mime_type`/`data`).
+ */
+export interface CursorSelectedImage {
+  /** Client-generated image id. */
+  uuid: string
+  /** Filename Cursor stores beside the bytes. */
+  path: string
+  /** Image media type such as `image/png`. */
+  mimeType: string
+  /** Decoded raster bytes (not base64). */
+  data: Uint8Array
+}
+
 /** Inputs {@link encodeAgentRunRequest} needs besides the Connect envelope. */
 export interface AgentRunEncodeInput {
   /** Session conversation id; reused across turns when a checkpoint exists. */
@@ -31,6 +45,8 @@ export interface AgentRunEncodeInput {
   checkpoint?: Uint8Array
   /** Flattened user text for this turn's UserMessageAction. */
   userText: string
+  /** Raster images for `UserMessage.selected_context`; omitted when none. */
+  images?: readonly CursorSelectedImage[]
   /** Optional system prompt; sent as `custom_system_prompt`. */
   systemPrompt?: string
   /** Cursor model id. */
@@ -65,7 +81,7 @@ export function encodeAgentRunRequest(input: AgentRunEncodeInput): Uint8Array {
   )
   return concat(
     input.checkpoint === undefined ? new Uint8Array() : encodeBytes(1, input.checkpoint),
-    encodeMessage(2, encodeMessage(1, encodeUserMessage(input.userText))),
+    encodeMessage(2, encodeMessage(1, encodeUserMessage(input.userText, input.images ?? []))),
     encodeMessage(3, modelDetails),
     encodeMcpTools(input.tools ?? []),
     encodeString(5, input.conversationId),
@@ -75,8 +91,8 @@ export function encodeAgentRunRequest(input: AgentRunEncodeInput): Uint8Array {
 }
 
 /**
- * Flatten pi-ai context messages into one user-message string. Images become
- * a placeholder: this unofficial backend does not accept multimodal MCP args.
+ * Flatten pi-ai context messages into one user-message string. Image bytes
+ * travel in `UserMessage.selected_context`, so image blocks contribute no text.
  * @param context - harness-converted pi-ai context.
  * @returns concatenated turn text.
  */
@@ -186,15 +202,83 @@ function encodeThinkingDetails(thinking: boolean, effort: string | undefined): U
   return encodeMessage(2, encodeString(1, effort))
 }
 
-function encodeUserMessage(text: string): Uint8Array {
-  return concat(encodeString(1, text), encodeString(2, crypto.randomUUID()))
+function encodeUserMessage(text: string, images: readonly CursorSelectedImage[]): Uint8Array {
+  return concat(
+    encodeString(1, text),
+    encodeString(2, crypto.randomUUID()),
+    images.length === 0 ? new Uint8Array() : encodeMessage(3, encodeSelectedContext(images)),
+  )
+}
+
+function encodeSelectedContext(images: readonly CursorSelectedImage[]): Uint8Array {
+  return concat(...images.map(image => encodeMessage(1, concat(
+    encodeString(2, image.uuid),
+    encodeString(3, image.path),
+    encodeString(7, image.mimeType),
+    encodeBytes(8, image.data),
+  ))))
+}
+
+/**
+ * Raster images in `context` for the unofficial `SelectedImage` field.
+ * A checkpointed follow-up (`latestTurnOnly`) sends only this turn's images;
+ * a flattened history sends every user and tool-result image in order.
+ * @param context - harness-converted pi-ai context.
+ * @param latestTurnOnly - true when conversation state already holds prior turns.
+ * @returns images with generated uuids; empty when none.
+ */
+export function collectContextImages(context: Context, latestTurnOnly = false): CursorSelectedImage[] {
+  const images: CursorSelectedImage[] = []
+  for (const message of latestTurnOnly ? latestTurnMessages(context) : context.messages) {
+    if (message.role === 'user' || message.role === 'toolResult') {
+      images.push(...imagesFromContent(message.content))
+    }
+  }
+  return images
+}
+
+function latestTurnMessages(context: Context): Context['messages'] {
+  const last = context.messages.at(-1)
+  if (last === undefined) return []
+  if (last.role === 'user') return [last]
+  if (last.role !== 'toolResult') return []
+  const trailing: Context['messages'] = []
+  for (let i = context.messages.length - 1; i >= 0; i--) {
+    const message = context.messages[i]
+    if (message?.role !== 'toolResult') break
+    trailing.unshift(message)
+  }
+  return trailing
+}
+
+function imagesFromContent(content: string | readonly { type: string; data?: string; mimeType?: string }[]): CursorSelectedImage[] {
+  if (typeof content === 'string') return []
+  const images: CursorSelectedImage[] = []
+  for (const block of content) {
+    if (block.type !== 'image' || typeof block.data !== 'string' || typeof block.mimeType !== 'string') continue
+    if (block.data.length === 0) continue
+    const uuid = crypto.randomUUID()
+    images.push({
+      uuid,
+      path: `${uuid}${extensionFor(block.mimeType)}`,
+      mimeType: block.mimeType,
+      data: Uint8Array.from(Buffer.from(block.data, 'base64')),
+    })
+  }
+  return images
+}
+
+function extensionFor(mimeType: string): string {
+  if (mimeType === 'image/jpeg' || mimeType === 'image/jpg') return '.jpg'
+  if (mimeType === 'image/gif') return '.gif'
+  if (mimeType === 'image/webp') return '.webp'
+  return '.png'
 }
 
 function userContentText(content: string | readonly { type: string; text?: string }[]): string {
   if (typeof content === 'string') return content
   return content.map((block) => {
     if (block.type === 'text') return block.text ?? ''
-    if (block.type === 'image') return '[image]'
     return ''
   }).join('')
 }

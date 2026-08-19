@@ -809,6 +809,16 @@ describe('openai-codex login tab', () => {
     expect(open).toHaveBeenCalledWith('about:blank', 'dsh-oauth-login')
   })
 
+  it('opens a blank tab for /login google-gemini-cli', async () => {
+    const tab = { closed: false, location: { href: 'about:blank' } }
+    const open = vi.fn(() => tab)
+    vi.stubGlobal('window', { open })
+    const { source, warm } = await loginBench()
+    await warm(proj('s1'))
+    await submitLogin(source, 'google-gemini-cli')
+    expect(open).toHaveBeenCalledWith('about:blank', 'dsh-oauth-login')
+  })
+
   it('does not open a tab for /plan or /login anthropic', async () => {
     const open = vi.fn()
     vi.stubGlobal('window', { open })

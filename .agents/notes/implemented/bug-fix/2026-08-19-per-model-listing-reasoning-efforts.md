@@ -30,7 +30,7 @@ Cursor GetUsableModels `ThinkingDetails` is a presence flag with no effort names
 
 ## Consequences
 
-Composer shows Low / Medium / High / Xhigh for Cursor Grok 4.6 with High selected. OpenRouter DeepSeek V4 Flash shows High / Xhigh with High selected. A listing that names no `default_effort` still omits `defaultEffort`, so a Default row appears only when the endpoint did not advertise one. Image input on live-only OpenRouter ids remains unclaimed.
+Composer shows Low / Medium / High / Xhigh for Cursor Grok 4.6 with High selected. OpenRouter DeepSeek V4 Flash shows High / Xhigh with High selected. A listing that names no `default_effort` still omits `defaultEffort`, so a Default row appears only when the endpoint did not advertise one. Image input on live-only OpenRouter ids and hosted Cursor chat families is owned by [vision modalities](2026-08-19-cursor-openrouter-image-modalities.md).
 
 ## Testing
 

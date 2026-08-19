@@ -145,6 +145,55 @@ describe('readListing', () => {
     ])
   })
 
+  it('reads OpenRouter image modalities and leaves generic rows text-only', () => {
+    expect(readListing({
+      data: [
+        {
+          id: 'vendor/vision',
+          architecture: { input_modalities: ['text', 'image'] },
+          supported_parameters: ['tools'],
+        },
+        {
+          id: 'vendor/text-modalities',
+          architecture: { input_modalities: ['text'] },
+        },
+        {
+          id: 'vendor/modality-string',
+          architecture: { modality: 'text+image->text' },
+        },
+        {
+          id: 'vendor/text-string',
+          architecture: { modality: 'text->text' },
+        },
+        {
+          id: 'vendor/modalities-object',
+          architecture: { input_modalities: { image: true } },
+        },
+        {
+          id: 'vendor/modality-number',
+          architecture: { modality: 1 },
+        },
+        {
+          id: 'vendor/modality-no-arrow',
+          architecture: { modality: 'text+image' },
+        },
+        {
+          id: 'vendor/image-token',
+          architecture: { input_modalities: ['IMAGE'] },
+        },
+      ],
+    })).toEqual([
+      { id: 'vendor/vision', input: ['text', 'image'] },
+      { id: 'vendor/text-modalities' },
+      { id: 'vendor/modality-string', input: ['text', 'image'] },
+      { id: 'vendor/text-string' },
+      { id: 'vendor/modalities-object' },
+      { id: 'vendor/modality-number' },
+      { id: 'vendor/modality-no-arrow', input: ['text', 'image'] },
+      { id: 'vendor/image-token', input: ['text', 'image'] },
+    ])
+  })
+
   it('refuses a body with no data array', () => {
     expect(() => readListing({ models: [] })).toThrow(/no "data" array/)
     expect(() => readListing(null)).toThrow(/no "data" array/)
@@ -318,6 +367,12 @@ describe('overlay helpers', () => {
       thinkingLevelMap: grokMap,
       defaultThinkingLevel: 'high',
     })
+    const vision = overlayLiveCatalogModels(
+      [template],
+      [{ id: 'vendor/sees', input: ['text', 'image'] }],
+      { contextWindow: 100, maxTokens: 10 },
+    )
+    expect(vision[1]).toMatchObject({ id: 'vendor/sees', input: ['text', 'image'] })
   })
 })
 

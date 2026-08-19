@@ -10,7 +10,7 @@ Status: implemented
 
 ## 决策
 
-`dsh-llm-pi-ai` 对「服务已安装 catalog」（缺省或空的 `models`）且说 `openai-completions` 或 `openai-responses` 的 OpenRouter catalog 路由，叠加一份实时的 OpenAI 兼容 `GET /models` 列表。叠加条件是路由键为 `openrouter`，或列举主机名为 `openrouter.ai`／`*.openrouter.ai`。已安装 id 保留 catalog 名称与容量；实时 `reasoning.supported_efforts` 替换快照档位映射。公布了 `supported_parameters` 却不含 `"tools"` 的行会被丢掉；省略该字段的列表保留每个可用 id。仅出现在实时列表中的 id 追加在 catalog 之后，并克隆第一条已安装模型的协议与端点，使 `listModels`、`resolveModel` 与 `stream` 共用同一集合。仅实时 id 若公布了 `reasoning` 对象或推理参数，会被标为具备推理能力并带上这些档位；其余仅实时 id 仍不具备推理能力，以免选择器提供端点无法兑现的档位。档位名映射由[按模型的 listing 档位](../bug-fix/2026-08-19-per-model-listing-reasoning-efforts.md)拥有。显式 `models` 列表不会被叠加。
+`dsh-llm-pi-ai` 对「服务已安装 catalog」（缺省或空的 `models`）且说 `openai-completions` 或 `openai-responses` 的 OpenRouter catalog 路由，叠加一份实时的 OpenAI 兼容 `GET /models` 列表。叠加条件是路由键为 `openrouter`，或列举主机名为 `openrouter.ai`／`*.openrouter.ai`。已安装 id 保留 catalog 名称与容量；实时 `reasoning.supported_efforts` 替换快照档位映射。公布了 `supported_parameters` 却不含 `"tools"` 的行会被丢掉；省略该字段的列表保留每个可用 id。仅出现在实时列表中的 id 追加在 catalog 之后，并克隆第一条已安装模型的协议与端点，使 `listModels`、`resolveModel` 与 `stream` 共用同一集合。仅实时 id 若公布了 `reasoning` 对象或推理参数，会被标为具备推理能力并带上这些档位；其余仅实时 id 仍不具备推理能力，以免选择器提供端点无法兑现的档位。档位名映射由[按模型的 listing 档位](../bug-fix/2026-08-19-per-model-listing-reasoning-efforts.md)拥有。仅实时 id 若在 `architecture.input_modalities` 或 `architecture.modality` 中公布了图片输入，会被标为 `[text, image]`；其余仍为纯文本，以免 harness 接纳随后会被端点拒绝的附件（[图片模态](../bug-fix/2026-08-19-cursor-openrouter-image-modalities.md)）。显式 `models` 列表不会被叠加。
 
 网络失败则回退到已安装 catalog，因此选择器不会变空。Fetch（`discoverModels`）使用同一套叠加与同一套回退，但调用方 abort 仍会响亮失败。成功的列表按进程生命周期缓存，键为 URL 以及 bearer 凭据的指纹，因此键入的探测密钥不会复用已存储密钥的回复。host 与 Web UI 不把 `openrouter` 路由键特殊处理。
 
@@ -30,8 +30,8 @@ Status: implemented
 
 ## 后果
 
-选择一个存在于实时列表、但不在已安装快照中的 OpenRouter 模型，无需改 `settings.yaml`。用显式 `models` 列表收窄路由时，仍会隐藏该列表以外的一切。OpenRouter 上的 Fetch 会显示这些额外项供采纳；DeepSeek 上的 Fetch 仍由 catalog 作答、不联网。仅实时出现、且公布了推理参数或对象的模型会提供该行的档位；其余不声称具备推理或图片输入。需要图片输入或叠加读不到的 listing 的部署把它们写在 `models` 条目上。
+选择一个存在于实时列表、但不在已安装快照中的 OpenRouter 模型，无需改 `settings.yaml`。用显式 `models` 列表收窄路由时，仍会隐藏该列表以外的一切。OpenRouter 上的 Fetch 会显示这些额外项供采纳；DeepSeek 上的 Fetch 仍由 catalog 作答、不联网。仅实时出现、且公布了推理参数或对象的模型会提供该行的档位；仅实时出现、且公布了图片输入的模型会宣称 `[text, image]`。列表未公布的能力，部署写在 `models` 条目上。
 
 ## 测试
 
-`tests/listing.spec.ts` 钉住 URL 拼接、单元测试仅允许 loopback 列举、仅 OpenRouter 的 catalog 列举目标、`supported_parameters` 过滤、OpenRouter 容量字段、仅实时推理叠加、叠加并集、进程生命周期缓存、进行中请求合并、按密钥区分的缓存身份，以及 HTTP 失败。`tests/discovery.spec.ts` 钉住 catalog 路由叠加以及 abort 与回退的区分，并保留 DeepSeek 仅 catalog（不联网）。`tests/live-catalog.spec.ts` 钉住选择器／`resolveModel` 的额外项、仅实时推理档位、显式 `models` 抑制叠加、列举失败回退，以及列举取密钥时的 `MISSING_CREDENTIAL`／`INVALID_CREDENTIAL`。
+`tests/listing.spec.ts` 钉住 URL 拼接、单元测试仅允许 loopback 列举、仅 OpenRouter 的 catalog 列举目标、`supported_parameters` 过滤、OpenRouter 容量字段、仅实时推理叠加、仅实时图片叠加、叠加并集、进程生命周期缓存、进行中请求合并、按密钥区分的缓存身份，以及 HTTP 失败。`tests/discovery.spec.ts` 钉住 catalog 路由叠加以及 abort 与回退的区分，并保留 DeepSeek 仅 catalog（不联网）。`tests/live-catalog.spec.ts` 钉住选择器／`resolveModel` 的额外项、仅实时推理档位、显式 `models` 抑制叠加、列举失败回退，以及列举取密钥时的 `MISSING_CREDENTIAL`／`INVALID_CREDENTIAL`。

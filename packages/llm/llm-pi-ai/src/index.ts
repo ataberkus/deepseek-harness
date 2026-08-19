@@ -86,6 +86,10 @@ export type {
 export { supportedProtocols } from './provider.ts'
 export { OPENAI_CODEX_DISPLAY_NAME, OPENAI_CODEX_PROVIDER } from './oauth-login.ts'
 export { CURSOR_DISPLAY_NAME, CURSOR_PROVIDER } from './cursor/constants.ts'
+export {
+  GOOGLE_GEMINI_CLI_DISPLAY_NAME,
+  GOOGLE_GEMINI_CLI_PROVIDER,
+} from './google-gemini-cli/constants.ts'
 export { OAUTH_CREDENTIALS_FILENAME } from './oauth-store.ts'
 
 export const name = 'llm-pi-ai'

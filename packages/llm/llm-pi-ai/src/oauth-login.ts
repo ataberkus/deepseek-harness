@@ -1,12 +1,13 @@
 /**
- * Hosted OAuth login for `openai-codex` (pi-ai browser PKCE) and `cursor`
- * (loginDeepControl poll). Both persist in {@link FileOAuthStore}.
+ * Hosted OAuth login for `openai-codex` (pi-ai browser PKCE), `cursor`
+ * (loginDeepControl poll), and `google-gemini-cli` (Google auth-code on
+ * 127.0.0.1:8085). All persist in {@link FileOAuthStore}.
  *
  * Codex keeps {@link createBrowserOAuthInteraction}: always choose browser
  * login, open the authorize URL, hang the manual-code prompt until the
- * localhost callback aborts it. Cursor login notifies `auth_url` and polls;
- * it never prompts `select` or `manual_code`, so the same interaction only
- * opens the URL.
+ * localhost callback aborts it. Cursor and Gemini CLI notify `auth_url` and
+ * wait; they never prompt `select` or `manual_code`, so the same interaction
+ * only opens the URL.
  *
  * @module dsh-llm-pi-ai/oauth-login
  */
@@ -42,6 +43,10 @@ export {
   parseOAuthProvider,
 } from './oauth-hosts.ts'
 export { CURSOR_DISPLAY_NAME, CURSOR_PROVIDER } from './cursor/constants.ts'
+export {
+  GOOGLE_GEMINI_CLI_DISPLAY_NAME,
+  GOOGLE_GEMINI_CLI_PROVIDER,
+} from './google-gemini-cli/constants.ts'
 
 /** pi-ai's browser login method id for OpenAI Codex. */
 export const OPENAI_CODEX_BROWSER_LOGIN_METHOD = 'browser'
@@ -50,10 +55,10 @@ export const OPENAI_CODEX_BROWSER_LOGIN_METHOD = 'browser'
 /**
  * Settings-free profiles for OAuth credentials this host persists.
  *
- * Only hosted table ids (`openai-codex`, `cursor`) are injected: other catalog
- * providers that offer OAuth beside an api-key method stay on the key path the
- * Models page already configures. Settings profiles for the same route win at
- * merge time.
+ * Only hosted table ids (`openai-codex`, `cursor`, `google-gemini-cli`) are
+ * injected: other catalog providers that offer OAuth beside an api-key method
+ * stay on the key path the Models page already configures. Settings profiles
+ * for the same route win at merge time.
  * @param infos - non-secret store listing.
  * @returns a providers dict suitable for {@link resolveProfiles}.
  */
@@ -223,9 +228,9 @@ export function createBrowserOAuthInteraction(
 
 /**
  * Run hosted OAuth login against `store` and persist the credential.
- * @param id - hosted provider id (`openai-codex` or `cursor`).
+ * @param id - hosted provider id (`openai-codex`, `cursor`, or `google-gemini-cli`).
  * @param store - the host credential store passed to `createModels`.
- * @param interaction - host {@link AuthInteraction}; Codex hangs `manual_code`, Cursor only needs `auth_url`.
+ * @param interaction - host {@link AuthInteraction}; Codex hangs `manual_code`, Cursor and Gemini CLI only need `auth_url`.
  */
 export async function loginHostedOAuth(
   id: string,
@@ -274,7 +279,7 @@ export function registerOAuthCommands(ctx: Context, deps: OAuthCommandDeps): voi
     let loginInFlight = false
     commandCtx.commands.register({
       name: 'login',
-      description: 'Sign in to OpenAI Codex or Cursor',
+      description: 'Sign in to OpenAI Codex, Cursor, or Gemini CLI',
       input: { hint: OAUTH_COMMAND_HINT },
       handler: async ({ rawInput, signal }) => {
         const provider = parseOAuthProvider(rawInput)
@@ -308,7 +313,7 @@ export function registerOAuthCommands(ctx: Context, deps: OAuthCommandDeps): voi
     })
     commandCtx.commands.register({
       name: 'logout',
-      description: 'Sign out of OpenAI Codex or Cursor',
+      description: 'Sign out of OpenAI Codex, Cursor, or Gemini CLI',
       input: { hint: OAUTH_COMMAND_HINT },
       handler: async ({ rawInput }) => {
         const provider = parseOAuthProvider(rawInput)
@@ -328,7 +333,7 @@ export function registerOAuthCommands(ctx: Context, deps: OAuthCommandDeps): voi
 
 /**
  * Delete the hosted OAuth credential for one table id and refresh live routes.
- * @param provider - `openai-codex` or `cursor`.
+ * @param provider - `openai-codex`, `cursor`, or `google-gemini-cli`.
  * @param deps - store and route-refresh hook.
  * @returns the signed-out success text.
  */

@@ -47,6 +47,7 @@ import {
 } from '../src/cursor/protobuf.ts'
 import {
   contextEndsWithToolResult,
+  collectContextImages,
   encodeAgentRunRequest,
   encodeMcpArgMap,
   flattenContextText,
@@ -107,8 +108,12 @@ async function collect(stream: AsyncIterable<{ type: string }>): Promise<string[
 }
 
 describe('hosted OAuth table', () => {
-  it('lists openai-codex then cursor', () => {
-    expect(hostedOAuthProviders().map(host => host.id)).toEqual(['openai-codex', 'cursor'])
+  it('lists openai-codex then cursor then google-gemini-cli', () => {
+    expect(hostedOAuthProviders().map(host => host.id)).toEqual([
+      'openai-codex',
+      'cursor',
+      'google-gemini-cli',
+    ])
     expect(hostedOAuthProvider('nope')).toBeUndefined()
   })
 })
@@ -568,6 +573,11 @@ describe('cursor models', () => {
       encodeString(4, '272k'),
     )))[0]?.contextWindow).toBe(272_000)
     expect(cursorModel('plain', 'Plain', false).contextWindow).toBe(200_000)
+    expect(cursorModel('grok-4.6', 'Grok 4.6', true).input).toEqual(['text', 'image'])
+    expect(cursorModel('grok-4.6-fast', 'Grok 4.6 Fast', true).input).toEqual(['text', 'image'])
+    expect(cursorModel('composer-1.5', 'Composer 1.5', true).input).toEqual(['text', 'image'])
+    expect(cursorModel('grok-code', 'Grok Code', false).input).toEqual(['text'])
+    expect(cursorModel('live-only', 'Live', false).input).toEqual(['text'])
   })
 
   it('merges live-first, fills documented Fast SKUs, and infers reasoning', () => {
@@ -633,6 +643,12 @@ describe('cursor models', () => {
       'low', 'medium', 'high',
     ])
     expect(cursorModel('plain', 'Plain', false).thinkingLevelMap).toBeUndefined()
+    expect(decodeUsableModels(encodeMessage(1, concat(
+      encodeString(1, 'grok-4.6'),
+      encodeString(4, 'Grok 4.6'),
+    )))[0]?.input).toEqual(['text', 'image'])
+    expect(withFastVariants([cursorModel('composer-2.5', 'Composer 2.5', true)])[1]?.input)
+      .toEqual(['text', 'image'])
   })
 
   it('skips live GetUsableModels when network listing is disabled', async () => {
@@ -753,14 +769,127 @@ describe('cursor request encoding', () => {
     }).byteLength).toBeGreaterThan(0)
   })
 
-  it('flattens image placeholders and empty tool results', () => {
+  it('encodes selected images and omits image placeholders from flattened text', () => {
+    const png = Uint8Array.from(Buffer.from('QQ==', 'base64'))
     expect(flattenContextText({
       messages: [{
         role: 'user',
-        content: [{ type: 'text', text: 'see' }, { type: 'image', data: 'abc', mimeType: 'image/png' }],
+        content: [{ type: 'text', text: 'see' }, { type: 'image', data: 'QQ==', mimeType: 'image/png' }],
         timestamp: 0,
       }],
-    })).toContain('[image]')
+    })).toBe('see')
+    const collected = collectContextImages({
+      messages: [{
+        role: 'user',
+        content: [{ type: 'text', text: 'see' }, { type: 'image', data: 'QQ==', mimeType: 'image/png' }],
+        timestamp: 0,
+      }],
+    })
+    expect(collected).toHaveLength(1)
+    expect(collected[0]?.mimeType).toBe('image/png')
+    expect(collected[0]?.data).toEqual(png)
+    expect(collectContextImages({
+      messages: [
+        {
+          role: 'user',
+          content: [{ type: 'image', data: 'QQ==', mimeType: 'image/png' }],
+          timestamp: 0,
+        },
+        {
+          role: 'user',
+          content: 'later',
+          timestamp: 0,
+        },
+      ],
+    }, true)).toEqual([])
+    const encoded = encodeAgentRunRequest({
+      conversationId: 'c',
+      userText: 'see',
+      modelId: 'grok-4.6',
+      images: [{
+        uuid: 'img-1',
+        path: 'img-1.png',
+        mimeType: 'image/png',
+        data: png,
+      }],
+    })
+    const action = fieldRepeated(decodeFields(encoded), 2)[0]
+    const userMessage = fieldRepeated(decodeFields(action ?? new Uint8Array()), 1)[0]
+    const selected = fieldRepeated(decodeFields(userMessage ?? new Uint8Array()), 3)[0]
+    const image = decodeFields(fieldRepeated(decodeFields(selected ?? new Uint8Array()), 1)[0] ?? new Uint8Array())
+    expect(fieldString(image, 2)).toBe('img-1')
+    expect(fieldString(image, 3)).toBe('img-1.png')
+    expect(fieldString(image, 7)).toBe('image/png')
+    expect(fieldRepeated(image, 8)[0]).toEqual(png)
+    expect(collectContextImages({
+      messages: [{
+        role: 'user',
+        content: [{ type: 'image', data: '', mimeType: 'image/png' }],
+        timestamp: 0,
+      }],
+    })).toEqual([])
+    expect(collectContextImages({
+      messages: [{
+        role: 'user',
+        content: [{ type: 'image', data: 'QQ==', mimeType: 'image/gif' }],
+        timestamp: 0,
+      }],
+    })[0]?.path).toMatch(/\.gif$/)
+    expect(collectContextImages({
+      messages: [{
+        role: 'user',
+        content: [{ type: 'image', data: 'QQ==', mimeType: 'image/jpeg' }],
+        timestamp: 0,
+      }],
+    })[0]?.path).toMatch(/\.jpg$/)
+    expect(collectContextImages({
+      messages: [{
+        role: 'user',
+        content: [{ type: 'image', data: 'QQ==', mimeType: 'image/jpg' }],
+        timestamp: 0,
+      }],
+    })[0]?.path).toMatch(/\.jpg$/)
+    expect(collectContextImages({ messages: [] })).toEqual([])
+    expect(collectContextImages({ messages: [] }, true)).toEqual([])
+    expect(collectContextImages({
+      messages: [
+        {
+          role: 'user',
+          content: [{ type: 'image', data: 'QQ==', mimeType: 'image/png' }],
+          timestamp: 0,
+        },
+        {
+          role: 'toolResult',
+          toolCallId: '1',
+          toolName: 'bash',
+          content: [{ type: 'image', data: 'QQ==', mimeType: 'image/webp' }],
+          isError: false,
+          timestamp: 0,
+        },
+      ],
+    }, true)).toHaveLength(1)
+    expect(collectContextImages({
+      messages: [{
+        role: 'toolResult',
+        toolCallId: '1',
+        toolName: 'bash',
+        content: [{ type: 'image', data: 'QQ==', mimeType: 'image/webp' }],
+        isError: false,
+        timestamp: 0,
+      }],
+    }, true)[0]?.path).toMatch(/\.webp$/)
+    expect(collectContextImages({
+      messages: [{
+        role: 'assistant',
+        content: [{ type: 'text', text: 'no' }],
+        api: CURSOR_API,
+        provider: CURSOR_PROVIDER,
+        model: 'grok-4.6',
+        usage: ZERO_USAGE,
+        stopReason: 'stop',
+        timestamp: 0,
+      }],
+    }, true)).toEqual([])
     expect(latestTurnText({
       messages: [{
         role: 'toolResult',
@@ -916,6 +1045,30 @@ describe('cursor streamSimple', () => {
     const action = fieldRepeated(decodeFields(captured ?? new Uint8Array()), 2)[0]
     const user = action === undefined ? undefined : fieldRepeated(decodeFields(action), 1)[0]
     expect(user === undefined ? '' : fieldString(decodeFields(user), 1)).toBe('two')
+  })
+
+  it('sends selected images on a flattened turn', async () => {
+    let captured: Uint8Array | undefined
+    cursorConnectInternals.request = async function* (request) {
+      captured = request.body
+      yield frameConnectMessage(interactionUpdate(1, encodeString(1, 'ok')))
+      yield frameConnectMessage(interactionUpdate(14, new Uint8Array()))
+    }
+    await collect(streamCursor(MODEL, {
+      messages: [{
+        role: 'user',
+        content: [{ type: 'text', text: 'see' }, { type: 'image', data: 'QQ==', mimeType: 'image/gif' }],
+        timestamp: 0,
+      }],
+    }, { apiKey: 'tok', sessionId: 'img-turn' }))
+    const action = fieldRepeated(decodeFields(captured ?? new Uint8Array()), 2)[0]
+    const userMessage = fieldRepeated(decodeFields(action ?? new Uint8Array()), 1)[0]
+    const selected = fieldRepeated(decodeFields(userMessage ?? new Uint8Array()), 3)[0]
+    const image = decodeFields(fieldRepeated(decodeFields(selected ?? new Uint8Array()), 1)[0] ?? new Uint8Array())
+    expect(fieldString(decodeFields(userMessage ?? new Uint8Array()), 1)).toBe('see')
+    expect(fieldString(image, 7)).toBe('image/gif')
+    expect(fieldString(image, 3)).toMatch(/\.gif$/)
+    expect(fieldRepeated(image, 8)[0]).toEqual(Uint8Array.from(Buffer.from('QQ==', 'base64')))
   })
 
   it('maps partial MCP args and missing-token errors', async () => {

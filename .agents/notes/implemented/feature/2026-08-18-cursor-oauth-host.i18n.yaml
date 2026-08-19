@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-08-18-cursor-oauth-host.md
-2026-08-18-cursor-oauth-host.md: aaeda429d174879df183e4e980a2b7b0500deb9d
-2026-08-18-cursor-oauth-host.zh.md: 72164cf7b5b3061f8e10a9598ec8009b5df8f8f1
+2026-08-18-cursor-oauth-host.md: a05bb8501c50a3d2a74e3a8b68e1e5b7b40cf4bf
+2026-08-18-cursor-oauth-host.zh.md: 261edc7927270fa678a139faceae2801b8fa81e5

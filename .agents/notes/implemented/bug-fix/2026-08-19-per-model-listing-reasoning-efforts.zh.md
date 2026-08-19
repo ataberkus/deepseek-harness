@@ -30,7 +30,7 @@ Cursor GetUsableModels 的 `ThinkingDetails` 只是存在标志、没有档位�
 
 ## 后果
 
-composer 为 Cursor Grok 4.6 显示 Low／Medium／High／Xhigh，并选中 High。OpenRouter DeepSeek V4 Flash 显示 High／Xhigh，并选中 High。listing 未点名 `default_effort` 时仍省略 `defaultEffort`，因此只有端点未公布默认值时才会出现 Default 行。仅实时 OpenRouter id 仍不声称具备图片输入。
+composer 为 Cursor Grok 4.6 显示 Low／Medium／High／Xhigh，并选中 High。OpenRouter DeepSeek V4 Flash 显示 High／Xhigh，并选中 High。listing 未点名 `default_effort` 时仍省略 `defaultEffort`，因此只有端点未公布默认值时才会出现 Default 行。[图片模态](2026-08-19-cursor-openrouter-image-modalities.md) 拥有仅实时 OpenRouter id 与托管 Cursor 聊天家族的图片输入。
 
 ## 测试
 

@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-08-19-catalog-reasoning-oauth-signout-cursor-fast.md
-2026-08-19-catalog-reasoning-oauth-signout-cursor-fast.md: c6d2108bfb8afbf7a3d705dbb577b742db439231
-2026-08-19-catalog-reasoning-oauth-signout-cursor-fast.zh.md: 07a5ec0486a78bdfa2cf5ca1bf5f9c81b8c56b85
+2026-08-19-catalog-reasoning-oauth-signout-cursor-fast.md: ac9dee2eb8d29fb9a3924da2c282cced5a347248
+2026-08-19-catalog-reasoning-oauth-signout-cursor-fast.zh.md: 1f5aebc39b186c12407f36ff8a16c239ef61cf6f
