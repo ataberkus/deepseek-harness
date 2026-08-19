@@ -10,17 +10,6 @@ export function estimateTextTokens(text: string): number {
 }
 
 /**
- * Format a non-negative USD estimate with magnitude-sensitive precision.
- * @param cost - non-negative estimated USD.
- * @returns formatted USD value.
- */
-export function formatUsdCost(cost: number): string {
-  if (cost < 0.01) return `$${cost.toFixed(4)}`
-  if (cost < 1) return `$${cost.toFixed(3)}`
-  return `$${cost.toFixed(2)}`
-}
-
-/**
  * Apply a per-million-token rate card to disjoint provider usage buckets.
  * Missing rates make a non-empty bucket unpriced and leave the usage unchanged.
  * @param usage - provider usage with disjoint cache buckets.
