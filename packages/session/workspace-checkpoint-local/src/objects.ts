@@ -5,9 +5,10 @@
  */
 
 import { randomBytes } from 'node:crypto'
-import { mkdir, readdir, rename, rm, stat, writeFile } from 'node:fs/promises'
+import { mkdir, readdir, rename, rm, stat, writeFile, readFile } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
 import { resolveDshHome } from '@deepseek-ai/dsh-home-paths'
+import { WorkspaceCheckpointError } from '@deepseek-ai/dsh-workspace-checkpoint'
 import type { Config } from './config.ts'
 
 /**
@@ -79,6 +80,23 @@ export async function totalBlobBytes(objectRoot: string): Promise<number> {
     if (info.isFile()) total += Number(info.size)
   }
   return total
+}
+
+/**
+ * Read one blob, or throw `CHECKPOINT_HASH_MISMATCH` when it is missing.
+ * @param objectRoot - store root.
+ * @param hash - SHA-256 hex digest.
+ * @returns the stored bytes.
+ */
+export async function readBlob(objectRoot: string, hash: string): Promise<Buffer> {
+  try {
+    return await readFile(blobPath(objectRoot, hash))
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+      throw new WorkspaceCheckpointError(`missing blob ${hash}`, 'CHECKPOINT_HASH_MISMATCH')
+    }
+    throw error
+  }
 }
 
 /**

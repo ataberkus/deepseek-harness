@@ -217,7 +217,7 @@ describe('LocalWorkspaceCheckpoint capture', () => {
     expect(record.restoreEligible).toBe(false)
   })
 
-  it('holds an in-process lease and stubs restore until the journal lands', async () => {
+  it('holds an in-process lease and records recovery flags', async () => {
     const harness = await boot()
     dispose.push(() => harness.dispose())
     await expect(harness.ctx.workspaceCheckpoint.recoveryRequired('k')).resolves.toBeUndefined()
@@ -229,7 +229,7 @@ describe('LocalWorkspaceCheckpoint capture', () => {
     await expect(harness.ctx.workspaceCheckpoint.restore({
       checkpointId: CheckpointId('missing'),
       cwd: harness.cwd,
-    })).rejects.toMatchObject({ code: 'CHECKPOINT_UNAVAILABLE' })
+    })).rejects.toMatchObject({ code: 'CHECKPOINT_NOT_FOUND' })
     const lease = await harness.ctx.workspaceCheckpoint.acquireLease('k')
     await expect(harness.ctx.workspaceCheckpoint.acquireLease('k'))
       .rejects.toMatchObject({ code: 'CHECKPOINT_LEASE_HELD' })

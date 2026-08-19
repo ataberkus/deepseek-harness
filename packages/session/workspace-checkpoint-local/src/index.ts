@@ -24,6 +24,7 @@ import type { Domain } from '@deepseek-ai/dsh-storage-domain'
 import { Config as ConfigSchema, type Config as ProviderConfig } from './config.ts'
 import { resolveObjectRoot } from './objects.ts'
 import { captureCheckpoint, inspectCheckpoint, listCheckpoints } from './store.ts'
+import { restoreCheckpoint } from './restore.ts'
 
 export { Config } from './config.ts'
 export type { Config as LocalWorkspaceCheckpointConfig } from './config.ts'
@@ -33,6 +34,7 @@ export type { ManifestBuildOptions } from './manifest.ts'
 export { fileStatsRaced, throwIfFileRaced } from './manifest.ts'
 export { canonicalizeCwd, fromManifestPath, isContained, toManifestPath } from './paths.ts'
 export { captureInternals } from './store.ts'
+export { restoreInternals } from './restore.ts'
 
 /**
  * Harness-home implementation of `ctx.workspaceCheckpoint`.
@@ -103,8 +105,13 @@ export class LocalWorkspaceCheckpoint extends WorkspaceCheckpoint {
    * @returns the restored checkpoint id and restored file count.
    */
   override restore(request: RestoreRequest): Promise<RestoreResult> {
-    void request
-    return Promise.reject(new WorkspaceCheckpointError('restore is not implemented', 'CHECKPOINT_UNAVAILABLE'))
+    return this.enqueue(async () => restoreCheckpoint(request, {
+      domain: this.requireDomain(),
+      objectRoot: this.objectRoot,
+      acquireLease: workspaceKey => this.acquireLease(workspaceKey),
+      markRecoveryRequired: (workspaceKey, reason) => this.markRecoveryRequired(workspaceKey, reason),
+      clearRecoveryRequired: workspaceKey => this.clearRecoveryRequired(workspaceKey),
+    }))
   }
 
   /**

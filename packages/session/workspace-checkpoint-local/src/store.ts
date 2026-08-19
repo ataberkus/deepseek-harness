@@ -109,14 +109,23 @@ export async function captureCheckpoint(
 /**
  * @param id - checkpoint id.
  * @param domain - open domain.
- * @returns the stored record.
+ * @returns the stored row including manifest entries.
  */
-export function inspectCheckpoint(id: CheckpointId, domain: CheckpointDomain): CheckpointRecord {
+export function loadStoredCheckpoint(id: CheckpointId, domain: CheckpointDomain): StoredCheckpointRecord {
   const stored = domain.table('checkpoints').get(id)
   if (stored === undefined) {
     throw new WorkspaceCheckpointError(`checkpoint not found: ${id}`, 'CHECKPOINT_NOT_FOUND')
   }
-  return toRecord(stored)
+  return stored
+}
+
+/**
+ * @param id - checkpoint id.
+ * @param domain - open domain.
+ * @returns the stored record.
+ */
+export function inspectCheckpoint(id: CheckpointId, domain: CheckpointDomain): CheckpointRecord {
+  return toRecord(loadStoredCheckpoint(id, domain))
 }
 
 /**
