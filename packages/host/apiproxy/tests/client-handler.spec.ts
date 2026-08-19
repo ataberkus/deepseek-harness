@@ -126,6 +126,7 @@ function scriptedApi(overrides: {
       providers: r => ok(r, { providers: [] }),
       models: r => ok(r, { groups: [], failures: [] }),
       discoverModels: err,
+      logout: err,
       ...overrides.llm,
     },
     events: { mux: () => empty<MuxFrame>(), host: () => empty<HostFrame>(), ...overrides.events },
@@ -753,6 +754,7 @@ describe('config unary surface', () => {
         providers: record('llm.providers', r => ok(r, { providers: [providerRow] })),
         models: record('llm.models', r => ok(r, { groups: [group], failures: [] })),
         discoverModels: record('llm.discoverModels', r => ok(r, { models: [{ id: 'acme-large', contextWindow: 65536 }] })),
+        logout: record('llm.logout', r => ok(r, {})),
       },
     })
     const c = client(api)
@@ -785,11 +787,13 @@ describe('config unary surface', () => {
       apiKey: 'probe-key',
     })
     expect(discovered.result).toEqual({ ok: true, value: { models: [{ id: 'acme-large', contextWindow: 65536 }] } })
+    const loggedOut = await c.llm.logout({ provider: 'openai-codex' })
+    expect(loggedOut.result).toEqual({ ok: true, value: {} })
 
     expect(seen.map(call => call.method)).toEqual([
       'settings.describe', 'settings.openDocument', 'settings.update', 'settings.replace', 'settings.mutate',
       'credentials.describe', 'credentials.set', 'credentials.unset',
-      'llm.providers', 'llm.models', 'llm.discoverModels',
+      'llm.providers', 'llm.models', 'llm.discoverModels', 'llm.logout',
     ])
     expect(seen[2]?.payload).toEqual({ ns: 'llm-deepseek', patch: { baseURL: 'https://next' } })
     expect(seen[4]?.payload)
@@ -803,6 +807,7 @@ describe('config unary surface', () => {
       api: 'openai-completions',
       apiKey: 'probe-key',
     })
+    expect(seen[11]?.payload).toEqual({ provider: 'openai-codex' })
   })
 
   it('rejects an invalid credential reference name at the carrier boundary', async () => {

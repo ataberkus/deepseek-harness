@@ -23,8 +23,31 @@
 import { LlmError } from '@deepseek-ai/dsh-llm'
 import type { LlmDiscoveredModel } from '@deepseek-ai/dsh-llm'
 import { attributionHeaders } from '@deepseek-ai/dsh-llm'
-import type { Api, Model } from '@earendil-works/pi-ai'
+import type { Api, Model, ThinkingLevelMap } from '@earendil-works/pi-ai'
 import { catalogModels, catalogProvider } from './catalog.ts'
+
+/**
+ * One listing row plus OpenRouter capability flags the wire discovery view
+ * does not carry. `reasoning` is set only when the endpoint named a reasoning
+ * parameter; absence means the overlay must not invent a selector.
+ */
+export interface ListedModel extends LlmDiscoveredModel {
+  /** Whether this id disclosed a selectable reasoning parameter. */
+  reasoning?: boolean
+}
+
+/**
+ * OpenRouter effort map for a live-only reasoning model. Catalog ids keep
+ * their installed map; this is only for ids the snapshot does not ship.
+ */
+const OPENROUTER_LIVE_THINKING: ThinkingLevelMap = {
+  low: 'low',
+  medium: 'medium',
+  high: 'high',
+}
+
+/** OpenRouter `supported_parameters` values that mean the model takes an effort. */
+const REASONING_PARAMETERS = new Set(['reasoning', 'reasoning_effort'])
 
 /**
  * Protocols whose model listing this module can read: the two that speak
@@ -76,8 +99,8 @@ export const modelListingInternals = {
   allowNonLoopback: process.env['VITEST'] !== 'true',
 }
 
-const listingCache = new Map<string, readonly LlmDiscoveredModel[]>()
-const listingInflight = new Map<string, Promise<readonly LlmDiscoveredModel[]>>()
+const listingCache = new Map<string, readonly ListedModel[]>()
+const listingInflight = new Map<string, Promise<readonly ListedModel[]>>()
 
 /** Drop process-lifetime listing cache. Tests call this so one scripted reply cannot leak. */
 export function resetModelListingCache(): void {
@@ -238,13 +261,27 @@ function listingRowSupportsTools(entry: ListingEntry): boolean {
 }
 
 /**
+ * Whether one listing row disclosed a selectable reasoning parameter.
+ * Listings that omit `supported_parameters` (generic OpenAI `GET /models`)
+ * do not claim reasoning — inventing a selector would offer levels the
+ * endpoint cannot honour.
+ * @param entry - one `data[]` element.
+ * @returns whether the overlay should mark the model as reasoning.
+ */
+function listingRowSupportsReasoning(entry: ListingEntry): boolean {
+  const params = entry.supported_parameters
+  if (!Array.isArray(params)) return false
+  return params.some(value => typeof value === 'string' && REASONING_PARAMETERS.has(value))
+}
+
+/**
  * Read one OpenAI-compatible listing reply. Entries without a usable id are
  * skipped rather than failing the whole interrogation: a single malformed row
  * should not deny the user the rest of a working endpoint's catalog.
  * @param body - parsed JSON reply.
  * @returns advertised models in endpoint order.
  */
-export function readListing(body: unknown): LlmDiscoveredModel[] {
+export function readListing(body: unknown): ListedModel[] {
   const data = (body as { data?: unknown } | null)?.data
   if (!Array.isArray(data)) {
     throw new LlmError(
@@ -252,7 +289,7 @@ export function readListing(body: unknown): LlmDiscoveredModel[] {
       'DISCOVERY_FAILED',
     )
   }
-  const models: LlmDiscoveredModel[] = []
+  const models: ListedModel[] = []
   for (const raw of data) {
     const entry = (raw ?? {}) as ListingEntry
     const id = label(entry.id)
@@ -272,11 +309,13 @@ export function readListing(body: unknown): LlmDiscoveredModel[] {
       topProvider?.['max_completion_tokens'],
       architecture?.['output_length'],
     )
+    const reasoning = listingRowSupportsReasoning(entry)
     models.push({
       id,
       ...name === undefined ? {} : { name },
       ...contextWindow === undefined ? {} : { contextWindow },
       ...maxTokens === undefined ? {} : { maxTokens },
+      ...reasoning ? { reasoning: true } : {},
     })
   }
   return models
@@ -303,7 +342,7 @@ export async function fetchModelListing(options: {
   baseURL: string
   apiKey?: string
   signal?: AbortSignal
-}): Promise<readonly LlmDiscoveredModel[]> {
+}): Promise<readonly ListedModel[]> {
   const url = listingUrl(options.baseURL)
   if (!modelListingAllowed(url)) {
     throw new LlmError(`${url} listing is disabled in unit tests`, 'DISCOVERY_FAILED')
@@ -328,7 +367,7 @@ export async function fetchModelListing(options: {
 async function readListingFromNetwork(
   url: string,
   options: { apiKey?: string; signal?: AbortSignal },
-): Promise<readonly LlmDiscoveredModel[]> {
+): Promise<readonly ListedModel[]> {
   let response: Response
   try {
     response = await modelListingInternals.fetch(url, {
@@ -373,28 +412,47 @@ async function readListingFromNetwork(
 /**
  * Merge an installed catalog's discovered rows with a live listing. Installed
  * ids keep catalog name and capacities (a listing rarely matches those);
- * live-only ids append in listing order.
+ * live-only ids append in listing order. Listing-only flags such as
+ * `reasoning` are dropped so a discovery reply stays `LlmDiscoveredModel`.
  * @param installed - catalog rows in catalog order.
  * @param live - tool-filtered listing rows.
  * @returns the union, catalog ids first.
  */
 export function overlayDiscoveredModels(
   installed: readonly LlmDiscoveredModel[],
-  live: readonly LlmDiscoveredModel[],
+  live: readonly ListedModel[],
 ): LlmDiscoveredModel[] {
   const seen = new Set(installed.map(model => model.id))
-  const extra = live.filter((model) => {
-    if (seen.has(model.id)) return false
+  const extra = live.flatMap((model) => {
+    if (seen.has(model.id)) return []
     seen.add(model.id)
-    return true
+    return [discoveredFromListing(model)]
   })
   return [...installed, ...extra]
+}
+
+/**
+ * Keep the discovery-wire fields of one listing row. `reasoning` is picker
+ * metadata and must not ride `llm.discoverModels`.
+ * @param row - a listing or catalog discovery row.
+ * @returns id plus optional name and capacities.
+ */
+export function discoveredFromListing(row: LlmDiscoveredModel): LlmDiscoveredModel {
+  return {
+    id: row.id,
+    ...row.name === undefined ? {} : { name: row.name },
+    ...row.contextWindow === undefined ? {} : { contextWindow: row.contextWindow },
+    ...row.maxTokens === undefined ? {} : { maxTokens: row.maxTokens },
+  }
 }
 
 /**
  * Overlay a live listing onto installed pi-ai models so the picker and the
  * request path share one catalog. Known ids keep the installed descriptor;
  * live-only ids clone the first installed model's protocol and endpoint.
+ * A live-only id that disclosed a reasoning parameter is marked reasoning
+ * with the OpenRouter effort map; others stay non-reasoning so the composer
+ * does not offer a selector the endpoint cannot honour.
  * @param installed - models the route already serves.
  * @param live - tool-filtered listing rows.
  * @param fallback - capacities for a live-only id the listing did not size.
@@ -402,7 +460,7 @@ export function overlayDiscoveredModels(
  */
 export function overlayLiveCatalogModels(
   installed: readonly Model<Api>[],
-  live: readonly LlmDiscoveredModel[],
+  live: readonly ListedModel[],
   fallback: { contextWindow: number; maxTokens: number },
 ): Model<Api>[] {
   const template = installed[0]
@@ -417,7 +475,8 @@ export function overlayLiveCatalogModels(
       ...rest,
       id: row.id,
       name: row.name ?? row.id,
-      reasoning: false,
+      reasoning: row.reasoning === true,
+      ...row.reasoning === true ? { thinkingLevelMap: OPENROUTER_LIVE_THINKING } : {},
       contextWindow: row.contextWindow ?? fallback.contextWindow,
       maxTokens: row.maxTokens ?? fallback.maxTokens,
       input: ['text'],

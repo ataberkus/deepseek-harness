@@ -30,6 +30,7 @@ import type { LlmDiscoveredModel, LlmModelDiscoveryRequest } from '@deepseek-ai/
 import { catalogModels, catalogProvider } from './catalog.ts'
 import {
   catalogListingTarget,
+  discoveredFromListing,
   fetchModelListing,
   LISTABLE_PROTOCOLS,
   overlayDiscoveredModels,
@@ -133,7 +134,9 @@ export async function discoverModels(
       ...apiKey === undefined ? {} : { apiKey },
       ...request.signal === undefined ? {} : { signal: request.signal },
     })
-    return installed.length === 0 ? live : overlayDiscoveredModels(installed, live)
+    return installed.length === 0
+      ? live.map(discoveredFromListing)
+      : overlayDiscoveredModels(installed, live)
   } catch (error: unknown) {
     if (installed.length > 0 && !(error instanceof LlmError && error.code === 'ABORTED')) {
       return installed

@@ -644,6 +644,25 @@ select.input {
   --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l2);
 }
 
+.fetchToolbar {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.fetchBulk {
+  display: flex;
+  gap: 12px;
+}
+
+.fetchNoneMatch {
+  margin: 0;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
 .candidateList {
   display: flex;
   flex-direction: column;

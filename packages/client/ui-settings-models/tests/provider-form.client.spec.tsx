@@ -488,6 +488,32 @@ describe('endpoint interrogation', () => {
     ])
   })
 
+  it('filters fetch candidates and selects or deselects the visible rows', async () => {
+    const discover = vi.fn(() => Promise.resolve(ok({
+      models: [{ id: 'alpha-one' }, { id: 'beta-two' }, { id: 'alpha-three' }],
+    })))
+    await mountSection({ discover })
+    openEditor('openai')
+    fireEvent.click(screen.getByText(en.fetchModels))
+    await screen.findByText(en.fetchTitle)
+
+    const search = screen.getByLabelText<HTMLInputElement>(en.fetchSearch)
+    fireEvent.change(search, { target: { value: 'alpha' } })
+    expect(screen.getByText('alpha-one')).toBeTruthy()
+    expect(screen.getByText('alpha-three')).toBeTruthy()
+    expect(screen.queryByText('beta-two')).toBeNull()
+
+    fireEvent.click(screen.getByText(en.fetchSelectNone))
+    const visible = [...document.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')]
+    expect(visible.every(box => !box.checked)).toBe(true)
+    fireEvent.click(screen.getByText(en.fetchSelectAll))
+    expect([...document.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')].every(box => box.checked)).toBe(true)
+
+    fireEvent.change(search, { target: { value: 'missing-id' } })
+    expect(screen.getByText(en.fetchNoneMatch)).toBeTruthy()
+    expect(screen.getByText(en.fetchSelectAll).closest('button')?.disabled).toBe(true)
+  })
+
   it('keeps the rows editable when the provider cannot be interrogated', async () => {
     const discover = vi.fn(() => Promise.resolve(
       fail('https://proxy.example/v1/models answered 401; check the API key', 'model-discovery-failed'),

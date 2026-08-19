@@ -64,3 +64,11 @@ export const llmDiscoverModelsRequestSchema = z.object({
 export const llmDiscoverModelsValueSchema = z.object({
   models: z.array(discoveredModelViewSchema),
 }) satisfies z.ZodType<Wire<ResponseValue<'llm.discoverModels'>>>
+
+/** llm.logout request payload. */
+export const llmLogoutRequestSchema = z.object({
+  provider: z.string().min(1),
+}) satisfies z.ZodType<Wire<RequestPayload<'llm.logout'>>>
+
+/** llm.logout response value. */
+export const llmLogoutValueSchema = z.object({}) satisfies z.ZodType<Wire<ResponseValue<'llm.logout'>>>

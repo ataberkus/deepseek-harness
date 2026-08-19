@@ -225,6 +225,19 @@ export abstract class LlmAdapter {
   }
 
   /**
+   * Sign out of a hosted OAuth route this adapter injected. Default refuses:
+   * only adapters that persist OAuth credentials implement this.
+   * @param provider - a route passed to {@link LlmRuntime.registerAdapter}.
+   * @returns nothing; a successful call unregisters the live route.
+   */
+  logout(provider: string): Promise<void> {
+    return Promise.reject(new LlmError(
+      `provider "${provider}" does not support logout`,
+      'UNSUPPORTED_OPTION',
+    ))
+  }
+
+  /**
    * Stream one model call as raw chunks. The only required method.
    * @param options - the fully-assembled request; implementations must honor `options.signal`.
    * @returns the chunk stream, obeying the adapter contract documented on `StreamChunk`.
@@ -556,6 +569,15 @@ export class LlmRuntime extends Service {
       })
     }
     return models
+  }
+
+  /**
+   * Sign out of a hosted OAuth route owned by its registered adapter.
+   * @param provider - registered provider route to disconnect.
+   * @returns nothing; a successful call unregisters the live route.
+   */
+  async logout(provider: string): Promise<void> {
+    await this.registration(provider).adapter.logout(provider)
   }
 
   /**

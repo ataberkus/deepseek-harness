@@ -22,7 +22,7 @@ Status: implemented
 
 Web 客户端在提交 `/login` 的按键手势里打开空白标签，并在收到 `commands/open-url` 时导航到授权页。授权 URL 到达后再 `window.open` 会被弹窗拦截；Node 里的 `dsh web` 进程也无法可靠地在已经打开的浏览器里再开标签。CLI 与 ACP 仍使用操作系统 opener。命名标签会被复用，因此第二次 `/login` 不会把进行中的授权页换成 `about:blank`。
 
-已存储的 `openai-codex` oauth 凭据会向适配器注册表注入一条无 settings 的 live 路由，模型选择器因此可以列出 pi-ai catalog 模型。可配置提供方目录仍然不提供仅 OAuth 的 catalog **密钥卡片**，这是不予提供那条笔记的决策；settings 里已存储的 profile 仍会出现在目录中，以便编辑或删除。live 路由不点名 `apiKeyEnv`，因此首次引导在 Codex 登录之前仍要求有一个可用的 API 密钥提供方。模型页把这条注入路由显示为只读已登录行（名称加上已连接圆点，没有编辑器，也没有 Sign-in 按钮）。登出仍是 `/logout openai-codex`。
+已存储的 `openai-codex` oauth 凭据会向适配器注册表注入一条无 settings 的 live 路由，模型选择器因此可以列出 pi-ai catalog 模型。可配置提供方目录仍然不提供仅 OAuth 的 catalog **密钥卡片**，这是不予提供那条笔记的决策；settings 里已存储的 profile 仍会出现在目录中，以便编辑或删除。live 路由不点名 `apiKeyEnv`，因此首次引导在 Codex 登录之前仍要求有一个可用的 API 密钥提供方。模型页把这条注入路由显示为已登录行（名称加上已连接圆点，通过 `llm.logout` 退出登录，没有编辑器，也没有 Sign-in 按钮）。`/logout openai-codex` 仍是命令等价物。
 
 `Provider is not configured` 映射为 `LlmError('MISSING_CREDENTIAL')`，并点名 `/login openai-codex`。托管的 `cursor` 登录是同一 store 与命令表上的兄弟路由；那条非官方 AgentService 传输见 [Cursor OAuth 宿主](2026-08-18-cursor-oauth-host.md)。
 
@@ -40,7 +40,7 @@ Web 客户端在提交 `/login` 的按键手势里打开空白标签，并在收
 
 **只从 Node 进程打开授权 URL。** 对 `dsh web` 否决：服务进程无法可靠地在已经打开的浏览器里再开标签，授权 URL 到达后再 `window.open` 会被弹窗拦截。Web 客户端在 `/login` 按键手势里打开空白标签，Host 转发 `commands/open-url` 以便该标签导航。CLI 仍使用操作系统 opener。
 
-**在模型页把 `openai-codex` 重新做成密钥卡片。** 否决：密钥字段仍然无法完成 ChatGPT 登录。只读的已连接行不是那张卡片：它报告宿主已经知道的 OAuth 状态，既没有 Sign-in 控件，也没有可编辑密钥。
+**在模型页把 `openai-codex` 重新做成密钥卡片。** 否决：密钥字段仍然无法完成 ChatGPT 登录。已登录的已连接行不是那张卡片：它报告宿主已经知道的 OAuth 状态，既没有 Sign-in 控件，也没有可编辑密钥。退出登录会删除已存储的登录，不会加上密钥字段。
 
 ## 后果
 
@@ -50,4 +50,4 @@ device-code／SSH 登录、模型页「登录」按钮、`dsh auth login` 启动
 
 ## 测试
 
-`tests/oauth-store.spec.ts` 钉住永不引用秘密的解析拒绝、属主独占持久化、`modify`／`delete`／`list`、并发写入，以及 POSIX 下拒绝他人可读。`tests/oauth-login.spec.ts` 钉住仅浏览器 interaction、`/login`／`/logout`、重叠 `/login` 拒绝、`commands/open-url` 发出、无目录卡片的 live 路由注入、`listProviders().auth === 'oauth'`、从已存文件启动、冲突路由的包容、无存储 token 的无密钥 Codex 流得到 `MISSING_CREDENTIAL`，以及 opener argv 在 Windows／WSL 上让含 `&` 的 URL 保持为单个参数（`rundll32`）。`packages/host/apiproxy/tests/api-proxy-config.spec.ts` 钉住未声明 OAuth 视图携带 `auth` 与 `connected`。`packages/client/ui-settings-models/tests` 钉住 store join（普通 `settingsNs: ''` 仍隐藏；`auth: oauth` 视为已配置）以及只读已登录行。插件 apply 测试会 stub `$DSH_HOME`，避免开发者本机凭据文件注入 live 路由。`tests/catalog.spec.ts` 中的目录不予提供测试保留：除非 settings profile 点名该路由，否则密钥卡片仍不出现。授权 URL 的 stderr 行由该包测试钉住；无密钥的装配快照无法重放 ChatGPT 登录。
+`tests/oauth-store.spec.ts` 钉住永不引用秘密的解析拒绝、属主独占持久化、`modify`／`delete`／`list`、并发写入，以及 POSIX 下拒绝他人可读。`tests/oauth-login.spec.ts` 钉住仅浏览器 interaction、`/login`／`/logout`、重叠 `/login` 拒绝、`commands/open-url` 发出、无目录卡片的 live 路由注入、`listProviders().auth === 'oauth'`、从已存文件启动、冲突路由的包容、无存储 token 的无密钥 Codex 流得到 `MISSING_CREDENTIAL`，以及 opener argv 在 Windows／WSL 上让含 `&` 的 URL 保持为单个参数（`rundll32`）。`packages/host/apiproxy/tests/api-proxy-config.spec.ts` 钉住未声明 OAuth 视图携带 `auth` 与 `connected`。`packages/client/ui-settings-models/tests` 钉住 store join（普通 `settingsNs: ''` 仍隐藏；`auth: oauth` 视为已配置）以及通过 `llm.logout` 退出登录的已登录行。插件 apply 测试会 stub `$DSH_HOME`，避免开发者本机凭据文件注入 live 路由。`tests/catalog.spec.ts` 中的目录不予提供测试保留：除非 settings profile 点名该路由，否则密钥卡片仍不出现。授权 URL 的 stderr 行由该包测试钉住；无密钥的装配快照无法重放 ChatGPT 登录。

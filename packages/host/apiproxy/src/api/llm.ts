@@ -87,6 +87,15 @@ export interface LlmApi {
     }>,
     signal?: AbortSignal,
   ): Promise<RpcResponse<{ models: DiscoveredModelView[] }>>
+
+  /**
+   * Sign out of a hosted OAuth live route (Codex or Cursor). Deletes the
+   * stored login and unregisters the route. `/logout openai-codex` and
+   * `/logout cursor` remain the command equivalents.
+   */
+  logout(
+    request: RpcRequest<{ provider: string }>,
+  ): Promise<RpcResponse<{}>>
 }
 
 /** Wire view of one model an interrogated endpoint advertises. */

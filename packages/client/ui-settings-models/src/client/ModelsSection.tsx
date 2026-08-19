@@ -3,7 +3,8 @@
  * directory, settings namespaces, and credential states, with one editor
  * card at a time. Rows expose confirmed API-key state through accessible
  * solid configured or missing dots, and an OAuth live route as a read-only
- * signed-in row (name plus connected dot, no editor). A whole-section provider without a
+ * signed-in row (name plus connected dot, Sign out to delete the stored login,
+ * no editor). A whole-section provider without a
  * configured key renders as its open setup card instead of a row, but only in
  * the first-run posture — no provider on the page can serve requests yet — and
  * only until the user closes that card; the add flow is a card carrying the
@@ -61,6 +62,12 @@ interface EditorTarget extends ProviderIdentity {
   declared?: boolean
 }
 
+/** Confirmed destructive action: a settings profile, or an OAuth live-route logout. */
+interface DeleteTarget extends EditorTarget {
+  /** Present when Delete signs out a hosted OAuth route instead of unsetting a profile. */
+  oauth?: true
+}
+
 /** Values that vary around the shared provider-editor rendering. */
 interface ProviderEditorRenderProps extends Pick<
   ProviderEditorProps,
@@ -111,6 +118,31 @@ export async function removeProviderProfile(
   } catch (error) {
     // The transport rejected rather than answering; the caller must be able
     // to retry the idempotent operation instead of the row silently staying.
+    return messageOf(error)
+  }
+  await controller.load()
+  return undefined
+}
+
+/**
+ * Sign out of a hosted OAuth live route. The call deletes the stored login
+ * and unregisters the route; it does not mutate settings.
+ * @param api - the llm wire face.
+ * @param controller - the page store to refresh.
+ * @param provider - live route id (`openai-codex` or `cursor`).
+ * @returns the failure message, or undefined once logout and reload landed.
+ */
+export async function logoutOAuthProvider(
+  api: Pick<IApiClient, 'llm'>,
+  controller: ModelsSettingsStore,
+  provider: string,
+): Promise<string | undefined> {
+  try {
+    const response = await api.llm.logout({ provider })
+    if (!response.result.ok) return response.result.error.message
+  } catch (error) {
+    // The transport rejected rather than answering; the caller must be able
+    // to retry instead of the row silently staying signed in.
     return messageOf(error)
   }
   await controller.load()
@@ -180,7 +212,7 @@ function Loaded({ injected }: { injected: ModelsSectionInjected }): ReactNode {
   const state = injected.useSnapshot(snapshot => snapshot)
   const [editing, setEditing] = useState<EditorTarget | undefined>(undefined)
   const [adding, setAdding] = useState(false)
-  const [deleteTarget, setDeleteTarget] = useState<EditorTarget | undefined>(undefined)
+  const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | undefined>(undefined)
   const [deleting, setDeleting] = useState(false)
   const [deleteFailure, setDeleteFailure] = useState<string | undefined>(undefined)
   const [savedTarget, setSavedTarget] = useState<ProviderIdentity | undefined>(undefined)
@@ -224,7 +256,9 @@ function Loaded({ injected }: { injected: ModelsSectionInjected }): ReactNode {
     if (deleteTarget === undefined || deleting) return
     setDeleting(true)
     setDeleteFailure(undefined)
-    void removeProviderProfile(api, controller, deleteTarget)
+    void (deleteTarget.oauth === true
+      ? logoutOAuthProvider(api, controller, deleteTarget.provider)
+      : removeProviderProfile(api, controller, deleteTarget))
       .then((failure) => {
         if (failure !== undefined) {
           setDeleteFailure(failure)
@@ -288,6 +322,13 @@ function Loaded({ injected }: { injected: ModelsSectionInjected }): ReactNode {
         {configured.map((row) => {
           if (row.entry.auth === 'oauth' && row.entry.settingsNs === '') {
             const oauthLabel = row.entry.provider === 'cursor' ? t('oauthConfiguredCursor') : t('oauthConfigured')
+            const oauthTarget: DeleteTarget = {
+              provider: row.entry.provider,
+              displayName: row.entry.displayName,
+              settingsNs: '',
+              settingsPath: [],
+              oauth: true,
+            }
             return (
               <li key={row.entry.provider} className={styles['rowCard']}>
                 <div className={styles['rowHead']}>
@@ -299,6 +340,20 @@ function Loaded({ injected }: { injected: ModelsSectionInjected }): ReactNode {
                       aria-label={oauthLabel}
                       title={oauthLabel}
                     />
+                  </span>
+                  <span className={styles['rowActions']}>
+                    <button
+                      type="button"
+                      className={styles['dangerButton']}
+                      aria-label={providerCopy(t('oauthSignOutProvider'), oauthTarget)}
+                      onClick={() => {
+                        setSavedTarget(undefined)
+                        setDeleteFailure(undefined)
+                        setDeleteTarget(oauthTarget)
+                      }}
+                    >
+                      {t('oauthSignOut')}
+                    </button>
                   </span>
                 </div>
               </li>
@@ -508,14 +563,21 @@ function Loaded({ injected }: { injected: ModelsSectionInjected }): ReactNode {
       <Modal
         open={deleteTarget !== undefined}
         onClose={closeDelete}
-        title={deleteTarget === undefined ? '' : providerCopy(t('deleteTitle'), deleteTarget)}
+        title={deleteTarget === undefined
+          ? ''
+          : providerCopy(
+            deleteTarget.oauth === true ? t('oauthSignOutTitle') : t('deleteTitle'),
+            deleteTarget,
+          )}
         closeLabel={t('close')}
         description={deleteTarget === undefined
           ? ''
           : providerCopy(
-            deleteTarget.credentialRef === undefined
-              ? t('deleteDescription')
-              : t('deleteDescriptionWithCredential'),
+            deleteTarget.oauth === true
+              ? t('oauthSignOutDescription')
+              : deleteTarget.credentialRef === undefined
+                ? t('deleteDescription')
+                : t('deleteDescriptionWithCredential'),
             deleteTarget,
           )}
         className={styles['deleteDialog'] as string}
@@ -532,7 +594,12 @@ function Loaded({ injected }: { injected: ModelsSectionInjected }): ReactNode {
             >
               {deleteTarget === undefined
                 ? ''
-                : providerCopy(deleting ? t('deleting') : t('deleteConfirm'), deleteTarget)}
+                : providerCopy(
+                  deleting
+                    ? (deleteTarget.oauth === true ? t('oauthSigningOut') : t('deleting'))
+                    : (deleteTarget.oauth === true ? t('oauthSignOutConfirm') : t('deleteConfirm')),
+                  deleteTarget,
+                )}
             </Button>
           </>
         )}

@@ -3362,6 +3362,20 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
           })
         }
       },
+
+      async logout(request) {
+        const { provider } = request.payload
+        try {
+          await ctx.llm.logout(provider)
+          return ok(request, {})
+        } catch (error: unknown) {
+          return err(request, {
+            code: 'oauth-logout-failed',
+            message: error instanceof Error ? error.message : String(error),
+            details: { provider },
+          })
+        }
+      },
     },
 
     events: {

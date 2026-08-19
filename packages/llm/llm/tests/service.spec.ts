@@ -561,6 +561,25 @@ describe('LlmRuntime', () => {
     expect(ctx.llm.listProviders()).toEqual([{ id: 'codex', name: 'Codex', auth: 'oauth' }])
   })
 
+  it('rejects logout on adapters that do not implement it and delegates when they do', async () => {
+    const ctx = new Context()
+    await ctx.plugin(LlmRuntime)
+    ctx.llm.registerAdapter(['plain'], new ScriptedAdapter(SCRIPT))
+    await expect(ctx.llm.logout('plain')).rejects.toMatchObject({ code: 'UNSUPPORTED_OPTION' })
+    await expect(ctx.llm.logout('missing')).rejects.toMatchObject({ code: 'NO_ADAPTER' })
+
+    const seen: string[] = []
+    const adapter = new class extends ScriptedAdapter {
+      override logout(provider: string): Promise<void> {
+        seen.push(provider)
+        return Promise.resolve()
+      }
+    }(SCRIPT)
+    ctx.llm.registerAdapter(['oauth'], adapter)
+    await ctx.llm.logout('oauth')
+    expect(seen).toEqual(['oauth'])
+  })
+
   it.each([
     [{ provider: 1, id: 'model', name: 'Model' }, 'non-string provider'],
     [{ provider: 'other', id: 'model', name: 'Model' }, 'mismatched provider'],

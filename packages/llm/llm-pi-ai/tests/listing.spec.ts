@@ -102,6 +102,14 @@ describe('readListing', () => {
           supported_parameters: ['tools', 'temperature'],
         },
         {
+          id: 'vendor/reasoning',
+          supported_parameters: ['tools', 'reasoning'],
+        },
+        {
+          id: 'vendor/effort',
+          supported_parameters: ['tools', 'reasoning_effort'],
+        },
+        {
           id: 'vendor/no-tools',
           supported_parameters: ['temperature'],
         },
@@ -124,6 +132,8 @@ describe('readListing', () => {
       ],
     })).toEqual([
       { id: 'vendor/with-tools', name: 'With Tools', contextWindow: 100_000, maxTokens: 8_000 },
+      { id: 'vendor/reasoning', reasoning: true },
+      { id: 'vendor/effort', reasoning: true },
       { id: 'vendor/params-object' },
       { id: 'vendor/plain' },
       { id: 'vendor/null-architecture' },
@@ -144,7 +154,7 @@ describe('overlay helpers', () => {
       [{ id: 'known', name: 'Known', contextWindow: 1, maxTokens: 2 }],
       [
         { id: 'known', name: 'Live name' },
-        { id: 'extra' },
+        { id: 'extra', reasoning: true },
         { id: 'extra' },
       ],
     )).toEqual([
@@ -174,6 +184,17 @@ describe('overlay helpers', () => {
       contextWindow: 9,
       maxTokens: 3,
       input: ['text'],
+    })
+    expect(overlaid[1]).not.toHaveProperty('thinkingLevelMap')
+    const reasoning = overlayLiveCatalogModels(
+      [template],
+      [{ id: 'vendor/thinks', reasoning: true }],
+      { contextWindow: 100, maxTokens: 10 },
+    )
+    expect(reasoning[1]).toMatchObject({
+      id: 'vendor/thinks',
+      reasoning: true,
+      thinkingLevelMap: { low: 'low', medium: 'medium', high: 'high' },
     })
     const fallback = overlayLiveCatalogModels(
       [template],

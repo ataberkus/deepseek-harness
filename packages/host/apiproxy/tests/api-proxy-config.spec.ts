@@ -803,3 +803,32 @@ describe('llm.discoverModels', () => {
     expect(error.message).toContain('no model discovery is registered')
   })
 })
+
+describe('llm.logout', () => {
+  it('signs out through the owning adapter', async () => {
+    const ctx = await harness()
+    const seen: string[] = []
+    class LogoutAdapter extends CatalogAdapter {
+      override logout(provider: string): Promise<void> {
+        seen.push(provider)
+        return Promise.resolve()
+      }
+    }
+    ctx.llm.registerAdapter(['openai-codex'], new LogoutAdapter('OpenAI Codex', []))
+    const api = createApiProxy(ctx, DEFAULTS)
+
+    expectOk(await api.llm.logout(request({ provider: 'openai-codex' })))
+    expect(seen).toEqual(['openai-codex'])
+  })
+
+  it('maps adapter refusal to oauth-logout-failed without dropping the route id', async () => {
+    const ctx = await harness()
+    ctx.llm.registerAdapter(['openai'], new CatalogAdapter('openai', []))
+    const api = createApiProxy(ctx, DEFAULTS)
+
+    const error = expectErr(await api.llm.logout(request({ provider: 'openai' })))
+    expect(error.code).toBe('oauth-logout-failed')
+    expect(error.details).toEqual({ provider: 'openai' })
+    expect(error.message).toContain('does not support logout')
+  })
+})

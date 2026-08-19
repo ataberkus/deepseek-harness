@@ -362,6 +362,9 @@ describe('login and logout commands', () => {
     expect(stored['openai-codex'].type).toBe('oauth')
     expect(stored['openai-codex'].refresh).toBe('refresh-token')
 
+    await ctx.llm.logout(OPENAI_CODEX_PROVIDER)
+    expect(ctx.llm.listProviders()).toEqual([])
+
     const logout = await ctx.commands.execute(agent, '/logout openai-codex', AbortSignal.timeout(5_000))
     expect(logout?.result).toEqual({ kind: 'success', text: 'Signed out of OpenAI Codex.' })
     expect(ctx.llm.listProviders()).toEqual([])

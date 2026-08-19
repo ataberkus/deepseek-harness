@@ -34,26 +34,47 @@ interface FallbackSpec {
 }
 
 /**
- * Offline catalog served until GetUsableModels succeeds. Ids match names
- * Cursor currently lists for a subscription account; a live overlay appends
- * anything this snapshot does not ship.
+ * Offline catalog served until GetUsableModels succeeds, and used to fill
+ * documented `-fast` siblings when live listing omits them. Ids follow
+ * Cursor's public model table (standard SKU plus Fast where Cursor ships one).
  */
 const FALLBACK: readonly FallbackSpec[] = [
-  { id: 'composer-1.5', name: 'Composer 1.5', reasoning: true, contextWindow: 200_000 },
-  { id: 'composer-1', name: 'Composer 1', reasoning: true, contextWindow: 200_000 },
-  { id: 'grok-4.5', name: 'Grok 4.5', reasoning: true, contextWindow: 256_000 },
-  { id: 'claude-4.6-sonnet', name: 'Claude 4.6 Sonnet', reasoning: true, contextWindow: 200_000 },
-  { id: 'claude-4.6-opus', name: 'Claude 4.6 Opus', reasoning: true, contextWindow: 200_000 },
-  { id: 'gpt-5.4', name: 'GPT-5.4', reasoning: true, contextWindow: 272_000 },
-  { id: 'gpt-5.3-codex', name: 'GPT-5.3 Codex', reasoning: true, contextWindow: 272_000 },
+  spec('composer-1.5', 'Composer 1.5'),
+  spec('composer-1', 'Composer 1'),
+  spec('composer-2.5', 'Composer 2.5'),
+  spec('composer-2.5-fast', 'Composer 2.5 Fast'),
+  spec('grok-4.6', 'Grok 4.6', 256_000),
+  spec('grok-4.6-fast', 'Grok 4.6 Fast', 256_000),
+  spec('grok-4.5', 'Grok 4.5', 256_000),
+  spec('grok-4.5-fast', 'Grok 4.5 Fast', 256_000),
+  spec('claude-4.6-sonnet', 'Claude 4.6 Sonnet'),
+  spec('claude-4.6-opus', 'Claude 4.6 Opus'),
+  spec('claude-4.5-sonnet', 'Claude 4.5 Sonnet'),
+  spec('claude-4.5-opus', 'Claude 4.5 Opus'),
+  spec('claude-4.5-haiku', 'Claude 4.5 Haiku'),
+  spec('claude-opus-5', 'Claude Opus 5'),
+  spec('claude-opus-5-fast', 'Claude Opus 5 Fast'),
+  spec('gpt-5.4', 'GPT-5.4', 272_000),
+  spec('gpt-5.3-codex', 'GPT-5.3 Codex', 272_000),
+  spec('gpt-5', 'GPT-5'),
+  spec('gpt-5-fast', 'GPT-5 Fast'),
+  spec('gemini-3-flash', 'Gemini 3 Flash'),
+  spec('gemini-3-pro', 'Gemini 3 Pro'),
+  spec('kimi-k3', 'Kimi K3', 1_000_000),
 ]
+
+function spec(id: string, name: string, contextWindow = CURSOR_DEFAULT_CONTEXT_WINDOW): FallbackSpec {
+  return { id, name, reasoning: true, contextWindow }
+}
+
+const FALLBACK_BY_ID = new Map(FALLBACK.map(entry => [entry.id, entry]))
 
 /**
  * Bundled Cursor models this adapter serves without a network round trip.
  * @returns pi-ai models tagged `cursor-agent`.
  */
 export function cursorFallbackModels(): Model<Api>[] {
-  return FALLBACK.map(spec => cursorModel(spec.id, spec.name, spec.reasoning, spec.contextWindow))
+  return FALLBACK.map(entry => cursorModel(entry.id, entry.name, entry.reasoning, entry.contextWindow))
 }
 
 /**
@@ -122,7 +143,7 @@ export function decodeUsableModels(payload: Uint8Array): Model<Api>[] {
     if (id.length === 0 || seen.has(id)) continue
     seen.add(id)
     const name = fieldString(fields, 4) || fieldString(fields, 3) || id
-    const reasoning = fieldRepeated(fields, 2).length > 0
+    const reasoning = inferCursorReasoning(id, fieldRepeated(fields, 2).length > 0)
     const contextWindow = inferContextWindow(id, name)
     models.push(cursorModel(id, name, reasoning, contextWindow))
   }
@@ -130,11 +151,13 @@ export function decodeUsableModels(payload: Uint8Array): Model<Api>[] {
 }
 
 /**
- * Overlay live GetUsableModels onto the bundled fallback. Network failure
- * returns the fallback so a picker never goes empty.
+ * Overlay live GetUsableModels onto the bundled fallback. Live ids win;
+ * fallback fills documented ids (including `-fast` siblings) the reply
+ * omitted. Network failure or an empty reply returns the fallback so a
+ * picker never goes empty.
  * @param accessToken - Cursor access token; never logged.
  * @param signal - abort listing.
- * @returns fallback ids first, then live-only ids.
+ * @returns live ids first, then fallback-only ids including priced Fast SKUs.
  */
 export async function listCursorModels(
   accessToken: string,
@@ -144,17 +167,63 @@ export async function listCursorModels(
   try {
     const payload = await cursorListingInternals.fetch(accessToken, signal)
     const live = decodeUsableModels(payload)
-    if (live.length === 0) return fallback
-    const seen = new Set(fallback.map(model => model.id))
-    const extra = live.filter((model) => {
-      if (seen.has(model.id)) return false
-      seen.add(model.id)
-      return true
-    })
-    return [...fallback, ...extra]
+    if (live.length === 0) return withFastVariants(fallback)
+    return withFastVariants(mergeCursorCatalogs(live, fallback))
   } catch {
-    return fallback
+    return withFastVariants(fallback)
   }
+}
+
+/**
+ * Live listing first, then fallback ids the endpoint did not name.
+ * @param live - decoded GetUsableModels rows.
+ * @param fallback - bundled catalog.
+ * @returns the union, live descriptors winning on id collision.
+ */
+export function mergeCursorCatalogs(
+  live: readonly Model<Api>[],
+  fallback: readonly Model<Api>[],
+): Model<Api>[] {
+  const byId = new Map<string, Model<Api>>()
+  for (const model of live) byId.set(model.id, model)
+  for (const model of fallback) {
+    if (!byId.has(model.id)) byId.set(model.id, model)
+  }
+  return [...byId.values()]
+}
+
+/**
+ * Ensure each non-fast id that has a documented Fast sibling also appears as
+ * `{id}-fast`. Cursor's picker lists both; GetUsableModels sometimes ships
+ * only the standard id.
+ * @param models - live-or-fallback union.
+ * @returns the same list plus missing documented Fast SKUs.
+ */
+export function withFastVariants(models: readonly Model<Api>[]): Model<Api>[] {
+  const byId = new Map(models.map(model => [model.id, model]))
+  for (const model of models) {
+    if (model.id.endsWith('-fast')) continue
+    const fastId = `${model.id}-fast`
+    if (byId.has(fastId)) continue
+    const documented = FALLBACK_BY_ID.get(fastId)
+    if (documented === undefined) continue
+    byId.set(fastId, cursorModel(
+      fastId,
+      documented.name,
+      model.reasoning,
+      model.contextWindow,
+    ))
+  }
+  return [...byId.values()]
+}
+
+function inferCursorReasoning(id: string, thinkingDetails: boolean): boolean {
+  if (thinkingDetails) return true
+  const documented = FALLBACK_BY_ID.get(id)
+  if (documented !== undefined) return documented.reasoning
+  const lower = id.toLowerCase()
+  if (lower.includes('grok-code')) return false
+  return /grok|claude|gpt-|composer|gemini|kimi|glm|opus|sonnet/.test(lower)
 }
 
 function inferContextWindow(id: string, name: string): number {
@@ -162,6 +231,8 @@ function inferContextWindow(id: string, name: string): number {
   if (/\b1m\b/.test(blob)) return 1_000_000
   if (/\b272k\b/.test(blob)) return 272_000
   if (/\b256k\b/.test(blob)) return 256_000
+  const documented = FALLBACK_BY_ID.get(id)
+  if (documented !== undefined) return documented.contextWindow
   return CURSOR_DEFAULT_CONTEXT_WINDOW
 }
 

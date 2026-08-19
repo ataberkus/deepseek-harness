@@ -10,7 +10,16 @@ import {
   decodeConnectFrames,
   frameConnectMessage,
 } from '../src/cursor/connect.ts'
-import { cursorModel, cursorListingInternals, decodeUsableModels, encodeUsableModelsRequest, listCursorModels } from '../src/cursor/models.ts'
+import {
+  cursorModel,
+  cursorListingInternals,
+  cursorFallbackModels,
+  decodeUsableModels,
+  encodeUsableModelsRequest,
+  listCursorModels,
+  mergeCursorCatalogs,
+  withFastVariants,
+} from '../src/cursor/models.ts'
 import {
   generateCursorAuthParams,
   cursorOAuthInternals,
@@ -531,6 +540,11 @@ describe('cursor models', () => {
     cursorListingInternals.fetch = async () => new Uint8Array()
     const empty = await listCursorModels('token')
     expect(empty.length).toBeGreaterThan(0)
+    expect(empty.map(model => model.id)).toEqual(expect.arrayContaining([
+      'grok-4.6',
+      'grok-4.6-fast',
+      'composer-1.5',
+    ]))
     cursorListingInternals.fetch = async () => {
       throw new Error('down')
     }
@@ -553,6 +567,26 @@ describe('cursor models', () => {
       encodeString(4, '272k'),
     )))[0]?.contextWindow).toBe(272_000)
     expect(cursorModel('plain', 'Plain', false).contextWindow).toBe(200_000)
+  })
+
+  it('merges live-first, fills documented Fast SKUs, and infers reasoning', () => {
+    const live = [cursorModel('live-only', 'Live', false, 8_000)]
+    const fallback = cursorFallbackModels()
+    const merged = mergeCursorCatalogs(live, fallback)
+    expect(merged[0]?.id).toBe('live-only')
+    expect(merged.map(model => model.id)).toEqual(expect.arrayContaining(['grok-4.6', 'grok-4.6-fast']))
+    const withFast = withFastVariants([cursorModel('composer-2.5', 'Composer 2.5', true)])
+    expect(withFast.map(model => model.id)).toEqual(['composer-2.5', 'composer-2.5-fast'])
+    expect(withFastVariants([cursorModel('gpt-5.4', 'GPT-5.4', true, 272_000)]).map(model => model.id))
+      .toEqual(['gpt-5.4'])
+    expect(decodeUsableModels(encodeMessage(1, concat(
+      encodeString(1, 'grok-4.6'),
+      encodeString(4, 'Grok 4.6'),
+    )))[0]?.reasoning).toBe(true)
+    expect(decodeUsableModels(encodeMessage(1, concat(
+      encodeString(1, 'grok-code'),
+      encodeString(4, 'Grok Code'),
+    )))[0]?.reasoning).toBe(false)
   })
 
   it('skips live GetUsableModels when network listing is disabled', async () => {

@@ -6,7 +6,7 @@ import Schema from '@deepseek-ai/schemastery'
 import { bindSnapshotSelector } from '@deepseek-ai/dsh-client-web-react'
 import type { RpcResponse, SettingsNamespaceView } from '@deepseek-ai/dsh-api-remotes/client'
 import {
-  ModelsSection, needsSetup, providerCopy, providerTargetLabel, removeProviderProfile,
+  ModelsSection, logoutOAuthProvider, needsSetup, providerCopy, providerTargetLabel, removeProviderProfile,
 } from '../src/client/ModelsSection.tsx'
 import type { ModelsSectionInjected, ModelsSectionProps } from '../src/client/ModelsSection.tsx'
 import { pathOps } from '../src/client/ProviderEditor.tsx'
@@ -140,12 +140,14 @@ function scriptedFace(overrides: {
   mutate?: ReturnType<typeof vi.fn>
   set?: ReturnType<typeof vi.fn>
   unset?: ReturnType<typeof vi.fn>
+  logout?: ReturnType<typeof vi.fn>
 } = {}) {
   const update = overrides.update ?? vi.fn(() => Promise.resolve(ok(wireNamespaces()[2])))
   const replace = overrides.replace ?? vi.fn(() => Promise.resolve(ok(wireNamespaces()[2])))
   const mutate = overrides.mutate ?? vi.fn(() => Promise.resolve(ok(wireNamespaces()[2])))
   const set = overrides.set ?? vi.fn(() => Promise.resolve(ok({})))
   const unset = overrides.unset ?? vi.fn(() => Promise.resolve(ok({})))
+  const logout = overrides.logout ?? vi.fn(() => Promise.resolve(ok({})))
   const face = {
     llm: {
       providers: vi.fn(() => Promise.resolve(ok({
@@ -159,6 +161,7 @@ function scriptedFace(overrides: {
         ],
       }))),
       models: vi.fn(() => Promise.resolve(ok({ groups: [], failures: [] }))),
+      logout,
     },
     settings: {
       describe: vi.fn(() => Promise.resolve(ok({ writable: true, hasDocument: false, namespaces: wireNamespaces() }))),
@@ -178,7 +181,7 @@ function scriptedFace(overrides: {
       unset,
     },
   }
-  return { face, update, replace, mutate, set, unset }
+  return { face, update, replace, mutate, set, unset, logout }
 }
 
 type WireFace = ConstructorParameters<typeof ModelsSettingsStore>[0]
@@ -283,6 +286,9 @@ describe('ModelsSection', () => {
     expect(signedIn.className).toContain('credentialDotConfigured')
     expect(screen.queryByRole('button', { name: 'Edit OpenAI Codex' })).toBeNull()
     expect(screen.queryByLabelText(en.keyInput)).toBeNull()
+    expect(screen.getByRole('button', {
+      name: providerCopy(en.oauthSignOutProvider, { provider: 'openai-codex', displayName: 'OpenAI Codex' }),
+    })).toBeTruthy()
   })
 
   it('renders Cursor signed-in copy on a cursor OAuth live route', async () => {
@@ -305,6 +311,74 @@ describe('ModelsSection', () => {
     const signedIn = screen.getByRole('img', { name: en.oauthConfiguredCursor })
     expect(signedIn.getAttribute('title')).toBe(en.oauthConfiguredCursor)
     expect(screen.queryByRole('button', { name: 'Edit Cursor' })).toBeNull()
+    expect(screen.getByRole('button', {
+      name: providerCopy(en.oauthSignOutProvider, { provider: 'cursor', displayName: 'Cursor' }),
+    })).toBeTruthy()
+  })
+
+  it('signs out an OAuth live route through llm.logout and keeps a failure in the dialog', async () => {
+    const logout = vi.fn(() => Promise.resolve(ok({})))
+    const scripted = scriptedFace({ logout })
+    scripted.face.llm.providers.mockImplementation(() => Promise.resolve(ok({
+      providers: [
+        {
+          provider: 'openai-codex',
+          displayName: 'OpenAI Codex',
+          settingsNs: '',
+          settingsPath: [],
+          active: true,
+          auth: 'oauth',
+          connected: true,
+        },
+      ],
+    })))
+    const { mutate, unset } = await mountFace(scripted)
+    const signOut = providerCopy(en.oauthSignOutProvider, { provider: 'openai-codex', displayName: 'OpenAI Codex' })
+    fireEvent.click(screen.getByRole('button', { name: signOut }))
+    const dialog = screen.getByRole('dialog', {
+      name: providerCopy(en.oauthSignOutTitle, { provider: 'openai-codex', displayName: 'OpenAI Codex' }),
+    })
+    expect(dialog.textContent).toContain('deletes the stored login')
+    fireEvent.click(within(dialog).getByRole('button', {
+      name: providerCopy(en.oauthSignOutConfirm, { provider: 'openai-codex', displayName: 'OpenAI Codex' }),
+    }))
+    await waitFor(() => { expect(logout).toHaveBeenCalledWith({ provider: 'openai-codex' }) })
+    expect(mutate).not.toHaveBeenCalled()
+    expect(unset).not.toHaveBeenCalled()
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog', {
+        name: providerCopy(en.oauthSignOutTitle, { provider: 'openai-codex', displayName: 'OpenAI Codex' }),
+      })).toBeNull()
+    })
+
+    cleanup()
+    const refused = vi.fn(() => Promise.resolve(fail('store locked', 'oauth-logout-failed')))
+    const failing = scriptedFace({ logout: refused })
+    failing.face.llm.providers.mockImplementation(() => Promise.resolve(ok({
+      providers: [
+        {
+          provider: 'cursor',
+          displayName: 'Cursor',
+          settingsNs: '',
+          settingsPath: [],
+          active: true,
+          auth: 'oauth',
+          connected: true,
+        },
+      ],
+    })))
+    await mountFace(failing)
+    const cursorSignOut = providerCopy(en.oauthSignOutProvider, { provider: 'cursor', displayName: 'Cursor' })
+    fireEvent.click(screen.getByRole('button', { name: cursorSignOut }))
+    fireEvent.click(within(screen.getByRole('dialog', {
+      name: providerCopy(en.oauthSignOutTitle, { provider: 'cursor', displayName: 'Cursor' }),
+    })).getByRole('button', {
+      name: providerCopy(en.oauthSignOutConfirm, { provider: 'cursor', displayName: 'Cursor' }),
+    }))
+    await screen.findByText('store locked')
+    expect(screen.getByRole('dialog', {
+      name: providerCopy(en.oauthSignOutTitle, { provider: 'cursor', displayName: 'Cursor' }),
+    })).toBeTruthy()
   })
 
   it('marks only a confirmed missing reference and leaves native or unavailable state unmarked', async () => {
@@ -1297,6 +1371,20 @@ describe('ModelsSection', () => {
       ops: [{ op: 'unset', path: ['ghost-profile'] }],
     })
     expect(replace).not.toHaveBeenCalled()
+  })
+
+  it('signs out an OAuth route without mutating settings, and reports a refused transport', async () => {
+    const { face, mutate, controller } = await mountSection()
+    const logout = vi.fn(() => Promise.resolve(ok({})))
+    face.llm.logout = logout
+    await expect(logoutOAuthProvider(face as never, controller, 'openai-codex')).resolves.toBeUndefined()
+    expect(logout).toHaveBeenCalledWith({ provider: 'openai-codex' })
+    expect(mutate).not.toHaveBeenCalled()
+
+    face.llm.logout = vi.fn(() => Promise.resolve(fail('store locked', 'oauth-logout-failed')))
+    await expect(logoutOAuthProvider(face as never, controller, 'cursor')).resolves.toBe('store locked')
+    face.llm.logout = vi.fn(() => Promise.reject(new Error('carrier down')))
+    await expect(logoutOAuthProvider(face as never, controller, 'cursor')).resolves.toBe('carrier down')
   })
 
   it('keeps the snapshot untouched and reports the message when a removal write is refused', async () => {

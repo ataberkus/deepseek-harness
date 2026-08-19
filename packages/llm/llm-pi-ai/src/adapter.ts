@@ -102,6 +102,13 @@ export interface PiAiAdapterOptions {
    * without a key field.
    */
   oauthInjected?: () => ReadonlySet<string>
+  /**
+   * Delete the hosted OAuth credential for one route and refresh live
+   * registration. Absent on adapters that do not host OAuth.
+   * @param provider Hosted OAuth route id (`openai-codex` or `cursor`).
+   * @returns After the stored login is gone.
+   */
+  logoutOAuth?: (provider: string) => Promise<void>
   /** Resolve the optional durable attachment service at request time. */
   resolveAttachments?: () => AttachmentStore | undefined
   /**
@@ -314,6 +321,17 @@ export class PiAiAdapter extends LlmAdapter {
       name: this.current().profiles.get(provider)?.displayName ?? provider,
       ...oauth ? { auth: 'oauth' as const } : {},
     }
+  }
+
+  override async logout(provider: string): Promise<void> {
+    const logout = this.config.logoutOAuth
+    if (logout === undefined) {
+      throw new LlmError(
+        `pi-ai provider "${provider}" does not support logout`,
+        'UNSUPPORTED_OPTION',
+      )
+    }
+    await logout(provider)
   }
 
   override providerRetryPolicy(provider: string): ResolvedRetryPolicy | undefined {

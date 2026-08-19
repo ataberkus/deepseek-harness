@@ -3,7 +3,7 @@ import { createServer } from 'node:http'
 import type { IncomingMessage, Server, ServerResponse } from 'node:http'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
-import LlmRuntime, { LlmError } from '@deepseek-ai/dsh-llm'
+import LlmRuntime, { LlmError, ReasoningEffortId } from '@deepseek-ai/dsh-llm'
 import * as LlmPiAi from '@deepseek-ai/dsh-llm-pi-ai'
 import { PiAiAdapter } from '@deepseek-ai/dsh-llm-pi-ai'
 import { getBuiltinModels } from '@earendil-works/pi-ai/providers/all'
@@ -64,7 +64,36 @@ describe('live catalog overlay', () => {
       name: 'Live Only',
       context: { contextWindow: 64_000 },
     })
+    expect((await ctx.llm.resolveModelInfo('openrouter', 'vendor/live-only')).reasoning).toBeUndefined()
     expect(server.paths).toContain('/models')
+  })
+
+  it('exposes OpenRouter efforts for a live-only row that discloses reasoning', async () => {
+    const catalog = getBuiltinModels('openrouter')
+    const known = catalog[0]
+    if (known === undefined) throw new Error('expected an OpenRouter catalog model')
+    const server = await listingServer({
+      data: [
+        { id: known.id, supported_parameters: ['tools'] },
+        {
+          id: 'deepseek/deepseek-flash',
+          name: 'DeepSeek Flash',
+          supported_parameters: ['tools', 'reasoning'],
+        },
+      ],
+    })
+    const ctx = new Context()
+    await ctx.plugin(LlmRuntime)
+    await ctx.plugin(LlmPiAi, { providers: { openrouter: { baseURL: server.url } } })
+
+    const resolved = await ctx.llm.resolveModelInfo('openrouter', 'deepseek/deepseek-flash')
+    expect(resolved.reasoning?.efforts.map(effort => effort.id)).toEqual(
+      expect.arrayContaining([
+        ReasoningEffortId('low'),
+        ReasoningEffortId('medium'),
+        ReasoningEffortId('high'),
+      ]),
+    )
   })
 
   it('does not overlay when the profile names an explicit models list', async () => {

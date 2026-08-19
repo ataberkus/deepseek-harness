@@ -80,6 +80,12 @@ export interface RpcErrorDetailsMap {
    * details name the endpoint asked, never the credential offered.
    */
   'model-discovery-failed': { settingsNs: string; baseURL?: string }
+  /**
+   * Signing out of a hosted OAuth route failed: the adapter does not own
+   * logout for that id, the store could not delete, or the route is not
+   * registered. The message is the adapter's own text.
+   */
+  'oauth-logout-failed': { provider: string }
   'title-invalid': { sessionId: SessionId }
   'fork-unavailable': { sessionId: SessionId }
   'subagent-parent-unavailable': { parentSessionId: SessionId }

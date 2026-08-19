@@ -315,20 +315,31 @@ export function registerOAuthCommands(ctx: Context, deps: OAuthCommandDeps): voi
         if (provider === undefined) {
           return { kind: 'error', text: OAUTH_LOGOUT_UNSUPPORTED }
         }
-        const host = hostedOAuthProvider(provider)
-        if (host === undefined) {
-          return { kind: 'error', text: OAUTH_LOGOUT_UNSUPPORTED }
-        }
         try {
-          await deps.store.delete(provider)
-          deps.onCredentialChange()
-          return { kind: 'success', text: host.signedOut }
+          return { kind: 'success', text: await logoutHostedOAuth(provider, deps) }
         } catch (error) {
-          return { kind: 'error', text: commandFailure(error, host.logoutFailed) }
+          const host = hostedOAuthProvider(provider)
+          return { kind: 'error', text: commandFailure(error, host?.logoutFailed ?? OAUTH_LOGOUT_UNSUPPORTED) }
         }
       },
     })
   })
+}
+
+/**
+ * Delete the hosted OAuth credential for one table id and refresh live routes.
+ * @param provider - `openai-codex` or `cursor`.
+ * @param deps - store and route-refresh hook.
+ * @returns the signed-out success text.
+ */
+export async function logoutHostedOAuth(provider: string, deps: OAuthCommandDeps): Promise<string> {
+  const host = hostedOAuthProvider(provider)
+  if (host === undefined) {
+    throw new Error(OAUTH_LOGOUT_UNSUPPORTED)
+  }
+  await deps.store.delete(provider)
+  deps.onCredentialChange()
+  return host.signedOut
 }
 
 /** Render a command failure without assuming the value is safe to stringify as a secret. */

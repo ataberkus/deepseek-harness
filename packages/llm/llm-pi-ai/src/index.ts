@@ -67,7 +67,7 @@ import { catalogProviderIds, catalogProviderTakesApiKey } from './catalog.ts'
 import { assertServiceable, Config, resolveProfiles } from './config.ts'
 import type { ResolvedPiAiProviderProfile } from './config.ts'
 import { discoverModels } from './discovery.ts'
-import { oauthProviderProfiles, registerOAuthCommands } from './oauth-login.ts'
+import { logoutHostedOAuth, oauthProviderProfiles, registerOAuthCommands } from './oauth-login.ts'
 import { FileOAuthStore, OAUTH_CREDENTIALS_FILENAME } from './oauth-store.ts'
 
 export { PiAiAdapter } from './adapter.ts'
@@ -226,11 +226,15 @@ export function apply(ctx: Context, config: Config): void {
     )
   }
 
+  let onCredentialChange: () => void = () => undefined
   const adapter = new PiAiAdapter({
     profiles,
     resolveApiKey,
     credentials: oauthStore,
     oauthInjected,
+    logoutOAuth: async (provider) => {
+      await logoutHostedOAuth(provider, { store: oauthStore, onCredentialChange })
+    },
     resolveAttachments: () => ctx.get('attachments'),
     onReplayDegrade: ({ provider, model, reason }) => {
       ctx.logger.warn(
@@ -312,18 +316,16 @@ export function apply(ctx: Context, config: Config): void {
   }
   ensureRegistrationFacts()
 
-  registerOAuthCommands(ctx, {
-    store: oauthStore,
-    onCredentialChange: () => {
-      lastRaw = undefined
-      try {
-        ensureRegistrationFacts()
-      } catch (error) {
-        ctx.logger.error('llm-pi-ai: keeping the previously registered routes after an OAuth credential change')
-        ctx.logger.error(error)
-      }
-    },
-  })
+  onCredentialChange = () => {
+    lastRaw = undefined
+    try {
+      ensureRegistrationFacts()
+    } catch (error) {
+      ctx.logger.error('llm-pi-ai: keeping the previously registered routes after an OAuth credential change')
+      ctx.logger.error(error)
+    }
+  }
+  registerOAuthCommands(ctx, { store: oauthStore, onCredentialChange })
 
   installSettingsSection(ctx, NS, Config, config, {
     // Refuse an unserviceable section where it is written: without this a

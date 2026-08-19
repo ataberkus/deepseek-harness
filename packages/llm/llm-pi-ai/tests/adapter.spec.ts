@@ -193,6 +193,14 @@ describe('PiAiAdapter provider routing', () => {
     })
   })
 
+  it('refuses logout when the adapter has no OAuth host hook', async () => {
+    const adapter = new PiAiAdapter({
+      profiles: () => resolveProfiles({ openai: { apiKeyEnv: 'OPENAI_API_KEY' } }),
+      resolveApiKey: () => Promise.resolve(undefined),
+    })
+    await expect(adapter.logout('openai')).rejects.toMatchObject({ code: 'UNSUPPORTED_OPTION' })
+  })
+
   it('reports unsupported stop sequences rather than silently ignoring them', async () => {
     const server = await mockServer([])
     const ctx = await harness(server.url)
