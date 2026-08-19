@@ -1,7 +1,7 @@
 /** Cursor poll, protobuf, Connect, listing, and streamSimple fixtures — never a live Cursor API. */
 import { EventEmitter } from 'node:events'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { Context as PiContext, Model, Tool } from '@earendil-works/pi-ai'
+import type { Api, Context as PiContext, Model, Tool } from '@earendil-works/pi-ai'
 import { CURSOR_API, CURSOR_PROVIDER } from '../src/cursor/constants.ts'
 import {
   connectStream,
@@ -80,7 +80,7 @@ afterEach(() => {
   resetCursorSessions()
 })
 
-const MODEL: Model = cursorModel('composer-1.5', 'Composer 1.5', true)
+const MODEL: Model<Api> = cursorModel('composer-1.5', 'Composer 1.5', true)
 
 function jsonBytes(value: unknown): Uint8Array {
   return new TextEncoder().encode(JSON.stringify(value))
@@ -664,7 +664,7 @@ describe('cursor request encoding', () => {
       }],
     })).toContain('(no output)')
     expect(flattenContextText({
-      messages: [{ role: 'user', content: [{ type: 'unknown' } as { type: string }], timestamp: 0 }],
+      messages: [{ role: 'user', content: [{ type: 'unknown' }] as never, timestamp: 0 }],
     })).toBe('')
     expect(latestTurnText({
       messages: [{
@@ -690,7 +690,7 @@ describe('cursor request encoding', () => {
           stopReason: 'stop',
           timestamp: 0,
         },
-        { role: 'user', content: [{ type: 'text' }], timestamp: 0 },
+        { role: 'user', content: [{ type: 'text' }] as never, timestamp: 0 },
       ],
     })).toBe('')
   })

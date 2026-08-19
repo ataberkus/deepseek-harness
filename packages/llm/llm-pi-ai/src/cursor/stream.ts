@@ -11,6 +11,7 @@
 
 import { createAssistantMessageEventStream } from '@earendil-works/pi-ai'
 import type {
+  Api,
   AssistantMessage,
   AssistantMessageEventStream,
   Context,
@@ -67,7 +68,7 @@ export function resetCursorSessions(): void {
  * @returns a pi-ai assistant event stream.
  */
 export function streamCursor(
-  model: Model,
+  model: Model<Api>,
   context: Context,
   options?: SimpleStreamOptions,
 ): AssistantMessageEventStream {
@@ -78,7 +79,7 @@ export function streamCursor(
 
 async function runCursorStream(
   stream: AssistantMessageEventStream,
-  model: Model,
+  model: Model<Api>,
   context: Context,
   options?: SimpleStreamOptions,
 ): Promise<void> {
@@ -244,7 +245,7 @@ function accessTokenFromOptions(options: SimpleStreamOptions | undefined): strin
   return apiKey === undefined || apiKey.length === 0 ? undefined : apiKey
 }
 
-function emptyAssistant(model: Model): AssistantMessage {
+function emptyAssistant(model: Model<Api>): AssistantMessage {
   return {
     role: 'assistant',
     content: [],
