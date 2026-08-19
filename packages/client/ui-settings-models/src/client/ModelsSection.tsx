@@ -287,6 +287,7 @@ function Loaded({ injected }: { injected: ModelsSectionInjected }): ReactNode {
       <ul className={styles['rows']}>
         {configured.map((row) => {
           if (row.entry.auth === 'oauth' && row.entry.settingsNs === '') {
+            const oauthLabel = row.entry.provider === 'cursor' ? t('oauthConfiguredCursor') : t('oauthConfigured')
             return (
               <li key={row.entry.provider} className={styles['rowCard']}>
                 <div className={styles['rowHead']}>
@@ -295,8 +296,8 @@ function Loaded({ injected }: { injected: ModelsSectionInjected }): ReactNode {
                     <span
                       className={`${styles['credentialDot']} ${styles['credentialDotConfigured']}`}
                       role="img"
-                      aria-label={t('oauthConfigured')}
-                      title={t('oauthConfigured')}
+                      aria-label={oauthLabel}
+                      title={oauthLabel}
                     />
                   </span>
                 </div>

@@ -23,6 +23,9 @@ import type {
   Provider,
   ThinkingLevelMap,
 } from '@earendil-works/pi-ai'
+import { CURSOR_PROVIDER } from './cursor/constants.ts'
+import { cursorFallbackModels } from './cursor/models.ts'
+import { cursorProvider } from './cursor/provider.ts'
 
 /**
  * Pricing for a model the installed catalog does not describe. The harness
@@ -125,11 +128,13 @@ function catalogProviders(): Map<string, Provider> {
 }
 
 /**
- * The installed catalog provider for one route, when pi-ai ships one.
+ * The installed catalog provider for one route, when pi-ai ships one, plus the
+ * hosted `cursor` provider this adapter owns (not in {@link catalogProviderIds}).
  * @param provider - provider route key.
- * @returns the catalog provider, or `undefined` for a route pi-ai does not ship.
+ * @returns the catalog or hosted provider, or `undefined` for an unknown route.
  */
 export function catalogProvider(provider: string): Provider | undefined {
+  if (provider === CURSOR_PROVIDER) return cursorProvider()
   return catalogProviders().get(provider)
 }
 
@@ -147,10 +152,12 @@ export function catalogProviderIds(): readonly string[] {
  *
  * A key is what the harness resolves through its own credential seam and hands
  * pi-ai per request. pi-ai's other method, OAuth, resolves from a stored
- * credential in the collection's `CredentialStore`. `/login openai-codex`
- * persists that credential and registers a live route; the configurable-provider
- * directory still withholds OAuth-only catalog cards, because a key field cannot
- * authenticate them and a blank card would invite a posture that fails.
+ * credential in the collection's `CredentialStore`. `/login openai-codex` and
+ * `/login cursor` persist that credential and register a live route; the
+ * configurable-provider directory still withholds OAuth-only cards, because a
+ * key field cannot authenticate them and a blank card would invite a posture
+ * that fails. Hosted `cursor` is withheld the same way: it is not in
+ * {@link catalogProviderIds} and this function returns false for it.
  * @param provider - provider route key.
  * @returns whether the catalog provider takes an api key; false for a route
  *   pi-ai does not ship, which the caller answers for separately.
@@ -160,11 +167,15 @@ export function catalogProviderTakesApiKey(provider: string): boolean {
 }
 
 /**
- * The installed catalog models for one route, indexed by model id.
+ * The installed catalog models for one route, indexed by model id. Hosted
+ * `cursor` returns the bundled fallback catalog.
  * @param provider - provider route key.
- * @returns catalog models by id; empty for a route pi-ai does not ship.
+ * @returns catalog models by id; empty for a route neither pi-ai nor this host ships.
  */
 export function catalogModels(provider: string): Map<string, Model<Api>> {
+  if (provider === CURSOR_PROVIDER) {
+    return new Map(cursorFallbackModels().map(model => [model.id, model]))
+  }
   if (!catalogProviders().has(provider)) return new Map()
   const models = getBuiltinModels(provider as BuiltinProvider) as Model<Api>[]
   return new Map(models.map(model => [model.id, model]))

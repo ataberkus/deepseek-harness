@@ -16,7 +16,7 @@ So the page advertised, with the keyless posture its own placeholder describes, 
 
 The directory offers only what a Models-page key field can authenticate. `catalogProviderTakesApiKey(provider)` answers whether pi-ai's installed provider for a route declares an api-key method — the one method the page can feed, since it resolves a key through the harness credential seam and hands it over as the request's `apiKey` override — and `directoryEntries()` skips the catalog routes that fail it.
 
-Host OAuth for `openai-codex` is a separate login path: [[2026-08-18-openai-codex-oauth-host]] persists a `CredentialStore` and registers a live route after `/login openai-codex`. That path does not add a key card, which is why this withholding remains. Always-registering the route without a stored token would mark onboarding ready without a working API-key provider.
+Host OAuth for `openai-codex` is a separate login path: [[2026-08-18-openai-codex-oauth-host]] persists a `CredentialStore` and registers a live route after `/login openai-codex`. Hosted `cursor` is withheld the same way: it is not in `catalogProviderIds()` and `catalogProviderTakesApiKey('cursor')` is false ([[2026-08-18-cursor-oauth-host]]). Those paths do not add a key card, which is why this withholding remains. Always-registering the route without a stored token would mark onboarding ready without a working API-key provider.
 
 Two boundaries keep the withholding narrow:
 

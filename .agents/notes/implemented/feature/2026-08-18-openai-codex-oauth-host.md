@@ -24,7 +24,7 @@ The Web client opens a blank tab during the `/login` keystroke and navigates it 
 
 A stored `openai-codex` oauth credential injects a settings-free live route into the adapter registry so the model picker can list pi-ai's catalog models. The configurable-provider directory still withholds the OAuth-only catalog **key card**, which is the withholding note's decision; a settings-stored profile still appears there so it can be edited or deleted. The live route names no `apiKeyEnv`, so first-run onboarding still requires a usable API-key provider until Codex login. The Models page shows that injected route as a read-only signed-in row (name plus connected dot, no editor, no Sign-in button). Logout remains `/logout openai-codex`.
 
-`Provider is not configured` maps to `LlmError('MISSING_CREDENTIAL')` and names `/login openai-codex`.
+`Provider is not configured` maps to `LlmError('MISSING_CREDENTIAL')` and names `/login openai-codex`. Hosted `cursor` login is a sibling route on the same store and command table; that unofficial AgentService transport is [the Cursor OAuth host](2026-08-18-cursor-oauth-host.md).
 
 ## Alternatives considered
 

@@ -63,6 +63,8 @@ import {
   fetchModelListing,
   overlayLiveCatalogModels,
 } from './listing.ts'
+import { CURSOR_PROVIDER } from './cursor/constants.ts'
+import { listCursorModels } from './cursor/models.ts'
 import { rethrowPiAiError, toStreamChunks } from './stream.ts'
 
 /** One resolution's frozen view: the profiles and the collection built from them. */
@@ -89,7 +91,8 @@ export interface PiAiAdapterOptions {
   /**
    * Persistent OAuth credential store shared across snapshots. API keys still
    * arrive per request through {@link resolveApiKey}; this store is how
-   * `openai-codex` (and any future OAuth-only catalog route) authenticates.
+   * `openai-codex` and hosted `cursor` (and any future OAuth-only hosted route)
+   * authenticates.
    */
   credentials?: CredentialStore
   /**
@@ -248,7 +251,8 @@ export class PiAiAdapter extends LlmAdapter {
 
   /**
    * Models this route currently serves: the installed catalog plus a live
-   * OpenRouter listing overlay when the profile has no explicit `models` list.
+   * OpenRouter listing overlay when the profile has no explicit `models` list,
+   * or a Cursor GetUsableModels overlay for the hosted `cursor` route.
    * An explicit list is left untouched. Listing failure returns the installed
    * set so a picker never goes empty.
    */
@@ -256,6 +260,11 @@ export class PiAiAdapter extends LlmAdapter {
     const profile = this.profileOf(snapshot, provider)
     const installed = snapshot.models.getModels(provider)
     if (!profile.servesInstalledCatalog) return installed
+    if (provider === CURSOR_PROVIDER) {
+      const token = await cursorAccessToken(this.config.credentials)
+      if (token === undefined) return installed
+      return listCursorModels(token)
+    }
     const target = catalogListingTarget(provider, {
       ...profile.api === undefined ? {} : { api: profile.api },
       ...profile.baseURL === undefined ? {} : { baseURL: profile.baseURL },
@@ -430,4 +439,18 @@ export class PiAiAdapter extends LlmAdapter {
       consumer.abort('pi-ai stream consumer stopped')
     }
   }
+}
+
+/**
+ * Access token for a hosted Cursor OAuth credential, when the collection store
+ * has one. Never logs the token.
+ * @param store - optional collection credential store.
+ * @returns the access token, or `undefined` when none is stored.
+ */
+async function cursorAccessToken(store: CredentialStore | undefined): Promise<string | undefined> {
+  if (store === undefined) return undefined
+  const credential = await store.read(CURSOR_PROVIDER)
+  if (credential?.type !== 'oauth') return undefined
+  const access = credential.access.trim()
+  return access.length === 0 ? undefined : access
 }

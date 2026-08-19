@@ -32,7 +32,9 @@ import { catalogModels, catalogProvider } from './catalog.ts'
  * OpenAI lineage — it authenticates with an `api-key` header and requires an
  * `api-version` query — and Codex authenticates through OAuth; guessing at
  * either would report an authentication failure as a provider with no models.
- * pi-ai's remaining protocols are absent for the same reason.
+ * Hosted Cursor lists through GetUsableModels, not this OpenAI JSON protocol,
+ * so `cursor-agent` is not listable here. pi-ai's remaining protocols are
+ * absent for the same reason.
  */
 export const LISTABLE_PROTOCOLS: ReadonlySet<string> = new Set([
   'openai-completions',

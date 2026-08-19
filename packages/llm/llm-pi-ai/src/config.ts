@@ -168,8 +168,9 @@ export interface ResolvedPiAiProviderProfile
   configuredMaxTokens: ReadonlyMap<string, number>
   /**
    * Whether this route serves the installed catalog (absent or empty `models`)
-   * rather than an explicit replacement list. Live OpenRouter listings overlay
-   * only this case, so a narrowed `models:` list stays the source of truth.
+   * rather than an explicit replacement list. Live OpenRouter listings and the
+   * hosted Cursor GetUsableModels overlay apply only in this case, so a
+   * narrowed `models:` list stays the source of truth.
    */
   servesInstalledCatalog: boolean
 }

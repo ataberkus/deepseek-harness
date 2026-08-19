@@ -946,6 +946,7 @@ describe('configurable-provider directory', () => {
     // openai-codex` stores the OAuth credential and registers a live route
     // without inventing a key card.
     expect(offered).not.toContain('openai-codex')
+    expect(offered).not.toContain('cursor')
     // A provider that offers OAuth *beside* an api-key method keeps its entry:
     // the key is a path this adapter can serve.
     expect(offered).toContain('anthropic')
@@ -966,6 +967,17 @@ describe('configurable-provider directory', () => {
       settingsNs: 'llm-pi-ai',
       settingsPath: ['providers', 'openai-codex'],
       declared: false,
+    })
+  })
+
+  it('still lists a settings-declared cursor route, as a hand-declared route', async () => {
+    const ctx = await harness({ providers: { cursor: { apiKeyEnv: KEY_ENV } } })
+    expect(ctx.llm.listConfigurableProviders()).toContainEqual({
+      provider: 'cursor',
+      displayName: 'cursor',
+      settingsNs: 'llm-pi-ai',
+      settingsPath: ['providers', 'cursor'],
+      declared: true,
     })
   })
 })

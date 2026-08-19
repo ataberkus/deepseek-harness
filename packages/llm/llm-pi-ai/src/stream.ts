@@ -12,6 +12,7 @@ import { CallId, CONTEXT_WINDOW_EXCEEDED_CODE, EMPTY_RESPONSE_CODE, isContextWin
 import type { FinishReason, StreamChunk, TokenUsage } from '@deepseek-ai/dsh-llm'
 import { isContextOverflow } from '@earendil-works/pi-ai'
 import type { AssistantMessage, AssistantMessageEvent, Usage as PiUsage } from '@earendil-works/pi-ai'
+import { hostedOAuthProvider, OPENAI_CODEX_PROVIDER } from './oauth-hosts.ts'
 import { toPiReplayState } from './replay.ts'
 
 /**
@@ -73,12 +74,25 @@ export function rethrowPiAiError(error: unknown): never {
   const message = error instanceof Error ? error.message : String(error)
   if (/provider is not configured/i.test(message)) {
     throw new LlmError(
-      `${message}; configure credentials for this provider, or sign in with /login openai-codex`,
+      missingCredentialMessage(message),
       'MISSING_CREDENTIAL',
       { cause: error instanceof Error ? error : undefined },
     )
   }
   throw error
+}
+
+/**
+ * Append a hosted `/login` hint when pi-ai reports an unconfigured provider.
+ * @param message - pi-ai error text, possibly `Provider is not configured: <id>`.
+ * @returns the harness `MISSING_CREDENTIAL` message.
+ */
+export function missingCredentialMessage(message: string): string {
+  const match = /provider is not configured:\s*(\S+)/i.exec(message)
+  const id = match?.[1]
+  const hosted = id === undefined ? undefined : hostedOAuthProvider(id)
+  const login = hosted?.id ?? OPENAI_CODEX_PROVIDER
+  return `${message}; configure credentials for this provider, or sign in with /login ${login}`
 }
 
 /**
@@ -127,7 +141,14 @@ export function mapStopReason(message: AssistantMessage, contextWindow?: number)
     }
     case 'error': {
       const text = message.errorMessage ?? 'pi-ai stream error'
-      return { kind: 'error', failure: { message: text, code: classifyPiAiError(text) } }
+      const code = classifyPiAiError(text)
+      return {
+        kind: 'error',
+        failure: {
+          message: code === 'MISSING_CREDENTIAL' ? missingCredentialMessage(text) : text,
+          code,
+        },
+      }
     }
   }
 }

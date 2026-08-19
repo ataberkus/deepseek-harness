@@ -39,8 +39,8 @@ declare module '@deepseek-ai/cordis' {
   }
 }
 
-/** Named tab reused for ChatGPT OAuth so a second `/login` does not blank an in-progress authorize page. */
-const OPENAI_CODEX_LOGIN_WINDOW = 'dsh-openai-codex-login'
+/** Named tab reused for hosted OAuth so a second `/login` does not blank an in-progress authorize page. */
+const HOSTED_OAUTH_LOGIN_WINDOW = 'dsh-oauth-login'
 
 /** Recover the command name from a line the Host confirmed as executed. */
 function submittedCommandName(line: string): string {
@@ -50,16 +50,16 @@ function submittedCommandName(line: string): string {
 }
 
 /**
- * `/login` and `/login openai-codex` are the host ChatGPT login lines.
- * `/login anthropic` and `/login-foo` are not.
+ * `/login`, `/login openai-codex`, and `/login cursor` are hosted OAuth login
+ * lines. `/login anthropic` and `/login-foo` are not.
  */
-function isOpenaiCodexLoginLine(line: string): boolean {
+function isHostedOAuthLoginLine(line: string): boolean {
   const trimmed = line.trim()
   const separator = trimmed.search(/\s/u)
   const name = separator === -1 ? trimmed : trimmed.slice(0, separator)
   if (name !== '/login') return false
   const rest = separator === -1 ? '' : trimmed.slice(separator).trim()
-  return rest.length === 0 || rest === 'openai-codex'
+  return rest.length === 0 || rest === 'openai-codex' || rest === 'cursor'
 }
 
 /** Authorize URLs are https; `javascript:` and other schemes are ignored. */
@@ -272,7 +272,7 @@ export class CommandUiRuntime extends Service implements CommandUiContract {
    */
   private prepareLoginTab(): void {
     if (this.pendingLoginTab !== null && !this.pendingLoginTab.closed) return
-    this.pendingLoginTab = openBrowserWindow('about:blank', OPENAI_CODEX_LOGIN_WINDOW)
+    this.pendingLoginTab = openBrowserWindow('about:blank', HOSTED_OAUTH_LOGIN_WINDOW)
   }
 
   /**
@@ -286,7 +286,7 @@ export class CommandUiRuntime extends Service implements CommandUiContract {
       this.pendingLoginTab.location.href = url
       return
     }
-    this.pendingLoginTab = openBrowserWindow(url, OPENAI_CODEX_LOGIN_WINDOW)
+    this.pendingLoginTab = openBrowserWindow(url, HOSTED_OAUTH_LOGIN_WINDOW)
   }
 
   /**
@@ -434,7 +434,7 @@ export class CommandUiRuntime extends Service implements CommandUiContract {
     session: ClientSessionContext,
     line: string,
   ): Promise<SubmitOutcome> {
-    if (isOpenaiCodexLoginLine(line)) this.prepareLoginTab()
+    if (isHostedOAuthLoginLine(line)) this.prepareLoginTab()
     const result = await this.ctx.remote.commands.execute(session.sessionId, line)
     if (!result.ok) throw new Error(`command.execute failed: ${result.error.code}: ${result.error.message}`)
     if (result.value === undefined) return { kind: 'error', text: `unknown or malformed command: ${line}` }
