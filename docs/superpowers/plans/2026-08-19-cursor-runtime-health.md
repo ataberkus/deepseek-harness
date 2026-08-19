@@ -1,5 +1,7 @@
 # Cursor Runtime Health Implementation Plan
 
+English | [中文](2026-08-19-cursor-runtime-health.zh.md)
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use subagent-driven-development (recommended) or executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Stop Cursor from advertising unconfirmed fallback models after a successful empty discovery response and stop heartbeat-only completions from becoming retryable generic `EMPTY_RESPONSE` failures.
@@ -61,7 +63,7 @@
 
 In the `cursor models` suite, replace the empty-success expectation with a typed failure and keep the transport-failure expectation:
 
-```ts
+```text
 it('rejects a successful empty GetUsableModels response without exposing the fallback', async () => {
   cursorListingInternals.fetch = async () => new Uint8Array()
   await expect(listCursorModels('token')).rejects.toMatchObject({
@@ -86,7 +88,7 @@ In `cursor.spec.ts`, replace the test helper that collects only event types with
 
 In `convert.spec.ts`, add the provider-specific direct mapping beside the existing generic assertion:
 
-```ts
+```text
 it('classifies an empty Cursor stop as a non-retryable Cursor backend failure', () => {
   expect(mapStopReason(assistant({ provider: 'cursor', stopReason: 'stop' }))).toEqual({
     kind: 'error',
@@ -128,7 +130,7 @@ Expected: failures show the current empty listing returning fallback, the empty 
 
 Add these documented constants to `cursor/constants.ts`:
 
-```ts
+```text
 /** Successful GetUsableModels response contained no usable model rows. */
 export const CURSOR_NO_USABLE_MODELS_CODE = 'CURSOR_NO_USABLE_MODELS'
 
@@ -142,7 +144,7 @@ Do not add either code to `packages/llm/llm/src/retry-policy.ts`; the default re
 
 In `listCursorModels`, keep the fallback construction and fetch inside a transport-only `try/catch`. Decode the successful payload after the catch; if `live.length === 0`, throw:
 
-```ts
+```text
 throw new LlmError(
   'Cursor GetUsableModels returned no usable models; check the Cursor service and retry model discovery',
   CURSOR_NO_USABLE_MODELS_CODE,
@@ -161,7 +163,7 @@ Update the adjacent JSDoc in `adapter.ts` and `models.ts` so it says transport f
 
 Import `CURSOR_EMPTY_STREAM_CODE` into `stream.ts`. In `mapStopReason`, keep the context-overflow check first, then in the `stop` branch detect `message.content.length === 0 && message.provider === CURSOR_PROVIDER`. Return:
 
-```ts
+```text
 {
   kind: 'error',
   failure: {
@@ -196,7 +198,7 @@ Expected: the new discovery, retry, heartbeat-only, and generic-empty tests pass
 
 Extend `ModelCatalogFailure` with:
 
-```ts
+```text
 /** Stable Harness error code when the provider raised a HarnessError. */
 code?: string
 ```
@@ -207,7 +209,7 @@ Add `code: z.string().min(1).optional()` to `modelCatalogFailureSchema`. Do not 
 
 Import the runtime `HarnessError` value alongside the existing LLM imports. Build the failure as:
 
-```ts
+```text
 const failure: ModelCatalogFailure = {
   id: provider.id,
   name: provider.name,

@@ -1,5 +1,7 @@
 # Gemini OAuth Composition Implementation Plan
 
+English | [中文](2026-08-19-gemini-oauth-composition.zh.md)
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use subagent-driven-development (recommended) or executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Prove that a completed Gemini CLI OAuth login reaches the real Web host and refreshes an already-loaded model directory without changing the already-passing Gemini catalog implementation.
@@ -48,7 +50,7 @@
 
 Add this test in the `ui-model-selection dual entry` suite:
 
-```ts
+```text
 it('does not load an unopened directory when the Host topology changes', async () => {
   const b = await bench()
   b.ctx.remote.$dispatch('llm/adapters-updated', [])
@@ -95,7 +97,7 @@ git commit -m "test: pin lazy model-directory invalidation"
 
 Create one serial `describe` block with these setup actions:
 
-```ts
+```text
 const SEED_PROVIDER = 'oauth-e2e-seed'
 const SEED_MODEL = 'oauth-e2e-model'
 

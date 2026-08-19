@@ -1,5 +1,7 @@
 # OAuth-host runtime health
 
+English | [中文](2026-08-19-oauth-host-runtime-health.zh.md)
+
 Status: draft for review
 
 ## Scope
