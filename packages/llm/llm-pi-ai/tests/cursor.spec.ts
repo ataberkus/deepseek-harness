@@ -11,6 +11,7 @@ import {
   frameConnectMessage,
 } from '../src/cursor/connect.ts'
 import { cursorModel, cursorListingInternals, decodeUsableModels, encodeUsableModelsRequest, listCursorModels } from '../src/cursor/models.ts'
+import { cursorPricingForModel } from '../src/cursor/pricing.ts'
 import {
   generateCursorAuthParams,
   cursorOAuthInternals,
@@ -100,6 +101,12 @@ describe('hosted OAuth table', () => {
   it('lists openai-codex then cursor', () => {
     expect(hostedOAuthProviders().map(host => host.id)).toEqual(['openai-codex', 'cursor'])
     expect(hostedOAuthProvider('nope')).toBeUndefined()
+  })
+})
+
+describe('cursor pricing configuration', () => {
+  it('carries the optional Teams/Enterprise token rate through resolution', () => {
+    expect(resolveProfiles({ cursor: {} }, 0.25).get('cursor')?.cursorTokenRate).toBe(0.25)
   })
 })
 
@@ -511,6 +518,21 @@ describe('cursor connect', () => {
 })
 
 describe('cursor models', () => {
+  it('uses the dated Cursor rate card and optional team surcharge', () => {
+    expect(cursorPricingForModel('grok-4.5')).toEqual({
+      input: 2,
+      cacheRead: 0.5,
+      output: 6,
+      cacheWrite: 0,
+    })
+    expect(cursorPricingForModel('claude-4.6-sonnet', 0.25)).toMatchObject({
+      input: 3.25,
+      cacheRead: 0.55,
+      output: 15.25,
+    })
+    expect(cursorPricingForModel('composer-unknown')).toBeUndefined()
+  })
+
   it('decodes GetUsableModels and overlays live-only ids', async () => {
     const payload = concat(
       encodeMessage(1, concat(encodeString(1, 'composer-1.5'), encodeString(4, 'Composer 1.5'), encodeEmptyMessage(2))),
@@ -697,6 +719,24 @@ describe('cursor request encoding', () => {
 })
 
 describe('cursor streamSimple', () => {
+  it('accounts for tokenDelta output and approximate serialized input', async () => {
+    const model = cursorModel('grok-4.5', 'Grok 4.5', true)
+    cursorConnectInternals.request = async function* () {
+      yield frameConnectMessage(interactionUpdate(8, concat(encodeVarint(8), encodeVarint(7))))
+      yield frameConnectMessage(interactionUpdate(14, encodeEmptyMessage(14)))
+    }
+    const events: { type: string; message?: { usage?: { input: number; output: number; cost: { total: number } } } }[] = []
+    for await (const event of streamCursor(model, {
+      messages: [{ role: 'user', content: 'hello', timestamp: 0 }],
+    }, { headers: { authorization: 'Bearer tok' }, sessionId: 'cost-session' })) {
+      events.push(event as typeof events[number])
+    }
+    const done = events.find(event => event.type === 'done')
+    expect(done?.message?.usage).toMatchObject({ output: 7 })
+    expect(done?.message?.usage?.input).toBeGreaterThan(0)
+    expect(done?.message?.usage?.cost.total).toBeGreaterThan(0)
+  })
+
   it('maps text, thinking, MCP tools, and ignores native exec', async () => {
     const mcp = encodeMessage(15, encodeMessage(1, concat(
       encodeString(1, 'bash'),

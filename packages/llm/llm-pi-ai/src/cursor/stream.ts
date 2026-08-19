@@ -10,6 +10,7 @@
  */
 
 import { createAssistantMessageEventStream } from '@earendil-works/pi-ai'
+import { estimateTextTokens, priceTokenUsage } from '@deepseek-ai/dsh-llm'
 import type {
   Api,
   AssistantMessage,
@@ -29,6 +30,7 @@ import {
   fieldMapBytes,
   fieldRepeated,
   fieldString,
+  fieldVarint,
 } from './protobuf.ts'
 import {
   contextEndsWithToolResult,
@@ -113,6 +115,8 @@ async function runCursorStream(
       maxMode: streamMaxMode(options),
       thinking: model.reasoning,
     })
+    partial.usage.input = estimateCursorInput(context, userText)
+    partial.usage.totalTokens = partial.usage.input
     stream.push({ type: 'start', partial: pushPartial() })
     let textIndex: number | undefined
     let thinkingIndex: number | undefined
@@ -184,6 +188,13 @@ async function runCursorStream(
           case 14:
             turnEnded = true
             break
+          case 8: {
+            const delta = fieldVarint(decodeFields(field.bytes), 1)
+            if (delta === undefined) break
+            partial.usage.output += Number(delta)
+            partial.usage.totalTokens = partial.usage.input + partial.usage.output
+            break
+          }
           default:
             break
         }
@@ -196,6 +207,7 @@ async function runCursorStream(
       return
     }
     if (toolCalls.length > 0) {
+      finalizeCursorCost(partial, model)
       session.awaitingTools = true
       partial.stopReason = 'toolUse'
       stream.push({ type: 'done', reason: 'toolUse', message: pushPartial() })
@@ -203,6 +215,7 @@ async function runCursorStream(
       return
     }
     session.awaitingTools = false
+    finalizeCursorCost(partial, model)
     partial.stopReason = 'stop'
     stream.push({ type: 'done', reason: 'stop', message: pushPartial() })
     stream.end(pushPartial())
@@ -218,6 +231,24 @@ async function runCursorStream(
     }
     fail(stream, failed, 'error')
   }
+}
+
+function estimateCursorInput(context: Context, userText: string): number {
+  return estimateTextTokens(userText)
+    + (context.systemPrompt === undefined ? 0 : estimateTextTokens(context.systemPrompt))
+    + (context.tools === undefined ? 0 : estimateTextTokens(JSON.stringify(context.tools)))
+    + 4
+}
+
+function finalizeCursorCost(partial: AssistantMessage, model: Model<Api>): void {
+  if (!Object.values(model.cost).some(rate => rate > 0)) return
+  const priced = priceTokenUsage({
+    inputTokens: partial.usage.input,
+    outputTokens: partial.usage.output,
+    ...partial.usage.cacheRead > 0 ? { cacheReadTokens: partial.usage.cacheRead } : {},
+    ...partial.usage.cacheWrite > 0 ? { cacheWriteTokens: partial.usage.cacheWrite } : {},
+  }, model.cost, 'estimated-input')
+  if (priced.estimatedCostUsd !== undefined) partial.usage.cost.total = priced.estimatedCostUsd
 }
 
 function sessionState(sessionId: string | undefined): SessionState {

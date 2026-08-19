@@ -65,6 +65,7 @@ import {
 } from './listing.ts'
 import { CURSOR_PROVIDER } from './cursor/constants.ts'
 import { listCursorModels } from './cursor/models.ts'
+import { cursorPricingForModel } from './cursor/pricing.ts'
 import { rethrowPiAiError, toStreamChunks } from './stream.ts'
 
 /** One resolution's frozen view: the profiles and the collection built from them. */
@@ -262,8 +263,11 @@ export class PiAiAdapter extends LlmAdapter {
     if (!profile.servesInstalledCatalog) return installed
     if (provider === CURSOR_PROVIDER) {
       const token = await cursorAccessToken(this.config.credentials)
-      if (token === undefined) return installed
-      return listCursorModels(token)
+      const models = token === undefined ? installed : await listCursorModels(token)
+      return models.map(model => ({
+        ...model,
+        cost: cursorPricingForModel(model.id, profile.cursorTokenRate) ?? model.cost,
+      }))
     }
     const target = catalogListingTarget(provider, {
       ...profile.api === undefined ? {} : { api: profile.api },
@@ -405,7 +409,12 @@ export class PiAiAdapter extends LlmAdapter {
         headers: requestHeaders(profile.headers),
       })
       const pricingKnown = Object.values(model.cost).some(rate => rate > 0)
-      const iterator = toStreamChunks(events, model.contextWindow, pricingKnown)[Symbol.asyncIterator]()
+      const iterator = toStreamChunks(
+        events,
+        model.contextWindow,
+        pricingKnown,
+        model.api === 'cursor-agent' ? 'estimated-input' : 'reported-usage',
+      )[Symbol.asyncIterator]()
       let exhausted = false
       try {
         while (true) {

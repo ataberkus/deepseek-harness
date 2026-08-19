@@ -174,11 +174,11 @@ export function apply(ctx: Context, config: Config): void {
       && memoizedSettings !== undefined && memoizedLive !== undefined) return
     lastRaw = raw
     lastOAuthRevision = revision
-    memoizedSettings = resolveProfiles(raw.providers)
+    memoizedSettings = resolveProfiles(raw.providers, raw.cursorTokenRate)
     memoizedLive = resolveProfiles({
       ...oauthProviderProfiles(oauthStore.credentialInfos()),
       ...raw.providers,
-    })
+    }, raw.cursorTokenRate)
   }
   /** Route keys injected solely by a stored OAuth credential, not settings. */
   const oauthInjected = (): ReadonlySet<string> => {
