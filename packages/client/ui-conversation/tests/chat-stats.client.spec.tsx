@@ -12,7 +12,7 @@ import { bindSnapshotSelector } from '@deepseek-ai/dsh-client-web-react'
 import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import { en as commonEn } from '@deepseek-ai/dsh-client-locale/src/locales/en.ts'
 import { zh as commonZh } from '@deepseek-ai/dsh-client-locale/src/locales/zh.ts'
-import { StatsLine, contextOccupancy, deriveStats, formatDuration, formatTokens, type StatsLineProps } from '../src/client/chat/StatsLine.tsx'
+import { StatsLine, contextOccupancy, deriveStats, formatCost, formatDuration, formatTokens, type StatsLineProps } from '../src/client/chat/StatsLine.tsx'
 import { en, zh } from '../src/client/locales.ts'
 import { chatSnapshotFixture } from './chat-snapshot-fixture.client.ts'
 
@@ -166,10 +166,15 @@ describe('formatters', () => {
     expect(formatDuration(45_230)).toBe('45.2s')
     expect(formatDuration(162_000)).toBe('2m42s')
   })
+
+  it('formats session spend with sub-cent precision', () => {
+    expect(formatCost(0.0123)).toBe('$0.0123')
+    expect(formatCost(1.2)).toBe('$1.20')
+  })
 })
 
 describe('StatsLine', () => {
-  const USAGE = { uncachedInputTokens: 10, outputTokens: 5, cacheReadTokens: 90, cacheWriteTokens: 0 }
+  const USAGE = { uncachedInputTokens: 10, outputTokens: 5, cacheReadTokens: 90, cacheWriteTokens: 0, costUsd: 0 }
 
   /** A whole-log sessionStats value: zeros plus overrides. */
   function sessionStats(overrides: Record<string, number>): Record<string, number> {
@@ -199,10 +204,38 @@ describe('StatsLine', () => {
     expect(view.container.textContent).toBe('1 turns · 1 steps| Cache hit 90%| Input 100 tok · Output 5 tok')
     const empty = makeSource()
     const emptyView = render(<StatsLine {...props(empty.source, {
-      tokenUsage: { uncachedInputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 },
+      tokenUsage: { uncachedInputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, costUsd: 0 },
       contextPressure: {},
     })} />)
     expect(emptyView.container.textContent).toBe('')
+  })
+
+  it('renders positive session spend immediately before tokens in both locales', () => {
+    const { source } = makeSource({ nodes: [assistant(1, 1)] })
+    const values = { tokenUsage: { ...USAGE, costUsd: 0.20 } }
+    const english = render(<StatsLine {...props(source, values)} />)
+    expect(english.container.textContent)
+      .toBe('1 turns · 1 steps| Cache hit 90%| Cost $0.20| Input 100 tok · Output 5 tok')
+    english.unmount()
+
+    const chinese = render(<StatsLine {...props(source, values)} t={t} />)
+    expect(chinese.container.textContent)
+      .toBe('1 轮 · 1 步| 缓存命中 90%| 花费 $0.20| 输入 100 tok · 输出 5 tok')
+  })
+
+  it('omits unknown session spend', () => {
+    const { costUsd: _costUsd, ...unknownUsage } = USAGE
+    const { source } = makeSource({ nodes: [assistant(1, 1)] })
+    const view = render(<StatsLine {...props(source, { tokenUsage: unknownUsage })} />)
+    expect(view.container.textContent).toBe('1 turns · 1 steps| Cache hit 90%| Input 100 tok · Output 5 tok')
+  })
+
+  it('shows positive spend even when token counts are zero', () => {
+    const { source } = makeSource({ nodes: [assistant(1, 1)] })
+    const view = render(<StatsLine {...props(source, {
+      tokenUsage: { uncachedInputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, costUsd: 0.20 },
+    })} />)
+    expect(view.container.textContent).toBe('1 turns · 1 steps| Cost $0.20| Input 0 tok · Output 0 tok')
   })
 
   it('reveals the full line in a delayed hover tooltip only while the row is clipped', () => {
@@ -308,7 +341,7 @@ describe('StatsLine', () => {
     // closed step in the whole log, so nothing renders on a brand-new session.
     const empty = makeSource()
     const view = render(<StatsLine {...props(empty.source, {
-      tokenUsage: { uncachedInputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 },
+      tokenUsage: { uncachedInputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, costUsd: 0 },
       sessionStats: sessionStats({}),
     })} />)
     expect(view.container.textContent).toBe('')
@@ -319,7 +352,7 @@ describe('StatsLine', () => {
     // the counts group renders alone, not an uninformative zero-token group.
     const { source } = makeSource()
     const view = render(<StatsLine {...props(source, {
-      tokenUsage: { uncachedInputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 },
+      tokenUsage: { uncachedInputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, costUsd: 0 },
       sessionStats: sessionStats({ turns: 1, steps: 1 }),
     })} />)
     expect(view.container.textContent).toBe('1 turns · 1 steps')
@@ -357,7 +390,7 @@ describe('StatsLine', () => {
   it('omits cache hit when nothing was billed on the input side', () => {
     const { source } = makeSource({ nodes: [assistant(1, 1)] })
     const view = render(<StatsLine {...props(source, {
-      tokenUsage: { uncachedInputTokens: 0, outputTokens: 7, cacheReadTokens: 0, cacheWriteTokens: 0 },
+      tokenUsage: { uncachedInputTokens: 0, outputTokens: 7, cacheReadTokens: 0, cacheWriteTokens: 0, costUsd: 0 },
     })} />)
     expect(view.container.textContent).toBe('1 turns · 1 steps| Input 0 tok · Output 7 tok')
   })
@@ -370,6 +403,7 @@ describe('StatsLine', () => {
         outputTokens: 7,
         cacheReadTokens: 90,
         cacheWriteTokens: 100,
+        costUsd: 0,
       },
     })} />)
     expect(view.container.textContent)

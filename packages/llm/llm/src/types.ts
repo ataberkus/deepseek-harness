@@ -138,6 +138,11 @@ export interface TokenUsage {
   cacheReadTokens?: number
   cacheWriteTokens?: number
   reasoningTokens?: number
+  /**
+   * Adapter-reported USD for this call; pi-ai copies `usage.cost.total` from
+   * catalog rates; omit when the adapter has no rates or the priced total is 0.
+   */
+  costUsd?: number
 }
 
 /** Display metadata for one registered provider route. */

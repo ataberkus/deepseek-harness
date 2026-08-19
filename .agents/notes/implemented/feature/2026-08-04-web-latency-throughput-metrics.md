@@ -14,7 +14,7 @@ A package-local fold, `ui-conversation`'s `chat/turn-metrics.ts`, is the single 
 
 The assistant footer appends the readings to the existing hover-revealed time chrome after `Ran for`, as `TTFT {s}s · {tps} tok/s`, each omitted independently when unrecorded. ChatView shows a turn's readings only when that turn's `turnTimings` entry has an `endTime`: the loaded window is a contiguous log suffix, so an in-window settled turn carries every one of its steps and the first-step TTFT is genuine rather than a window artifact. `formatLatencySeconds` is unit-less so each locale template owns its second suffix (`TTFT {seconds}s` / `首 token {seconds}秒`).
 
-The stats line reuses the same step reading in its window fold: `deriveStats` accumulates TTFT sum/count and decode span/tokens, rendering a latency/throughput group localized through the `conversation` locale namespace (`TTFT avg … · … tok/s` in English) beside the LLM/tool wall times. The turn-count, step-count, duration, cache, and token labels use the same namespace. Like those wall times the group is window-scoped and folds no billing; token accounting stays on the token-meter projections.
+The stats line reuses the same step reading in its window fold: `deriveStats` accumulates TTFT sum/count and decode span/tokens, rendering a latency/throughput group localized through the `conversation` locale namespace (`TTFT avg … · … tok/s` in English) beside the LLM/tool wall times. The turn-count, step-count, duration, cache, and token labels use the same namespace. Like those wall times, the latency/throughput group is window-scoped and folds no billing; the separate durable `tokenUsage` group owns session tokens and catalog-priced spend.
 
 ## Alternatives considered
 

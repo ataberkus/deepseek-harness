@@ -34,9 +34,9 @@ import { geminiCliProvider } from './google-gemini-cli/provider.ts'
 export { THINKING_LEVELS } from './thinking-levels.ts'
 
 /**
- * Pricing for a model the installed catalog does not describe. The harness
- * never reads pi-ai's cost metadata — `replay.ts` zeroes it and no consumer
- * reports spend — so this is the absence of a fact, not a configurable rate.
+ * Pricing for a model the installed catalog does not describe. Zero rates omit
+ * spend from live TokenUsage; `replay.ts` still zeroes reconstructed messages,
+ * so this is the absence of a billing fact, not a configurable rate.
  */
 const NO_COST: ModelCost = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }
 

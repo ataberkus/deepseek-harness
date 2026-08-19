@@ -90,6 +90,17 @@ export function formatTokens(n: number): string {
 }
 
 /**
+ * Format a positive session spend amount without displaying a misleading zero-cent total.
+ * @param usd - session spend in USD.
+ * @returns a dollar amount with four decimals for sub-cent precision and two otherwise.
+ */
+export function formatCost(usd: number): string {
+  const cents = usd * 100
+  const hasSubCentPrecision = Math.abs(cents - Math.round(cents)) > 1e-9
+  return usd < 0.01 || hasSubCentPrecision ? `$${usd.toFixed(4)}` : `$${usd.toFixed(2)}`
+}
+
+/**
  * Compact duration: 45.2s under a minute, 2m42s from there on.
  * @param ms - duration in milliseconds.
  * @returns display string.
@@ -190,14 +201,16 @@ export const StatsLine = memo(function StatsLine({ useSession, useProjection, t 
   }
   // Context occupancy deliberately lives on the composer's ContextMeter ring,
   // not here — one home per fact.
-  // Billing rides the durable projection, so these survive paging and
-  // compaction. Gated on actual token activity: a session whose steps all
+  // Billing uses the durable projection, so these survive paging and
+  // compaction. Gated on actual billing activity: a session whose steps all
   // settled without billing (e.g. every request failed) shows its counts
   // without a zero-token group.
+  const costUsd = usage !== undefined && Object.hasOwn(usage, 'costUsd') ? usage.costUsd : 0
   if (usage !== undefined
-    && (billedInputTokens(usage) > 0 || usage.outputTokens > 0)) {
+    && (billedInputTokens(usage) > 0 || usage.outputTokens > 0 || costUsd > 0)) {
     const cacheHit = cacheHitPercent(usage)
     if (cacheHit !== null) groups.push(t('stats.cacheHit', { percent: cacheHit }))
+    if (costUsd > 0) groups.push(t('stats.cost', { cost: formatCost(costUsd) }))
     groups.push(t('stats.tokens', {
       input: formatTokens(billedInputTokens(usage)),
       output: formatTokens(usage.outputTokens),

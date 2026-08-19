@@ -967,7 +967,7 @@ describe('small branch tails', () => {
         t={t}
         useSession={bindSnapshotSelector(source) as unknown as StatsLineProps['useSession']}
         useProjection={(key: string) => key === 'tokenUsage'
-          ? { uncachedInputTokens: 0, outputTokens: 10, cacheReadTokens: 0, cacheWriteTokens: 0 }
+          ? { uncachedInputTokens: 0, outputTokens: 10, cacheReadTokens: 0, cacheWriteTokens: 0, costUsd: 0 }
           : undefined}
       />,
     )

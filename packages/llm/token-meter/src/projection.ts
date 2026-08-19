@@ -15,6 +15,7 @@ export interface TokenUsageProjection {
   outputTokens: number
   cacheReadTokens: number
   cacheWriteTokens: number
+  costUsd: number
 }
 
 /**

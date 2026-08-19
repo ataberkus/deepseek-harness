@@ -26,6 +26,7 @@ const zeroBuckets = (): TokenUsageProjection => ({
   outputTokens: 0,
   cacheReadTokens: 0,
   cacheWriteTokens: 0,
+  costUsd: 0,
 })
 
 const bucketsFrom = (usage: TokenUsage): TokenUsageProjection => ({
@@ -33,6 +34,7 @@ const bucketsFrom = (usage: TokenUsage): TokenUsageProjection => ({
   outputTokens: usage.outputTokens,
   cacheReadTokens: usage.cacheReadTokens ?? 0,
   cacheWriteTokens: usage.cacheWriteTokens ?? 0,
+  costUsd: usage.costUsd ?? 0,
 })
 
 const bucketsEqual = (left: TokenUsageProjection, right: TokenUsageProjection): boolean =>
@@ -40,6 +42,7 @@ const bucketsEqual = (left: TokenUsageProjection, right: TokenUsageProjection): 
   && left.outputTokens === right.outputTokens
   && left.cacheReadTokens === right.cacheReadTokens
   && left.cacheWriteTokens === right.cacheWriteTokens
+  && left.costUsd === right.costUsd
 
 const addReplacing = (
   totals: TokenUsageProjection,
@@ -50,6 +53,7 @@ const addReplacing = (
   outputTokens: totals.outputTokens - (previous?.outputTokens ?? 0) + next.outputTokens,
   cacheReadTokens: totals.cacheReadTokens - (previous?.cacheReadTokens ?? 0) + next.cacheReadTokens,
   cacheWriteTokens: totals.cacheWriteTokens - (previous?.cacheWriteTokens ?? 0) + next.cacheWriteTokens,
+  costUsd: totals.costUsd - (previous?.costUsd ?? 0) + next.costUsd,
 })
 
 const projectionSchema = z.object({
@@ -57,6 +61,7 @@ const projectionSchema = z.object({
   outputTokens: z.number().int().nonnegative(),
   cacheReadTokens: z.number().int().nonnegative(),
   cacheWriteTokens: z.number().int().nonnegative(),
+  costUsd: z.number().nonnegative(),
 }).strict()
 
 // Cast for the optional values: under exactOptionalPropertyTypes zod infers
@@ -136,7 +141,7 @@ ProjectionDefinition<'tokenUsage', TokenUsageState> = {
     }
   },
   view: state => state.totals,
-  stateVersion: 1,
+  stateVersion: 2,
 }
 
 /**

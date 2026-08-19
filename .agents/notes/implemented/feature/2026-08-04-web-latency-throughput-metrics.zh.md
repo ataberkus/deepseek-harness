@@ -14,7 +14,7 @@ Web 聊天已经记录了逐步骤的 LLM（大语言模型）计时（`stepStar
 
 assistant 页脚把读数追加到既有 hover 显示的时间附属元素中、`用时` 之后，形如 `首 token {s}秒 · {tps} tok/s`，未记录的数字各自省略。ChatView 仅在该轮次的 `turnTimings` 条目带有 `endTime` 时才显示读数：已加载窗口是日志的连续后缀，因此窗口内已结算的轮次必然带着它的全部步骤，首步 TTFT 是真实值而非窗口截断的产物。`formatLatencySeconds` 不带单位，各语言模板各自拥有秒后缀（`TTFT {seconds}s`／`首 token {seconds}秒`）。
 
-统计行在其窗口折算中复用同一份步骤读数：`deriveStats` 累计 TTFT 总和／计数与解码时长／token 数，在 LLM／工具墙钟时间旁渲染经 `conversation` locale 命名空间本地化的延迟／吞吐分组（中文为 `首 token 平均 … · … tok/s`）。轮次计数、步骤计数、耗时、缓存与 token 各项的标签也使用同一命名空间。与那些墙钟时间一样，该分组是窗口作用域的，不折算任何计费；token 账目仍归 token-meter 投影。
+统计行在其窗口折算中复用同一份步骤读数：`deriveStats` 累计 TTFT 总和／计数与解码时长／token 数，在 LLM／工具墙钟时间旁渲染经 `conversation` locale 命名空间本地化的延迟／吞吐分组（中文为 `首 token 平均 … · … tok/s`）。轮次计数、步骤计数、耗时、缓存与 token 各项的标签也使用同一命名空间。与那些墙钟时间一样，延迟／吞吐分组是窗口作用域的，不折算任何计费；独立的持久 `tokenUsage` 分组负责会话 token 与按目录价格计算的花费。
 
 ## 考虑过的替代方案
 

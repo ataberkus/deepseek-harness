@@ -2,6 +2,8 @@
 
 Status: draft for review
 
+English | [中文](2026-08-19-session-spend-on-stats-line.zh.md)
+
 ## Scope
 
 This specification covers catalog-priced USD spend from live pi-ai model calls through durable `TokenUsage`, the `tokenUsage` session projection, the standalone browser fixture, and the Web conversation composer stats line.
@@ -13,7 +15,7 @@ The change keeps provider ownership intact: pi-ai reports the priced total, `dsh
 - Preserve positive per-call catalog spend as optional `TokenUsage.costUsd` without changing `SESSION_FORMAT_VERSION`.
 - Sum spend across the complete durable session log with the same last-sample replacement rule used by token buckets.
 - Display localized `Cost {cost}` / `花费 {cost}` immediately before the existing input/output token group.
-- Format values below one cent to four decimal places and all other values to two decimal places, while omitting zero, unknown, and unpriced spend.
+- Format values below one cent, or values carrying sub-cent precision, to four decimal places and other cent-aligned values to two decimal places, while omitting zero, unknown, and unpriced spend.
 - Keep replay reconstruction's zero-cost pi-ai messages unchanged; billed spend belongs to the live durable usage event.
 - Update the source JSDoc, subsystem and package references, the required implemented Agent Note, and every edited bilingual pair together.
 
@@ -25,7 +27,7 @@ The change keeps provider ownership intact: pi-ai reports the priced total, `dsh
 
 `TokenUsageProjection` gains required `costUsd: number`. `tokenUsageProjectionDefinition` initializes, validates, compares, replaces, and sums this floating-point bucket with the token buckets. Its checkpoint `stateVersion` becomes `2`, so an old version is discarded and refolded from the durable log. The browser fixture mirrors the same fold and output field.
 
-`StatsLine` exports `formatCost(usd)`, formats `< 0.01` as `$0.0123` and other values as `$1.23`, and adds the localized cost group after cache hit and before the token group only when `usage.costUsd > 0`. Existing token-only output remains unchanged for absent or zero cost.
+`StatsLine` exports `formatCost(usd)`, formats values below one cent or carrying sub-cent precision with four decimals (including `$0.0123`) and cent-aligned values with two decimals (including `$1.20`), and adds the localized cost group after cache hit and before the token group only when `usage.costUsd > 0`. Existing token-only output remains unchanged for absent or zero cost.
 
 ## Compatibility and non-goals
 

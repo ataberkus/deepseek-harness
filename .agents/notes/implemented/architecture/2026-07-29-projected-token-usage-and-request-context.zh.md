@@ -14,7 +14,7 @@ Web 统计行原先从当前已加载的会话节点推导 token 总量。该窗
 
 这两个值都是普通的持久会话投影状态。当 `ctx.sessionProjections` 存在时，`@deepseek-ai/dsh-token-meter` 会注册两个单元。
 
-`tokenUsage` 将完整持久日志归并为未缓存输入、输出、缓存读取和缓存写入四类计数项。即使后续请求失败，`assistant/chunk` 用量样本仍会保留；同一 `(turn, step)` 的 `assistant/message` 用量值会替换先前样本，不会重复计数。推理（reasoning）仍是输出的细分项。压缩和表层替换不会抹除先前的计费用量。
+`tokenUsage` 将完整持久日志归并为未缓存输入、输出、缓存读取、缓存写入和适配器报告的 `costUsd` 五类计数项。即使后续请求失败，`assistant/chunk` 用量样本仍会保留；同一 `(turn, step)` 的 `assistant/message` 用量值会替换先前样本，不会重复计数，其中也包括花费。推理（reasoning）仍是输出的细分项。压缩和表层替换不会抹除先前的计费用量。
 
 `contextPressure` 携带可选的 `pressureTokens`（提供方报告的最新提示词规模，为未缓存输入加缓存读取与写入之和，不含输出），以及来自最新一条 `request/context` 记录的可选 `contextWindow`。在各自来源出现前，两个字段都不会被合成。
 

@@ -277,18 +277,21 @@ describe('SubagentCatalogAction', () => {
         outputTokens: 200,
         cacheReadTokens: 3_000,
         cacheWriteTokens: 400,
+        costUsd: 0,
       },
       finished: {
         uncachedInputTokens: 123,
         outputTokens: 0,
         cacheReadTokens: 0,
         cacheWriteTokens: 0,
+        costUsd: 0,
       },
       interrupted: {
         uncachedInputTokens: 123_000_000,
         outputTokens: 0,
         cacheReadTokens: 0,
         cacheWriteTokens: 0,
+        costUsd: 0,
       },
     } as const
     const entries = rows.map(([id, activity]) => ({

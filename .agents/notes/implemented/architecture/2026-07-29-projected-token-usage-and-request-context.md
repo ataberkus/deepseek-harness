@@ -14,7 +14,7 @@ Context occupancy needs a numerator and a denominator that no existing surface c
 
 Both values are ordinary durable session-projection state. `@deepseek-ai/dsh-token-meter` registers two units when `ctx.sessionProjections` is present.
 
-`tokenUsage` folds the complete durable log into uncached input, output, cache-read, and cache-write buckets. An `assistant/chunk` usage sample survives a later failed request; an `assistant/message` usage value for the same `(turn, step)` replaces the earlier sample instead of double-counting it. Reasoning stays an output subdivision. Compaction and surface replacement do not erase earlier billing.
+`tokenUsage` folds the complete durable log into uncached input, output, cache-read, cache-write, and adapter-reported `costUsd` buckets. An `assistant/chunk` usage sample survives a later failed request; an `assistant/message` usage value for the same `(turn, step)` replaces the earlier sample instead of double-counting it, including its cost. Reasoning stays an output subdivision. Compaction and surface replacement do not erase earlier billing.
 
 `contextPressure` carries optional `pressureTokens` — the newest provider-reported prompt size, summing uncached input plus cache reads and writes, excluding output — and optional `contextWindow` from the newest `request/context` record. Neither field is synthesized before its source exists.
 

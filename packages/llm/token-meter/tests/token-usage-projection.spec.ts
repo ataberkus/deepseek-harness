@@ -14,6 +14,7 @@ const ZERO: TokenUsageProjection = {
   outputTokens: 0,
   cacheReadTokens: 0,
   cacheWriteTokens: 0,
+  costUsd: 0,
 }
 
 async function harness(): Promise<{
@@ -120,6 +121,7 @@ describe('tokenUsage session projection', () => {
       outputTokens: 4,
       cacheReadTokens: 7,
       cacheWriteTokens: 2,
+      costUsd: 0,
     })
     expect(changes).toHaveLength(1)
   })
@@ -144,6 +146,7 @@ describe('tokenUsage session projection', () => {
       outputTokens: 5,
       cacheReadTokens: 8,
       cacheWriteTokens: 1,
+      costUsd: 0,
     })
   })
 
@@ -181,7 +184,27 @@ describe('tokenUsage session projection', () => {
       outputTokens: 15,
       cacheReadTokens: 2,
       cacheWriteTokens: 4,
+      costUsd: 0,
     })
+  })
+
+  it('sums cost across steps and replaces a same-step sample', async () => {
+    const { ctx, session } = await harness()
+    startStep(session, 1, 1)
+    const first = usageChunk(session, { inputTokens: 10, outputTokens: 2, costUsd: 0.10 }, 1, 1)
+    finalUsage(session, { inputTokens: 12, outputTokens: 3, costUsd: 0.12 }, 1, 1, [first])
+    startStep(session, 1, 2)
+    const second = usageChunk(session, { inputTokens: 20, outputTokens: 4, costUsd: 0.05 }, 1, 2)
+    finalUsage(session, { inputTokens: 20, outputTokens: 4, costUsd: 0.05 }, 1, 2, [second])
+
+    const result = projected(ctx, session)
+    expect(result).toMatchObject({
+      uncachedInputTokens: 32,
+      outputTokens: 7,
+      cacheReadTokens: 0,
+      cacheWriteTokens: 0,
+    })
+    expect(result.costUsd).toBeCloseTo(0.17, 12)
   })
 
   it('retains a usage chunk when the request produces no final assistant message', async () => {
@@ -194,6 +217,7 @@ describe('tokenUsage session projection', () => {
       outputTokens: 1,
       cacheReadTokens: 0,
       cacheWriteTokens: 0,
+      costUsd: 0,
     })
   })
 
@@ -220,6 +244,7 @@ describe('tokenUsage session projection', () => {
       outputTokens: 3,
       cacheReadTokens: 0,
       cacheWriteTokens: 0,
+      costUsd: 0,
     })
   })
 
@@ -230,6 +255,7 @@ describe('tokenUsage session projection', () => {
     const checkpoint = JSON.parse(JSON.stringify(
       ctx.sessionProjections.checkpoint(session),
     )) as ReturnType<typeof ctx.sessionProjections.checkpoint>
+    expect(checkpoint.tokenUsage?.ver).toBe(2)
 
     await meterFiber.dispose()
     expect(ctx.sessionProjections.snapshot(session).values).not.toHaveProperty('tokenUsage')
@@ -240,6 +266,7 @@ describe('tokenUsage session projection', () => {
       outputTokens: 2,
       cacheReadTokens: 5,
       cacheWriteTokens: 0,
+      costUsd: 0,
     })
   })
 })
