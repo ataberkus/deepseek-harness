@@ -233,6 +233,14 @@ describe('ui-model-selection dual entry', () => {
     expect(face2.directory).not.toBe(face1.directory)
   })
 
+  it('does not load an unopened directory when the Host topology changes', async () => {
+    const b = await bench()
+    b.ctx.remote.$dispatch('llm/adapters-updated', [])
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(b.calls.models).toBe(0)
+  })
+
   it('blocks the composer only once the Host reports the route unservable', async () => {
     const b = await bench()
     b.mint('s1')
