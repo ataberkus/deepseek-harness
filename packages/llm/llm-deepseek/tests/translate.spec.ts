@@ -309,6 +309,25 @@ describe('mapUsage', () => {
     expect(mapUsage({ prompt_tokens: 10, completion_tokens: 2 }))
       .toEqual({ inputTokens: 10, outputTokens: 2 })
   })
+
+  it('prices reported disjoint buckets when a model rate card is configured', () => {
+    const usage = mapUsage({
+      prompt_tokens: 12,
+      completion_tokens: 4,
+      prompt_cache_hit_tokens: 5,
+    }, {
+      input: 1,
+      output: 2,
+      cacheRead: 0.5,
+    })
+    expect(usage).toMatchObject({
+      inputTokens: 7,
+      outputTokens: 4,
+      cacheReadTokens: 5,
+      costBasis: 'reported-usage',
+    })
+    expect(usage.estimatedCostUsd).toBeCloseTo(0.0000195)
+  })
 })
 
 describe('translate: defensive tool-call branches', () => {

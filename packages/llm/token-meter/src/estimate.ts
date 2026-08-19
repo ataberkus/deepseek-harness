@@ -6,11 +6,9 @@
  * @module @deepseek-ai/dsh-token-meter/estimate
  */
 
+import { estimateTextTokens } from '@deepseek-ai/dsh-llm'
 import type { ContentBlock, Message } from '@deepseek-ai/dsh-llm'
 import type { EpochHeader } from '@deepseek-ai/dsh-session'
-
-/** Fixed text-density estimate used until exact tokenization is needed. */
-const CHARS_PER_TOKEN = 4
 
 /** Per-block structural overhead for JSON framing and type tags. */
 const BLOCK_OVERHEAD = 4
@@ -29,11 +27,11 @@ export function estimateContent(blocks: readonly ContentBlock[]): number {
     switch (block.type) {
       case 'text':
       case 'reasoning':
-        tokens += Math.ceil(block.text.length / CHARS_PER_TOKEN) + BLOCK_OVERHEAD
+        tokens += estimateTextTokens(block.text) + BLOCK_OVERHEAD
         break
       case 'tool-call':
-        tokens += Math.ceil(block.name.length / CHARS_PER_TOKEN)
-          + Math.ceil(block.arguments.length / CHARS_PER_TOKEN)
+        tokens += estimateTextTokens(block.name)
+          + estimateTextTokens(block.arguments)
           + BLOCK_OVERHEAD
         break
       case 'tool-result':
@@ -42,7 +40,7 @@ export function estimateContent(blocks: readonly ContentBlock[]): number {
       default:
         // ContentBlockMap is merge-extensible; unknown blocks retain a
         // conservative structural JSON price under the fixed heuristic.
-        tokens += BLOCK_OVERHEAD + Math.ceil(JSON.stringify(block).length / CHARS_PER_TOKEN)
+        tokens += BLOCK_OVERHEAD + estimateTextTokens(JSON.stringify(block))
     }
   }
   return tokens
@@ -64,7 +62,7 @@ export function estimateMessage(message: Message): number {
  */
 export function estimateSystemTokens(header: EpochHeader | undefined): number {
   if (header?.system === undefined) return 0
-  return Math.ceil(header.system.length / CHARS_PER_TOKEN) + ROLE_OVERHEAD
+  return estimateTextTokens(header.system) + ROLE_OVERHEAD
 }
 
 /**
@@ -74,7 +72,7 @@ export function estimateSystemTokens(header: EpochHeader | undefined): number {
  */
 export function estimateToolsTokens(header: EpochHeader | undefined): number {
   if (header?.tools === undefined || header.tools.length === 0) return 0
-  return Math.ceil(JSON.stringify(header.tools).length / CHARS_PER_TOKEN) + BLOCK_OVERHEAD
+  return estimateTextTokens(JSON.stringify(header.tools)) + BLOCK_OVERHEAD
 }
 
 /**

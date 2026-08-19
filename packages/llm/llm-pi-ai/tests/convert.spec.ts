@@ -19,6 +19,13 @@ function usage(input = 0, output = 0, cacheRead = 0, cacheWrite = 0): Usage {
   }
 }
 
+function pricedUsage(input: number, output: number): Usage {
+  return {
+    ...usage(input, output),
+    cost: { input: 0.01, output: 0.02, cacheRead: 0, cacheWrite: 0, total: 0.03 },
+  }
+}
+
 function assistant(overrides: Partial<AssistantMessage> = {}): AssistantMessage {
   return {
     role: 'assistant',
@@ -721,6 +728,14 @@ describe('toStreamChunks', () => {
 })
 
 describe('mapStopReason / mapUsage', () => {
+  it('preserves pi-ai native cost when the resolved model has pricing', () => {
+    expect(mapUsage(pricedUsage(10, 5), true)).toEqual({
+      inputTokens: 10,
+      outputTokens: 5,
+      estimatedCostUsd: 0.03,
+      costBasis: 'reported-usage',
+    })
+  })
   it.each([
     ['stop', { kind: 'stop' }],
     ['length', { kind: 'max-tokens' }],

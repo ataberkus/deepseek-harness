@@ -26,20 +26,35 @@ const zeroBuckets = (): TokenUsageProjection => ({
   outputTokens: 0,
   cacheReadTokens: 0,
   cacheWriteTokens: 0,
+  estimatedCostUsd: 0,
+  unpricedSteps: 0,
+  approximateSteps: 0,
 })
 
-const bucketsFrom = (usage: TokenUsage): TokenUsageProjection => ({
-  uncachedInputTokens: usage.inputTokens,
-  outputTokens: usage.outputTokens,
-  cacheReadTokens: usage.cacheReadTokens ?? 0,
-  cacheWriteTokens: usage.cacheWriteTokens ?? 0,
-})
+const bucketsFrom = (usage: TokenUsage): TokenUsageProjection => {
+  const buckets = {
+    uncachedInputTokens: usage.inputTokens,
+    outputTokens: usage.outputTokens,
+    cacheReadTokens: usage.cacheReadTokens ?? 0,
+    cacheWriteTokens: usage.cacheWriteTokens ?? 0,
+  }
+  const hasTokens = Object.values(buckets).some(value => value > 0)
+  return {
+    ...buckets,
+    estimatedCostUsd: usage.estimatedCostUsd ?? 0,
+    unpricedSteps: hasTokens && usage.estimatedCostUsd === undefined ? 1 : 0,
+    approximateSteps: usage.costBasis === 'estimated-input' ? 1 : 0,
+  }
+}
 
 const bucketsEqual = (left: TokenUsageProjection, right: TokenUsageProjection): boolean =>
   left.uncachedInputTokens === right.uncachedInputTokens
   && left.outputTokens === right.outputTokens
   && left.cacheReadTokens === right.cacheReadTokens
   && left.cacheWriteTokens === right.cacheWriteTokens
+  && left.estimatedCostUsd === right.estimatedCostUsd
+  && left.unpricedSteps === right.unpricedSteps
+  && left.approximateSteps === right.approximateSteps
 
 const addReplacing = (
   totals: TokenUsageProjection,
@@ -50,6 +65,9 @@ const addReplacing = (
   outputTokens: totals.outputTokens - (previous?.outputTokens ?? 0) + next.outputTokens,
   cacheReadTokens: totals.cacheReadTokens - (previous?.cacheReadTokens ?? 0) + next.cacheReadTokens,
   cacheWriteTokens: totals.cacheWriteTokens - (previous?.cacheWriteTokens ?? 0) + next.cacheWriteTokens,
+  estimatedCostUsd: totals.estimatedCostUsd - (previous?.estimatedCostUsd ?? 0) + next.estimatedCostUsd,
+  unpricedSteps: totals.unpricedSteps - (previous?.unpricedSteps ?? 0) + next.unpricedSteps,
+  approximateSteps: totals.approximateSteps - (previous?.approximateSteps ?? 0) + next.approximateSteps,
 })
 
 const projectionSchema = z.object({
@@ -57,6 +75,9 @@ const projectionSchema = z.object({
   outputTokens: z.number().int().nonnegative(),
   cacheReadTokens: z.number().int().nonnegative(),
   cacheWriteTokens: z.number().int().nonnegative(),
+  estimatedCostUsd: z.number().finite().nonnegative(),
+  unpricedSteps: z.number().int().nonnegative(),
+  approximateSteps: z.number().int().nonnegative(),
 }).strict()
 
 // Cast for the optional values: under exactOptionalPropertyTypes zod infers
@@ -136,7 +157,7 @@ ProjectionDefinition<'tokenUsage', TokenUsageState> = {
     }
   },
   view: state => state.totals,
-  stateVersion: 1,
+  stateVersion: 2,
 }
 
 /**

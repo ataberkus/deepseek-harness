@@ -15,6 +15,12 @@ export interface TokenUsageProjection {
   outputTokens: number
   cacheReadTokens: number
   cacheWriteTokens: number
+  /** Sum of priced usage estimates in USD. */
+  estimatedCostUsd: number
+  /** Usage-bearing steps whose pricing was unavailable. */
+  unpricedSteps: number
+  /** Usage-bearing steps priced from an approximation rather than provider usage. */
+  approximateSteps: number
 }
 
 /**

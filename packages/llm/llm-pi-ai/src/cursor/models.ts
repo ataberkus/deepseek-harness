@@ -12,6 +12,7 @@ import {
   CURSOR_PROVIDER,
 } from './constants.ts'
 import { connectUnary } from './connect.ts'
+import { cursorPricingForModel } from './pricing.ts'
 import {
   decodeFields,
   encodeString,
@@ -78,7 +79,7 @@ export function cursorModel(
     baseUrl: CURSOR_BASE_URL,
     reasoning,
     input: ['text'],
-    cost: NO_COST,
+    cost: cursorPricingForModel(id) ?? NO_COST,
     contextWindow,
     maxTokens: CURSOR_DEFAULT_MAX_TOKENS,
   }

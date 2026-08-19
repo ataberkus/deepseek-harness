@@ -15,7 +15,8 @@ import type { ModelSelectionRef } from '@deepseek-ai/dsh-agent'
 import type {} from '@deepseek-ai/dsh-agent-default-model'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import { SessionId } from '@deepseek-ai/dsh-session'
-import type { SessionEvent } from '@deepseek-ai/dsh-session'
+import type { Session, SessionEvent } from '@deepseek-ai/dsh-session'
+import type { TokenUsageProjection } from '@deepseek-ai/dsh-token-meter/client'
 // Empty type imports carry the loader Context merge for the settlement await
 // and the cmdline Context merge for the appExit host value.
 import type {} from '@deepseek-ai/cordis-plugin-loader'
@@ -26,6 +27,12 @@ export const name = 'headless-runner'
 
 /** Core services required before the one-shot turn can start. */
 export const inject = ['agentDefaultModel', 'agents', 'sessions']
+
+function formatUsdCost(cost: number): string {
+  if (cost < 0.01) return `$${cost.toFixed(4)}`
+  if (cost < 1) return `$${cost.toFixed(3)}`
+  return `$${cost.toFixed(2)}`
+}
 
 /** Plugin config: the task resolved from this app's injected provider service. */
 export interface Config {
@@ -87,6 +94,21 @@ function fail(io: HeadlessIo, error: unknown): void {
   io.exit(1)
 }
 
+function sessionCost(ctx: Context, session: Session): string | undefined {
+  const projections = ctx.get('sessionProjections') as {
+    snapshot(session: Session): { values: { tokenUsage?: TokenUsageProjection } }
+  } | undefined
+  if (projections === undefined) return undefined
+  const usage = projections.snapshot(session).values.tokenUsage as TokenUsageProjection | undefined
+  if (usage === undefined) return undefined
+  const tokens = usage.uncachedInputTokens + usage.outputTokens
+    + usage.cacheReadTokens + usage.cacheWriteTokens
+  if (tokens === 0 && usage.unpricedSteps === 0) return undefined
+  if (usage.unpricedSteps > 0) return 'dsh: Estimated session cost unavailable'
+  const label = usage.approximateSteps > 0 ? 'Approx.' : 'Estimated'
+  return `dsh: ${label} session cost: ${formatUsdCost(usage.estimatedCostUsd)}`
+}
+
 /**
  * Run one task through a freshly created Agent and request process exit.
  * @param ctx - plugin context carrying the Agent, default model, Session, and launcher IO services.
@@ -127,6 +149,8 @@ async function run(ctx: Context, task: string, io: HeadlessIo): Promise<void> {
   await sessions.flush(agent.session)
   const outcome = summarize(agent.session.events, firstSeq)
   io.stdout.write(outcome.text + '\n')
+  const cost = sessionCost(ctx, agent.session)
+  if (cost !== undefined) io.stderr.write(cost + '\n')
   if (outcome.reason?.kind === 'error') {
     io.stderr.write(`dsh: ${outcome.reason.error.code}: ${outcome.reason.error.message}\n`)
   }

@@ -56,6 +56,7 @@ export type {
   PiAiCompatProfile,
   PiAiModality,
   PiAiModelOverride,
+  PiAiModelPricing,
   PiAiModelProfile,
   PiAiReasoningEfforts,
   PiAiThinkingFormat,
@@ -173,10 +174,14 @@ export interface ResolvedPiAiProviderProfile
    * narrowed `models:` list stays the source of truth.
    */
   servesInstalledCatalog: boolean
+  /** Teams/Enterprise third-party Cursor surcharge in USD per million tokens. */
+  cursorTokenRate: number
 }
 
 /** Plugin configuration: the provider routes this instance owns. */
 export interface Config {
+  /** Teams/Enterprise third-party Cursor surcharge in USD per million tokens. */
+  cursorTokenRate?: number
   /**
    * pi-ai provider routes, keyed by provider. An empty (or omitted) dict is
    * the dormant settings-driven posture: the adapter mounts with no routes
@@ -217,6 +222,12 @@ const modelFields = {
   name: z.string(),
   contextWindow: z.number().step(1).min(1),
   maxTokens: z.number().step(1).min(1),
+  pricing: z.object({
+    input: z.number().min(0),
+    output: z.number().min(0),
+    cacheRead: z.number().min(0),
+    cacheWrite: z.number().min(0),
+  }),
   // No explicit default, unlike the route's `defaultInput`: schemastery
   // materializes `[]` for an absent array, and resolution reads that as "no
   // answer here" so the catalog entry below still applies.
@@ -260,6 +271,7 @@ const profile = z.object({
 
 /** Runtime schema for {@link Config}. */
 export const Config: z<Config> = z.object({
+  cursorTokenRate: z.number().min(0).default(0),
   providers: z.dict(profile).default({}),
 })
 
@@ -303,13 +315,18 @@ function rejectRemovedFields(provider: string, source: PiAiProviderProfile): voi
  * resolves to the empty (dormant) route set here rather than through a hidden
  * fallback, and each route's models and pi-ai provider are materialized once.
  * @param providers - configured provider profiles keyed by route.
+ * @param cursorTokenRate - Teams/Enterprise third-party Cursor surcharge.
  * @returns validated profiles in configuration order.
  */
 export function resolveProfiles(
   providers: Readonly<Record<string, PiAiProviderProfile>> | undefined,
+  cursorTokenRate = 0,
 ): Map<string, ResolvedPiAiProviderProfile> {
   if (Array.isArray(providers)) {
     throw new Error('llm-pi-ai: providers is now a dict keyed by provider route, not an array of profiles')
+  }
+  if (!Number.isFinite(cursorTokenRate) || cursorTokenRate < 0) {
+    throw new Error('llm-pi-ai: cursorTokenRate must be a finite non-negative number')
   }
   const entries = Object.entries(providers ?? {})
   const resolved = new Map<string, ResolvedPiAiProviderProfile>()
@@ -366,6 +383,7 @@ export function resolveProfiles(
       ...rest.thinkingBudgets === undefined ? {} : { thinkingBudgets: { ...rest.thinkingBudgets } },
       configuredMaxTokens: catalog.configuredMaxTokens,
       servesInstalledCatalog: (source.models?.length ?? 0) === 0,
+      cursorTokenRate,
       piProvider: buildProvider({
         provider,
         displayName,

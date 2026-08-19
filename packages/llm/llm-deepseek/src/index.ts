@@ -86,6 +86,12 @@ const catalogModel: z<DeepSeekCatalogModel> = z.object({
   description: z.string(),
   contextWindow: z.number().step(1).min(1),
   maxTokens: z.number().step(1).min(1),
+  pricing: z.object({
+    input: z.number().min(0),
+    output: z.number().min(0),
+    cacheRead: z.number().min(0),
+    cacheWrite: z.number().min(0),
+  }),
 })
 
 export const Config: z<Config> = z.object({
@@ -134,6 +140,13 @@ function resolveModels(models: readonly DeepSeekCatalogModel[] | undefined): Dee
         `llm-deepseek: catalog model "${model.id}" maxTokens must be a positive integer`,
       )
     }
+    if (model.pricing !== undefined) {
+      for (const [bucket, rate] of Object.entries(model.pricing)) {
+        if (!Number.isFinite(rate) || rate < 0) {
+          throw new Error(`llm-deepseek: catalog model "${model.id}" pricing.${bucket} must be a finite non-negative number`)
+        }
+      }
+    }
     if (seen.has(model.id)) throw new Error(`llm-deepseek: duplicate catalog model "${model.id}"`)
     seen.add(model.id)
     return {
@@ -142,6 +155,7 @@ function resolveModels(models: readonly DeepSeekCatalogModel[] | undefined): Dee
       ...model.description === undefined ? {} : { description: model.description },
       ...model.contextWindow === undefined ? {} : { contextWindow: model.contextWindow },
       ...model.maxTokens === undefined ? {} : { maxTokens: model.maxTokens },
+      ...model.pricing === undefined ? {} : { pricing: { ...model.pricing } },
     }
   })
 }

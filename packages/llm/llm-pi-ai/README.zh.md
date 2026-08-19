@@ -190,6 +190,8 @@ pi-ai 事件会变为 harness 推理、文本、工具调用、usage 与 finish 
 
 ## 已知限制与暂缓事项
 
+- **费用估算保留价格确定性**：pi-ai catalog 价格会保留在 `TokenUsage.estimatedCostUsd`；配置的 `models[].pricing` 为自定义路由提供每百万 token 的完整费率。缺少费率时，会话费用显示为不可用而不是 `$0`。Cursor 使用 `src/cursor/pricing.ts` 中的官方日期快照；`cursorTokenRate` 加上 Teams/Enterprise 第三方附加费，但不改变 Cursor 自有模型费率。由于 AgentService 报告输出 token 增量，却不报告完整的计费输入／缓存用量，Cursor 输入费用带有近似性质。
+
 - **模型页不提供仅 OAuth 的 catalog 卡片**：密钥字段无法认证 `openai-codex` 或托管的 `cursor`。使用 `/login openai-codex`（ChatGPT 浏览器 PKCE）或 `/login cursor`（loginDeepControl 轮询）登录；token 持久化在 `$DSH_HOME/oauth-credentials.json`。Codex 刷新走 pi-ai；Cursor 刷新由本宿主负责。非官方 Cursor AgentService 传输不是公开 API。登录后 live 路由出现在模型选择器中，并在模型页显示为只读已登录行（没有密钥字段）。settings 文档已经点名的路由仍保留目录条目，以便编辑或删除；`apiKeyEnv` 也仍能用该密钥认证（若没有其他环节刷新，该 token 会过期）。不提供 device-code 登录、Web「登录」按钮、IDE token，以及其他仅 OAuth 的 catalog 提供方。Web UI 在 `/login` 时打开空白标签，并在 `commands/open-url` 上导航；重叠的 `/login` 会被拒绝。若 OpenAI 授权页报告 `missing_required_parameter`，把 stderr 写出的完整 URL 粘贴到地址栏；点击被换行截断的链接会丢掉查询串。
 - **提供方自带的凭据发现只读进程环境**：不指定凭据的路由交由 catalog 提供方自行解析，而它探测的是环境变量（`AZURE_OPENAI_API_KEY`、`AWS_PROFILE`、`AWS_ACCESS_KEY_ID` 以及各提供方自己的那一组）。它不读任何本地凭据目录，因此只有 `~/.aws/credentials` 而未导出 `AWS_PROFILE` 会被解析为未配置；由 harness 凭据 seam 保管的值，除非进程环境里也有，否则对它不可见。
 - **settings 能新增或覆盖路由，但不能移除组合路由**：用户层合并在组合 `base` 之上，因此删除 `cordis.yml` 提供的提供方属于组合变更；对该 namespace 执行 `replace` 只会重置用户层。

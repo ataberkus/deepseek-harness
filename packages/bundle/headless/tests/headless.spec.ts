@@ -6,8 +6,11 @@ import AgentRegistry, { Inbox } from '@deepseek-ai/dsh-agent'
 import type { Agent, AgentHandle, CreateAgentOptions } from '@deepseek-ai/dsh-agent'
 import AgentDefaultModelConfig from '@deepseek-ai/dsh-agent-default-model'
 import { createAssistantMessage } from '@deepseek-ai/dsh-llm'
+import type { TokenUsage } from '@deepseek-ai/dsh-llm'
 import SessionStore from '@deepseek-ai/dsh-session'
 import type { Session, UserMessage } from '@deepseek-ai/dsh-session'
+import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
+import TokenMeter from '@deepseek-ai/dsh-token-meter'
 import { apply, Config, internals } from '../src/index.ts'
 
 const originalInternals = { ...internals }
@@ -24,6 +27,7 @@ function appendTurn(
   message: UserMessage,
   text: string | undefined,
   completed: boolean,
+  usage?: TokenUsage,
 ): void {
   session.append('turn/start', { turn })
   session.append('step/start', { turn, step: 1 })
@@ -36,6 +40,7 @@ function appendTurn(
         content: [{ type: 'text', text }],
         source: { provider: 'test-provider', model: 'test-model' },
       }),
+      ...usage === undefined ? {} : { usage },
     }, { surfaceOp: 'append' })
   }
   session.append('step/end', { turn, step: 1 })
@@ -54,6 +59,8 @@ async function bench(script: Script): Promise<{
 }> {
   const ctx = new Context()
   await ctx.plugin(SessionStore)
+  await ctx.plugin(SessionProjectionRegistry)
+  await ctx.plugin(TokenMeter)
   await ctx.plugin(AgentRegistry)
   await ctx.plugin(AgentDefaultModelConfig, { provider: 'test-provider', model: 'test-model' })
   ctx.agents.setFactory({
@@ -108,6 +115,22 @@ async function bench(script: Script): Promise<{
 }
 
 describe('headless runner', () => {
+  it('keeps stdout answer-only and reports estimated cost on stderr', async () => {
+    const test = await bench({
+      async afterPrompt(session, message) {
+        appendTurn(session, 1, message, 'final answer', true, {
+          inputTokens: 10,
+          outputTokens: 5,
+          estimatedCostUsd: 0.0123,
+          costBasis: 'reported-usage',
+        })
+      },
+    })
+    const result = await test.run()
+    expect(result.out).toBe('final answer\n')
+    expect(result.err).toBe('dsh: Estimated session cost: $0.012\n')
+  })
+
   it('aggregates the final text across the complete idle-to-idle interval and flushes before exit', async () => {
     const test = await bench({
       before(session) {

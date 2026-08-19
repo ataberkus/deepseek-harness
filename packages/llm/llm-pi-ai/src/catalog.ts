@@ -23,6 +23,7 @@ import type {
   Provider,
   ThinkingLevelMap,
 } from '@earendil-works/pi-ai'
+import type { TokenPricing } from '@deepseek-ai/dsh-llm'
 import { CURSOR_PROVIDER } from './cursor/constants.ts'
 import { cursorFallbackModels } from './cursor/models.ts'
 import { cursorProvider } from './cursor/provider.ts'
@@ -36,6 +37,9 @@ const NO_COST: ModelCost = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }
 
 /** One request modality a pi-ai model may accept. */
 export type PiAiModality = Model<Api>['input'][number]
+
+/** Complete per-million-token rates for a configured pi-ai model. */
+export type PiAiModelPricing = Required<TokenPricing>
 
 /**
  * Every pi-ai request modality. The `Record` key type is a drift gate: a pi-ai
@@ -222,6 +226,8 @@ export interface PiAiModelProfile {
    * default on its own.
    */
   maxTokens?: number
+  /** Complete per-million-token USD rates for this model. */
+  pricing?: PiAiModelPricing
   /**
    * Request modalities this model accepts. Absent — or empty, which describes
    * a model that accepts nothing and so states no answer either — keeps the
@@ -502,6 +508,13 @@ export function resolveRouteModels(request: RouteCatalogRequest): RouteCatalog {
     if (entry.id.length === 0) invalid(provider, 'has a model with an empty id')
     if (seen.has(entry.id)) invalid(provider, `lists model "${entry.id}" more than once`)
     seen.add(entry.id)
+    if (entry.pricing !== undefined) {
+      for (const [bucket, rate] of Object.entries(entry.pricing)) {
+        if (!Number.isFinite(rate) || rate < 0) {
+          invalid(provider, `model "${entry.id}" pricing.${bucket} must be a finite non-negative number`)
+        }
+      }
+    }
     const base = defaults.get(entry.id)
     const api = request.api ?? base?.api ?? routeApi
     if (api === undefined) {
@@ -540,7 +553,7 @@ export function resolveRouteModels(request: RouteCatalogRequest): RouteCatalog {
       provider,
       baseUrl,
       input: declaredInput(entry.input) ?? base?.input ?? [...request.defaultInput],
-      cost: base?.cost ?? NO_COST,
+      cost: entry.pricing ?? base?.cost ?? NO_COST,
       contextWindow,
       maxTokens,
       ...resolveModelReasoning(provider, entry, base),

@@ -435,6 +435,38 @@ describe('catalog routes with per-model configuration', () => {
     expect((await ctx.llm.listModels('deepseek')).map(model => model.id)).toEqual([catalogModel.id])
   })
 
+  it('materializes a complete custom pricing card on a hand-declared model', () => {
+    const profile = resolveProfiles({
+      custom: {
+        api: 'openai-completions',
+        baseURL: 'https://gateway.example/v1',
+        models: [{
+          id: 'custom-model',
+          pricing: { input: 1, output: 2, cacheRead: 0.5, cacheWrite: 3 },
+        }],
+      },
+    }).get('custom')
+    expect(profile?.piProvider.getModels()[0]?.cost).toEqual({
+      input: 1,
+      output: 2,
+      cacheRead: 0.5,
+      cacheWrite: 3,
+    })
+  })
+
+  it('rejects an invalid custom pricing rate', () => {
+    expect(() => resolveProfiles({
+      custom: {
+        api: 'openai-completions',
+        baseURL: 'https://gateway.example/v1',
+        models: [{
+          id: 'custom-model',
+          pricing: { input: Number.NaN, output: 2, cacheRead: 0.5, cacheWrite: 3 },
+        }],
+      },
+    })).toThrow(/pricing\.input must be a finite non-negative number/)
+  })
+
   it('materializes a request default only from a configured output cap', async () => {
     const server = await mockServer([])
     const [catalogModel] = getBuiltinModels('deepseek')
