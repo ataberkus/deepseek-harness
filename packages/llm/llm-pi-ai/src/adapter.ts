@@ -97,8 +97,8 @@ export interface PiAiAdapterOptions {
   /**
    * Persistent OAuth credential store shared across snapshots. API keys still
    * arrive per request through {@link resolveApiKey}; this store is how
-   * `openai-codex` and hosted `cursor` (and any future OAuth-only hosted route)
-   * authenticates.
+   * `openai-codex`, hosted `cursor`, and hosted `google-gemini-cli`
+   * authenticate.
    */
   credentials?: CredentialStore
   /**
@@ -111,7 +111,7 @@ export interface PiAiAdapterOptions {
   /**
    * Delete the hosted OAuth credential for one route and refresh live
    * registration. Absent on adapters that do not host OAuth.
-   * @param provider Hosted OAuth route id (`openai-codex` or `cursor`).
+   * @param provider Hosted OAuth route id (`openai-codex`, `cursor`, or `google-gemini-cli`).
    * @returns After the stored login is gone.
    */
   logoutOAuth?: (provider: string) => Promise<void>

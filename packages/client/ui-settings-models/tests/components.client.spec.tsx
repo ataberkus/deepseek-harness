@@ -316,6 +316,31 @@ describe('ModelsSection', () => {
     })).toBeTruthy()
   })
 
+  it('renders Gemini CLI signed-in copy on a google-gemini-cli OAuth live route', async () => {
+    const scripted = scriptedFace()
+    scripted.face.llm.providers.mockImplementation(() => Promise.resolve(ok({
+      providers: [
+        {
+          provider: 'google-gemini-cli',
+          displayName: 'Gemini CLI',
+          settingsNs: '',
+          settingsPath: [],
+          active: true,
+          auth: 'oauth',
+          connected: true,
+        },
+      ],
+    })))
+    await mountFace(scripted)
+    expect(screen.getByText('Gemini CLI')).toBeTruthy()
+    const signedIn = screen.getByRole('img', { name: en.oauthConfiguredGemini })
+    expect(signedIn.getAttribute('title')).toBe(en.oauthConfiguredGemini)
+    expect(screen.queryByRole('button', { name: 'Edit Gemini CLI' })).toBeNull()
+    expect(screen.getByRole('button', {
+      name: providerCopy(en.oauthSignOutProvider, { provider: 'google-gemini-cli', displayName: 'Gemini CLI' }),
+    })).toBeTruthy()
+  })
+
   it('signs out an OAuth live route through llm.logout and keeps a failure in the dialog', async () => {
     const logout = vi.fn(() => Promise.resolve(ok({})))
     const scripted = scriptedFace({ logout })

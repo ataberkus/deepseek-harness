@@ -24,7 +24,7 @@ Web 客户端在提交 `/login` 的按键手势里打开空白标签，并在收
 
 已存储的 `openai-codex` oauth 凭据会向适配器注册表注入一条无 settings 的 live 路由，模型选择器因此可以列出 pi-ai catalog 模型。可配置提供方目录仍然不提供仅 OAuth 的 catalog **密钥卡片**，这是不予提供那条笔记的决策；settings 里已存储的 profile 仍会出现在目录中，以便编辑或删除。live 路由不点名 `apiKeyEnv`，因此首次引导在 Codex 登录之前仍要求有一个可用的 API 密钥提供方。模型页把这条注入路由显示为已登录行（名称加上已连接圆点，通过 `llm.logout` 退出登录，没有编辑器，也没有 Sign-in 按钮）。`/logout openai-codex` 仍是命令等价物。
 
-`Provider is not configured` 映射为 `LlmError('MISSING_CREDENTIAL')`，并点名 `/login openai-codex`。托管的 `cursor` 登录是同一 store 与命令表上的兄弟路由；那条非官方 AgentService 传输见 [Cursor OAuth 宿主](2026-08-18-cursor-oauth-host.md)。
+`Provider is not configured` 映射为 `LlmError('MISSING_CREDENTIAL')`，并点名 `/login openai-codex`。托管的 `cursor` 与 `google-gemini-cli` 登录是同一 store 与命令表上的兄弟路由；那些非官方传输见 [Cursor OAuth 宿主](2026-08-18-cursor-oauth-host.md) 和 [Gemini CLI OAuth 宿主](2026-08-19-google-gemini-cli-oauth-host.md)。
 
 ## 考虑过的替代方案
 

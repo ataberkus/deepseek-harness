@@ -6,6 +6,10 @@
  */
 
 import { CURSOR_DISPLAY_NAME, CURSOR_PROVIDER } from './cursor/constants.ts'
+import {
+  GOOGLE_GEMINI_CLI_DISPLAY_NAME,
+  GOOGLE_GEMINI_CLI_PROVIDER,
+} from './google-gemini-cli/constants.ts'
 
 /** Installed pi-ai provider id for ChatGPT Codex subscription auth. */
 export const OPENAI_CODEX_PROVIDER = 'openai-codex'
@@ -47,6 +51,15 @@ const HOSTS: readonly HostedOAuthProvider[] = [
     loginFailed: 'Cursor login failed',
     logoutFailed: 'Cursor logout failed',
   },
+  {
+    id: GOOGLE_GEMINI_CLI_PROVIDER,
+    displayName: GOOGLE_GEMINI_CLI_DISPLAY_NAME,
+    signedIn:
+      'Signed in to Gemini CLI. Select a google-gemini-cli model to use the Gemini CLI subscription.',
+    signedOut: 'Signed out of Gemini CLI.',
+    loginFailed: 'Gemini CLI login failed',
+    logoutFailed: 'Gemini CLI logout failed',
+  },
 ]
 
 const BY_ID = new Map(HOSTS.map(host => [host.id, host]))
@@ -84,10 +97,12 @@ export const OAUTH_LOGIN_IN_PROGRESS =
   'A login is already in progress. Finish or cancel the open browser tab, then run /login again.'
 
 /** Command remainder hint listing every hosted id. */
-export const OAUTH_COMMAND_HINT = '[openai-codex|cursor]'
+export const OAUTH_COMMAND_HINT = '[openai-codex|cursor|google-gemini-cli]'
 
 /** Error when `/login` names a route this host does not offer. */
-export const OAUTH_LOGIN_UNSUPPORTED = 'Only /login openai-codex and /login cursor are supported.'
+export const OAUTH_LOGIN_UNSUPPORTED =
+  'Only /login openai-codex, /login cursor, and /login google-gemini-cli are supported.'
 
 /** Error when `/logout` names a route this host does not offer. */
-export const OAUTH_LOGOUT_UNSUPPORTED = 'Only /logout openai-codex and /logout cursor are supported.'
+export const OAUTH_LOGOUT_UNSUPPORTED =
+  'Only /logout openai-codex, /logout cursor, and /logout google-gemini-cli are supported.'

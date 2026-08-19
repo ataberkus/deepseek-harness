@@ -54,10 +54,11 @@ function fakeAgent(): Agent {
 }
 
 describe('parseOAuthProvider', () => {
-  it('defaults empty input to openai-codex, accepts cursor, and rejects any other name', () => {
+  it('defaults empty input to openai-codex, accepts hosted ids, and rejects any other name', () => {
     expect(parseOAuthProvider('')).toBe(OPENAI_CODEX_PROVIDER)
     expect(parseOAuthProvider('  openai-codex  ')).toBe(OPENAI_CODEX_PROVIDER)
     expect(parseOAuthProvider('cursor')).toBe('cursor')
+    expect(parseOAuthProvider('google-gemini-cli')).toBe('google-gemini-cli')
     expect(parseOAuthProvider('anthropic')).toBeUndefined()
   })
 })
@@ -67,11 +68,15 @@ describe('oauthProviderProfiles', () => {
     expect(oauthProviderProfiles([
       { providerId: 'openai-codex', type: 'oauth' },
       { providerId: 'cursor', type: 'oauth' },
+      { providerId: 'google-gemini-cli', type: 'oauth' },
       { providerId: 'anthropic', type: 'oauth' },
       { providerId: 'openai-codex', type: 'api_key' },
     ])).toEqual({
       'openai-codex': { displayName: catalog.catalogProvider('openai-codex')?.name ?? 'OpenAI Codex' },
       cursor: { displayName: catalog.catalogProvider('cursor')?.name ?? 'Cursor' },
+      'google-gemini-cli': {
+        displayName: catalog.catalogProvider('google-gemini-cli')?.name ?? 'Gemini CLI',
+      },
     })
     expect(oauthProviderProfiles([])).toEqual({})
   })
@@ -408,6 +413,58 @@ describe('login and logout commands', () => {
     expect(ctx.llm.listProviders()).toEqual([])
   })
 
+  it('signs in with /login google-gemini-cli, injects a live route, and keeps the key card withheld', async () => {
+    const home = await isolateDshHome()
+    const provider = catalog.catalogProvider('google-gemini-cli')
+    if (provider?.auth.oauth === undefined) throw new Error('expected google-gemini-cli oauth')
+    vi.spyOn(provider.auth.oauth, 'login').mockImplementation(async (interaction) => {
+      interaction.notify({
+        type: 'auth_url',
+        url: 'https://accounts.google.com/o/oauth2/v2/auth?client_id=x',
+      })
+      return {
+        type: 'oauth',
+        access: 'gemini-access',
+        refresh: 'gemini-refresh',
+        expires: Date.now() + 60_000,
+        projectId: 'proj-test',
+      }
+    })
+    const ctx = new Context()
+    contexts.push(ctx)
+    await ctx.plugin(LlmRuntime)
+    await ctx.plugin(CommandRuntime)
+    await ctx.plugin(LlmPiAi, {})
+    expect(ctx.llm.listConfigurableProviders().map(entry => entry.provider))
+      .not.toContain('google-gemini-cli')
+    const login = await ctx.commands.execute(fakeAgent(), '/login google-gemini-cli', AbortSignal.timeout(5_000))
+    expect(login?.result).toEqual({
+      kind: 'success',
+      text: 'Signed in to Gemini CLI. Select a google-gemini-cli model to use the Gemini CLI subscription.',
+    })
+    expect(ctx.llm.listProviders()).toEqual([
+      { id: 'google-gemini-cli', name: provider.name, auth: 'oauth' },
+    ])
+    expect(ctx.llm.listConfigurableProviders().map(entry => entry.provider))
+      .not.toContain('google-gemini-cli')
+    const models = await ctx.llm.listModels('google-gemini-cli')
+    expect(models.length).toBeGreaterThan(0)
+    expect(models[0]?.provider).toBe('google-gemini-cli')
+    const stored = JSON.parse(await readFile(join(home, OAUTH_CREDENTIALS_FILENAME), 'utf8'))
+    expect(stored['google-gemini-cli']).toMatchObject({
+      type: 'oauth',
+      refresh: 'gemini-refresh',
+      projectId: 'proj-test',
+    })
+    const logout = await ctx.commands.execute(
+      fakeAgent(),
+      '/logout google-gemini-cli',
+      AbortSignal.timeout(5_000),
+    )
+    expect(logout?.result).toEqual({ kind: 'success', text: 'Signed out of Gemini CLI.' })
+    expect(ctx.llm.listProviders()).toEqual([])
+  })
+
   it('rejects login and logout for any provider other than openai-codex', async () => {
     await isolateDshHome()
     const ctx = new Context()
@@ -560,6 +617,29 @@ describe('login and logout commands', () => {
     expect(ctx.llm.listConfigurableProviders().map(entry => entry.provider)).not.toContain('cursor')
   })
 
+  it('registers google-gemini-cli from a stored credential at boot without a settings profile', async () => {
+    const home = await isolateDshHome()
+    await writeFile(join(home, OAUTH_CREDENTIALS_FILENAME), `${JSON.stringify({
+      'google-gemini-cli': {
+        type: 'oauth',
+        access: 'access-token',
+        refresh: 'refresh-token',
+        expires: Date.now() + 60_000,
+        projectId: 'proj-boot',
+      },
+    }, null, 2)}\n`, { mode: 0o600 })
+    const ctx = new Context()
+    contexts.push(ctx)
+    await ctx.plugin(LlmRuntime)
+    await ctx.plugin(LlmPiAi, {})
+    expect(ctx.llm.listProviders()).toEqual([{
+      id: 'google-gemini-cli',
+      name: catalog.catalogProvider('google-gemini-cli')?.name ?? 'Gemini CLI',
+      auth: 'oauth',
+    }])
+    expect(ctx.llm.listConfigurableProviders().map(entry => entry.provider)).not.toContain('google-gemini-cli')
+  })
+
   it('does not mark a settings-declared openai-codex route as oauth-injected', async () => {
     const home = await isolateDshHome()
     await writeFile(join(home, OAUTH_CREDENTIALS_FILENAME), `${JSON.stringify({
@@ -597,6 +677,27 @@ describe('login and logout commands', () => {
     expect(ctx.llm.listProviders()).toEqual([{
       id: 'cursor',
       name: 'cursor',
+    }])
+  })
+
+  it('does not mark a settings-declared google-gemini-cli route as oauth-injected', async () => {
+    const home = await isolateDshHome()
+    await writeFile(join(home, OAUTH_CREDENTIALS_FILENAME), `${JSON.stringify({
+      'google-gemini-cli': {
+        type: 'oauth',
+        access: 'access-token',
+        refresh: 'refresh-token',
+        expires: Date.now() + 60_000,
+        projectId: 'proj-settings',
+      },
+    }, null, 2)}\n`, { mode: 0o600 })
+    const ctx = new Context()
+    contexts.push(ctx)
+    await ctx.plugin(LlmRuntime)
+    await ctx.plugin(LlmPiAi, { providers: { 'google-gemini-cli': { apiKeyEnv: 'GEMINI_CLI_TOKEN' } } })
+    expect(ctx.llm.listProviders()).toEqual([{
+      id: 'google-gemini-cli',
+      name: 'google-gemini-cli',
     }])
   })
 
@@ -738,6 +839,24 @@ describe('login and logout commands', () => {
     expect(result.finish).toMatchObject({ kind: 'error', failure: { code: 'MISSING_CREDENTIAL' } })
     expect(JSON.stringify(result.finish)).toMatch(/\/login cursor/)
   })
+
+  it('maps a keyless google-gemini-cli stream without a stored token to MISSING_CREDENTIAL', async () => {
+    await isolateDshHome()
+    const ctx = new Context()
+    contexts.push(ctx)
+    await ctx.plugin(LlmRuntime)
+    await ctx.plugin(LlmPiAi, { providers: { 'google-gemini-cli': {} } })
+    const result = await assemble(ctx, {
+      provider: 'google-gemini-cli',
+      model: 'gemini-2.5-flash',
+      messages: [createUserMessage({
+        content: [{ type: 'text', text: 'hi' }],
+        source: { kind: 'plugin', plugin: 'test' },
+      })],
+    })
+    expect(result.finish).toMatchObject({ kind: 'error', failure: { code: 'MISSING_CREDENTIAL' } })
+    expect(JSON.stringify(result.finish)).toMatch(/\/login google-gemini-cli/)
+  })
 })
 
 describe('loginOpenaiCodex', () => {
@@ -799,6 +918,12 @@ describe('rethrowPiAiError', () => {
     } catch (cursorError) {
       expect(cursorError).toMatchObject({ code: 'MISSING_CREDENTIAL' })
       expect(String(cursorError)).toMatch(/\/login cursor/)
+    }
+    try {
+      rethrowPiAiError(new Error('Provider is not configured: google-gemini-cli'))
+    } catch (geminiError) {
+      expect(geminiError).toMatchObject({ code: 'MISSING_CREDENTIAL' })
+      expect(String(geminiError)).toMatch(/\/login google-gemini-cli/)
     }
   })
 

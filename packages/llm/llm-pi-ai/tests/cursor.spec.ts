@@ -107,8 +107,12 @@ async function collect(stream: AsyncIterable<{ type: string }>): Promise<string[
 }
 
 describe('hosted OAuth table', () => {
-  it('lists openai-codex then cursor', () => {
-    expect(hostedOAuthProviders().map(host => host.id)).toEqual(['openai-codex', 'cursor'])
+  it('lists openai-codex then cursor then google-gemini-cli', () => {
+    expect(hostedOAuthProviders().map(host => host.id)).toEqual([
+      'openai-codex',
+      'cursor',
+      'google-gemini-cli',
+    ])
     expect(hostedOAuthProvider('nope')).toBeUndefined()
   })
 })

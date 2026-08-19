@@ -59,8 +59,9 @@ const REASONING_PARAMETERS = new Set(['reasoning', 'reasoning_effort'])
  * `api-version` query — and Codex authenticates through OAuth; guessing at
  * either would report an authentication failure as a provider with no models.
  * Hosted Cursor lists through GetUsableModels, not this OpenAI JSON protocol,
- * so `cursor-agent` is not listable here. pi-ai's remaining protocols are
- * absent for the same reason.
+ * so `cursor-agent` is not listable here. Hosted Gemini CLI has no OpenAI
+ * listing either, so `google-gemini-cli` is not listable here. pi-ai's
+ * remaining protocols are absent for the same reason.
  */
 export const LISTABLE_PROTOCOLS: ReadonlySet<string> = new Set([
   'openai-completions',

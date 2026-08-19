@@ -12,7 +12,7 @@ Community clients implement that unofficial wire. [`@rahularya01/pi-cursor`](htt
 
 ## Decision
 
-`dsh-llm-pi-ai` hosts Cursor OAuth on the same [`FileOAuthStore`](../../../../packages/llm/llm-pi-ai/src/oauth-store.ts) as [OpenAI Codex](2026-08-18-openai-codex-oauth-host.md). A table of hosted ids (`openai-codex`, `cursor`) owns `/login` / `/logout` and live-route injection. Empty `/login` remains `openai-codex`. Any other name fails. One in-flight login covers the whole host so a Cursor poll and a Codex localhost callback cannot race. The Web client still opens a blank tab for `/login`, `/login openai-codex`, and `/login cursor`.
+`dsh-llm-pi-ai` hosts Cursor OAuth on the same [`FileOAuthStore`](../../../../packages/llm/llm-pi-ai/src/oauth-store.ts) as [OpenAI Codex](2026-08-18-openai-codex-oauth-host.md) and [Gemini CLI](2026-08-19-google-gemini-cli-oauth-host.md). A table of hosted ids (`openai-codex`, `cursor`, `google-gemini-cli`) owns `/login` / `/logout` and live-route injection. Empty `/login` remains `openai-codex`. Any other name fails. One in-flight login covers the whole host so a Cursor poll, a Codex localhost callback, and a Gemini loopback cannot race. The Web client still opens a blank tab for `/login`, `/login openai-codex`, `/login cursor`, and `/login google-gemini-cli`.
 
 Cursor login constructs the hosted `cursor` Provider (`auth.oauth.login` / `refreshToken`, no `auth.apiKey`) and calls `models.setProvider` plus `models.login('cursor', 'oauth', interaction)`. The interaction reuses `createBrowserOAuthInteraction` only to open `auth_url`; Cursor never prompts `select` or `manual_code`. Refresh uses `https://api2.cursor.sh/auth/exchange_user_api_key`.
 

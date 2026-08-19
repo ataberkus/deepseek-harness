@@ -18,7 +18,7 @@ Cursor 登录成功后仍会漏掉 Grok 4.6 与 Fast SKU。捆绑 fallback 是�
 
 OpenRouter 实时叠加读取 `supported_parameters`。仅实时 id 若点名 `reasoning` 或 `reasoning_effort`，会被标为具备推理能力，并带上 OpenRouter 映射 `{ low, medium, high }`。其余仅实时 id 仍不具备推理能力。已安装 catalog id 保留快照映射。发现回复仍省略 `reasoning`，因此 `llm.discoverModels` 只携带 id／名称／容量。[OpenRouter 实时叠加](../feature/2026-08-18-openrouter-live-catalog.md) 拥有这份并集；本笔记拥有推理标志。
 
-`LlmAdapter.logout`／`LlmRuntime.logout`／`llm.logout` 通过与 `/logout` 相同的 `logoutHostedOAuth` 路径删除托管 OAuth 凭据。模型页上 `auth: oauth` 行的删除会先确认，再调用该 RPC 并重新加载。它不走 `settings.mutate`。[Codex](../feature/2026-08-18-openai-codex-oauth-host.md) 与 [Cursor](../feature/2026-08-18-cursor-oauth-host.md) 登录仍只走命令；本笔记补的是断开，不是 Sign-in。「获取可用模型」沿用同一份叠加，并加上搜索框，以及针对**已过滤**候选列表的全选／取消全选。
+`LlmAdapter.logout`／`LlmRuntime.logout`／`llm.logout` 通过与 `/logout` 相同的 `logoutHostedOAuth` 路径删除托管 OAuth 凭据。模型页上 `auth: oauth` 行的删除会先确认，再调用该 RPC 并重新加载。它不走 `settings.mutate`。[Codex](../feature/2026-08-18-openai-codex-oauth-host.md)、[Cursor](../feature/2026-08-18-cursor-oauth-host.md) 与 [Gemini CLI](../feature/2026-08-19-google-gemini-cli-oauth-host.md) 登录仍只走命令；本笔记补的是断开，不是 Sign-in。「获取可用模型」沿用同一份叠加，并加上搜索框，以及针对**已过滤**候选列表的全选／取消全选。
 
 composer 选择器在点击后立即回显：`ModelDirectory.select` 在 `session.selectModel` 返回前写入 `current`，菜单在提交时关闭。Host 拒绝则恢复上一次 current。`PiAiAdapter` 按 snapshot 记住实时叠加，因此 `session.models` 不会为每个已公布 id 再重建一遍 OpenRouter 列表。已经有 groups 的选择器在 catalog 刷新期间保持 `ready`。
 
