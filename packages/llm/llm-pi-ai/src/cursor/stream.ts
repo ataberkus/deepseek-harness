@@ -111,10 +111,8 @@ async function runCursorStream(
       modelName: model.name,
       ...context.tools === undefined ? {} : { tools: context.tools },
       maxMode: streamMaxMode(options),
-      thinking: model.reasoning && options?.reasoning !== 'off',
-      ...options?.reasoning === undefined || options.reasoning === 'off'
-        ? {}
-        : { thinkingEffort: options.reasoning },
+      thinking: model.reasoning === true && options?.reasoning !== undefined,
+      ...options?.reasoning === undefined ? {} : { thinkingEffort: options.reasoning },
     })
     stream.push({ type: 'start', partial: pushPartial() })
     let textIndex: number | undefined

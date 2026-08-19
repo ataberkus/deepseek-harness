@@ -16,7 +16,7 @@ OpenRouter 上的 DeepSeek 行是同一类错误。实时叠加给仅实时 id �
 
 OpenRouter 叠加解析每一行 listing 的 `reasoning` 对象：`supported_efforts` 是提供的档位，`default_effort` 是选择器公布的默认值，`none` 对应 pi-ai 的 `off`，JSON null 的 `supported_efforts` 表示网关全集（`mandatory` 为 true 时去掉 `none`）。`supported_parameters` 点名了推理参数却没有可用对象时，仍使用 `{ low, medium, high }`。匹配的已安装 id 采用实时映射，以免快照继续提供端点已不再点名的 Off／Minimal／多余档位。未声明的 pi-ai 档位被钉成 `null`；缺席的基础档位键否则会被当成支持。`resolveModelInfo` 公布 `defaultThinkingLevel`，因此 listing 或家族表已点名默认值时，composer 不会插入 Default 行。
 
-Cursor GetUsableModels 的 `ThinkingDetails` 只是存在标志、没有档位名，因此按 id（去掉 Fast 后缀）查家族表来挂映射。Grok 4.6 是 `low`／`medium`／`high`／`xhigh`，默认 `high`。其余 Grok id、Composer、Kimi／`k3` 以及未知推理 id 是 `low`／`medium`／`high`，默认 `high`。GPT-5.4 是 Off（线上为 `none`）／Minimal／Low／Medium／High／Xhigh，默认 `medium`。其余 GPT／Codex id 不含 Xhigh。Claude 是 Off／Low／Medium／High，默认 `high`。Gemini 是 Minimal／Low／Medium／High。GLM 是 Low／High／Max。Cursor 运行把选中的档位编进 ThinkingDetails 字段 1；开启思考但未点名档位时发空消息（Cursor 默认）；`off` 省略 ThinkingDetails。
+Cursor GetUsableModels 的 `ThinkingDetails` 只是存在标志、没有档位名，因此按 id（去掉 Fast 后缀）查家族表来挂映射。Grok 4.6 是 `low`／`medium`／`high`／`xhigh`，默认 `high`。其余 Grok id、Composer、Kimi／`k3` 以及未知推理 id 是 `low`／`medium`／`high`，默认 `high`。GPT-5.4 是 Off（线上为 `none`）／Minimal／Low／Medium／High／Xhigh，默认 `medium`。其余 GPT／Codex id 不含 Xhigh。Claude 是 Off／Low／Medium／High，默认 `high`。Gemini 是 Minimal／Low／Medium／High。GLM 是 Low／High／Max。Cursor 运行把选中的档位编进 ThinkingDetails 字段 1。pi-ai 对 Off 会省略 `reasoning`，因此 stream 省略 ThinkingDetails；编码器在开启思考却未点名档位时仍发送空的 ThinkingDetails 消息（Cursor 默认）。
 
 ## 考虑过的替代方案
 
@@ -34,4 +34,4 @@ composer 为 Cursor Grok 4.6 显示 Low／Medium／High／Xhigh，并选中 High
 
 ## 测试
 
-`packages/llm/llm-pi-ai/tests/thinking-levels.spec.ts` 钉住钉死未声明档位、`none` → `off`，以及 listing 对象解析。`tests/listing.spec.ts` 钉住实时 `supported_efforts`／`default_effort`，以及覆盖已安装 id 的快照映射。`tests/live-catalog.spec.ts` 钉住 DeepSeek V4 Flash 的 High／Xhigh 与默认 High。`tests/cursor.spec.ts` 钉住家族映射、Grok 4.6 把 Off／Minimal 钉成不支持、ThinkingDetails 字段 1，以及档位为 `off` 时省略 ThinkingDetails。
+`packages/llm/llm-pi-ai/tests/thinking-levels.spec.ts` 钉住钉死未声明档位、`none` → `off`，以及 listing 对象解析。`tests/listing.spec.ts` 钉住实时 `supported_efforts`／`default_effort`，以及覆盖已安装 id 的快照映射。`tests/live-catalog.spec.ts` 钉住 DeepSeek V4 Flash 的 High／Xhigh 与默认 High。`tests/cursor.spec.ts` 钉住家族映射、Grok 4.6 把 Off／Minimal 钉成不支持、ThinkingDetails 字段 1，以及 stream 未点名档位时省略 ThinkingDetails。

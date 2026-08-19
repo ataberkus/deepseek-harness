@@ -834,7 +834,7 @@ describe('cursor streamSimple', () => {
     await collect(streamCursor(
       cursorModel('gpt-5', 'GPT-5', true),
       { messages: [{ role: 'user', content: 'hi', timestamp: 0 }] },
-      { headers: { authorization: 'Bearer tok' }, reasoning: 'off' },
+      { headers: { authorization: 'Bearer tok' } },
     ))
     const offDetails = fieldRepeated(decodeFields(captured ?? new Uint8Array()), 3)[0]
     const offThinking = offDetails === undefined ? undefined : fieldRepeated(decodeFields(offDetails), 2)[0]
