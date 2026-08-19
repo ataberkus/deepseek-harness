@@ -56,6 +56,7 @@ export type {
   PiAiCompatProfile,
   PiAiModality,
   PiAiModelOverride,
+  PiAiModelPricing,
   PiAiModelProfile,
   PiAiReasoningEfforts,
   PiAiThinkingFormat,
@@ -217,6 +218,12 @@ const modelFields = {
   name: z.string(),
   contextWindow: z.number().step(1).min(1),
   maxTokens: z.number().step(1).min(1),
+  pricing: z.object({
+    input: z.number().min(0),
+    output: z.number().min(0),
+    cacheRead: z.number().min(0),
+    cacheWrite: z.number().min(0),
+  }),
   // No explicit default, unlike the route's `defaultInput`: schemastery
   // materializes `[]` for an absent array, and resolution reads that as "no
   // answer here" so the catalog entry below still applies.

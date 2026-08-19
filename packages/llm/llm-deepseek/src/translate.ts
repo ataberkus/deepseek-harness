@@ -8,8 +8,8 @@
  * @module dsh-llm-deepseek/translate
  */
 
-import { CallId, EMPTY_RESPONSE_CODE, LlmError } from '@deepseek-ai/dsh-llm'
-import type { ContentBlock, FinishReason, StreamChunk, TokenUsage } from '@deepseek-ai/dsh-llm'
+import { CallId, EMPTY_RESPONSE_CODE, LlmError, priceTokenUsage } from '@deepseek-ai/dsh-llm'
+import type { ContentBlock, FinishReason, StreamChunk, TokenPricing, TokenUsage } from '@deepseek-ai/dsh-llm'
 import { DONE } from './sse.ts'
 import type { WireChunk, WireUsage } from './types.ts'
 
@@ -50,15 +50,16 @@ export function mapFinishReason(reason: string): FinishReason {
  * @param usage - wire usage from the finish chunk or the trailing usage-only chunk.
  * @returns disjoint harness counts; cache/reasoning fields present only when the wire reported them.
  */
-export function mapUsage(usage: WireUsage): TokenUsage {
+export function mapUsage(usage: WireUsage, pricing?: TokenPricing): TokenUsage {
   const cacheRead = usage.prompt_tokens_details?.cached_tokens ?? usage.prompt_cache_hit_tokens
   const reasoning = usage.completion_tokens_details?.reasoning_tokens
-  return {
+  const mapped: TokenUsage = {
     inputTokens: usage.prompt_tokens - (cacheRead ?? 0),
     outputTokens: usage.completion_tokens,
     ...cacheRead !== undefined ? { cacheReadTokens: cacheRead } : {},
     ...reasoning !== undefined ? { reasoningTokens: reasoning } : {},
   }
+  return pricing === undefined ? mapped : priceTokenUsage(mapped, pricing, 'reported-usage')
 }
 
 /** Assemble the final ContentBlock for one open block. */
@@ -83,7 +84,10 @@ function closeBlock(block: OpenBlock): ContentBlock {
  *   A `stop` (or absent) finish with no opened blocks is a degenerate provider completion and maps to an
  *   `EMPTY_RESPONSE` error finish instead of a successful empty message.
  */
-export async function* translate(payloads: AsyncIterable<string>): AsyncGenerator<StreamChunk> {
+export async function* translate(
+  payloads: AsyncIterable<string>,
+  pricing?: TokenPricing,
+): AsyncGenerator<StreamChunk> {
   let nextIndex = 0
   let textBlock: OpenBlock | undefined
   let reasoningBlock: OpenBlock | undefined
@@ -176,7 +180,7 @@ export async function* translate(payloads: AsyncIterable<string>): AsyncGenerato
 
     // Usage may arrive attached to the finish chunk or as a trailing
     // usage-only chunk — keep the latest.
-    if (chunk.usage) pendingUsage = mapUsage(chunk.usage)
+    if (chunk.usage) pendingUsage = mapUsage(chunk.usage, pricing)
   }
 
   // parseSse guarantees the [DONE] sentinel (or throws); reaching here means

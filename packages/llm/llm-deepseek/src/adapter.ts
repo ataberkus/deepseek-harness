@@ -16,6 +16,7 @@ import type {
   LlmResolvedModelInfo,
   ResolvedRetryPolicy,
   StreamChunk,
+  TokenPricing,
 } from '@deepseek-ai/dsh-llm'
 import type { CredentialRef } from '@deepseek-ai/dsh-credentials'
 import { idleWatchdog, timeoutOf } from '@deepseek-ai/dsh-timeout'
@@ -38,6 +39,8 @@ export interface DeepSeekCatalogModel {
   contextWindow?: number
   /** Per-request output cap for this model; omission falls back to the profile's {@link DeepSeekConnectionOptions.maxTokens}. */
   maxTokens?: number
+  /** Optional per-million-token USD rates for this model. */
+  pricing?: TokenPricing
 }
 
 /**
@@ -345,6 +348,7 @@ export class DeepSeekAdapter extends LlmAdapter {
       throw new LlmError('DeepSeek API returned no response body', 'EMPTY_RESPONSE')
     }
 
-    yield* translate(parseSse(response.body, onComment))
+    const pricing = connection.models.find(model => model.id === options.model)?.pricing
+    yield* translate(parseSse(response.body, onComment), pricing)
   }
 }

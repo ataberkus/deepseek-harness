@@ -20,13 +20,17 @@ import { toPiReplayState } from './replay.ts'
  * @param usage - cumulative usage from the terminal pi-ai event.
  * @returns harness counts; cache fields appear only when non-zero (pi-ai reports zeros, not absence).
  */
-export function mapUsage(usage: PiUsage): TokenUsage {
-  return {
+export function mapUsage(usage: PiUsage, pricingKnown = false): TokenUsage {
+  const mapped: TokenUsage = {
     inputTokens: usage.input,
     outputTokens: usage.output,
     ...usage.cacheRead > 0 ? { cacheReadTokens: usage.cacheRead } : {},
     ...usage.cacheWrite > 0 ? { cacheWriteTokens: usage.cacheWrite } : {},
   }
+  const hasTokens = usage.input + usage.output + usage.cacheRead + usage.cacheWrite > 0
+  return pricingKnown && hasTokens
+    ? { ...mapped, estimatedCostUsd: usage.cost.total, costBasis: 'reported-usage' }
+    : mapped
 }
 
 // XXX(pi-ai upstream): pi-ai flattens the caught error to `error.message`
@@ -165,6 +169,7 @@ export function mapStopReason(message: AssistantMessage, contextWindow?: number)
 export async function* toStreamChunks(
   events: AsyncIterable<AssistantMessageEvent>,
   contextWindow?: number,
+  pricingKnown = false,
 ): AsyncGenerator<StreamChunk> {
   // pi-ai contentIndex ↔ our block index map 1:1 (both count blocks from 0
   // in stream order), but we track ids per index for tool calls.
@@ -227,7 +232,7 @@ export async function* toStreamChunks(
         }
         break
       case 'done':
-        yield { type: 'usage', usage: mapUsage(event.message.usage) }
+        yield { type: 'usage', usage: mapUsage(event.message.usage, pricingKnown) }
         yield {
           type: 'finish',
           reason: mapStopReason(event.message, contextWindow),
@@ -237,7 +242,7 @@ export async function* toStreamChunks(
       case 'error':
         // In-stream error delivery (pi-ai's style) → error finish chunk
         // (the harness's other sanctioned error path besides throwing).
-        yield { type: 'usage', usage: mapUsage(event.error.usage) }
+        yield { type: 'usage', usage: mapUsage(event.error.usage, pricingKnown) }
         yield { type: 'finish', reason: mapStopReason(event.error, contextWindow) }
         return
       // no default: AssistantMessageEvent is pi-ai's closed union; a new

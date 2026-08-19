@@ -127,6 +127,14 @@ export type FinishReason = FinishReasonMap[keyof FinishReasonMap]
 /** Basis for a recorded per-call USD estimate. */
 export type TokenCostBasis = 'reported-usage' | 'estimated-input'
 
+/** Optional per-million-token USD rates for disjoint usage buckets. */
+export interface TokenPricing {
+  input?: number
+  output?: number
+  cacheRead?: number
+  cacheWrite?: number
+}
+
 /**
  * Token accounting for one model call (cache fields are optional).
  *
