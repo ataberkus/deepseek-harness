@@ -14,6 +14,9 @@ import {
   readListing,
   resetModelListingCache,
 } from '../src/listing.ts'
+import { thinkingLevelMapFromOffered } from '../src/thinking-levels.ts'
+
+const FALLBACK_THINKING = thinkingLevelMapFromOffered(['low', 'medium', 'high'])
 
 const servers: Server[] = []
 
@@ -132,8 +135,8 @@ describe('readListing', () => {
       ],
     })).toEqual([
       { id: 'vendor/with-tools', name: 'With Tools', contextWindow: 100_000, maxTokens: 8_000 },
-      { id: 'vendor/reasoning', reasoning: true },
-      { id: 'vendor/effort', reasoning: true },
+      { id: 'vendor/reasoning', reasoning: true, thinkingLevelMap: FALLBACK_THINKING },
+      { id: 'vendor/effort', reasoning: true, thinkingLevelMap: FALLBACK_THINKING },
       { id: 'vendor/params-object' },
       { id: 'vendor/plain' },
       { id: 'vendor/null-architecture' },
@@ -145,6 +148,101 @@ describe('readListing', () => {
   it('refuses a body with no data array', () => {
     expect(() => readListing({ models: [] })).toThrow(/no "data" array/)
     expect(() => readListing(null)).toThrow(/no "data" array/)
+  })
+
+  it('reads OpenRouter reasoning.supported_efforts instead of a generic map', () => {
+    expect(readListing({
+      data: [
+        {
+          id: 'deepseek/deepseek-v4-flash',
+          supported_parameters: ['tools', 'reasoning'],
+          reasoning: {
+            mandatory: false,
+            supported_efforts: ['xhigh', 'high'],
+            default_effort: 'high',
+          },
+        },
+        {
+          id: 'x-ai/grok-4.6',
+          supported_parameters: ['tools', 'reasoning'],
+          reasoning: {
+            mandatory: true,
+            supported_efforts: ['xhigh', 'high', 'medium', 'low'],
+            default_effort: 'high',
+          },
+        },
+        {
+          id: 'vendor/all-gateway',
+          supported_parameters: ['tools', 'reasoning'],
+          reasoning: { mandatory: false, supported_efforts: null },
+        },
+        {
+          id: 'vendor/toggle-only',
+          supported_parameters: ['tools', 'reasoning'],
+          reasoning: { mandatory: true },
+        },
+        {
+          id: 'vendor/unknown-effort',
+          supported_parameters: ['tools'],
+          reasoning: { supported_efforts: ['quantum'], default_effort: 'high' },
+        },
+        {
+          id: 'vendor/mandatory-all',
+          supported_parameters: ['tools'],
+          reasoning: { mandatory: true, supported_efforts: null, default_effort: 'medium' },
+        },
+        {
+          id: 'vendor/with-none',
+          supported_parameters: ['tools'],
+          reasoning: { supported_efforts: ['low', 'none', 'low'], default_effort: 'none' },
+        },
+        {
+          id: 'vendor/stale-default',
+          supported_parameters: ['tools'],
+          reasoning: { supported_efforts: ['high'], default_effort: 'max' },
+        },
+      ],
+    })).toEqual([
+      {
+        id: 'deepseek/deepseek-v4-flash',
+        reasoning: true,
+        thinkingLevelMap: thinkingLevelMapFromOffered(['xhigh', 'high']),
+        defaultEffort: 'high',
+      },
+      {
+        id: 'x-ai/grok-4.6',
+        reasoning: true,
+        thinkingLevelMap: thinkingLevelMapFromOffered(['low', 'medium', 'high', 'xhigh']),
+        defaultEffort: 'high',
+      },
+      {
+        id: 'vendor/all-gateway',
+        reasoning: true,
+        thinkingLevelMap: thinkingLevelMapFromOffered(
+          ['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'],
+          'none',
+        ),
+      },
+      { id: 'vendor/toggle-only' },
+      { id: 'vendor/unknown-effort' },
+      {
+        id: 'vendor/mandatory-all',
+        reasoning: true,
+        thinkingLevelMap: thinkingLevelMapFromOffered(['minimal', 'low', 'medium', 'high', 'xhigh', 'max']),
+        defaultEffort: 'medium',
+      },
+      {
+        id: 'vendor/with-none',
+        reasoning: true,
+        thinkingLevelMap: thinkingLevelMapFromOffered(['off', 'low'], 'none'),
+        defaultEffort: 'off',
+      },
+      {
+        id: 'vendor/stale-default',
+        reasoning: true,
+        thinkingLevelMap: thinkingLevelMapFromOffered(['high']),
+      },
+    ])
   })
 })
 
@@ -194,7 +292,7 @@ describe('overlay helpers', () => {
     expect(reasoning[1]).toMatchObject({
       id: 'vendor/thinks',
       reasoning: true,
-      thinkingLevelMap: { low: 'low', medium: 'medium', high: 'high' },
+      thinkingLevelMap: FALLBACK_THINKING,
     })
     const fallback = overlayLiveCatalogModels(
       [template],
@@ -202,6 +300,24 @@ describe('overlay helpers', () => {
       { contextWindow: 100, maxTokens: 10 },
     )
     expect(fallback[1]).toMatchObject({ id: 'vendor/unsized', name: 'vendor/unsized', contextWindow: 100, maxTokens: 10 })
+    const grokMap = thinkingLevelMapFromOffered(['low', 'medium', 'high', 'xhigh'])
+    const overwritten = overlayLiveCatalogModels(
+      [template],
+      [{
+        id: template.id,
+        reasoning: true,
+        thinkingLevelMap: grokMap,
+        defaultEffort: 'high',
+      }],
+      { contextWindow: 100, maxTokens: 10 },
+    )
+    expect(overwritten).toHaveLength(1)
+    expect(overwritten[0]).toMatchObject({
+      id: template.id,
+      reasoning: true,
+      thinkingLevelMap: grokMap,
+      defaultThinkingLevel: 'high',
+    })
   })
 })
 

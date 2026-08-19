@@ -2,6 +2,7 @@
 import { EventEmitter } from 'node:events'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Api, Context as PiContext, Model, Tool } from '@earendil-works/pi-ai'
+import { getSupportedThinkingLevels } from '@earendil-works/pi-ai'
 import { CURSOR_API, CURSOR_PROVIDER } from '../src/cursor/constants.ts'
 import {
   connectStream,
@@ -587,6 +588,51 @@ describe('cursor models', () => {
       encodeString(1, 'grok-code'),
       encodeString(4, 'Grok Code'),
     )))[0]?.reasoning).toBe(false)
+    expect(getSupportedThinkingLevels(cursorModel('grok-4.6', 'Grok 4.6', true))).toEqual([
+      'low', 'medium', 'high', 'xhigh',
+    ])
+    expect(cursorModel('grok-4.6', 'Grok 4.6', true)).toMatchObject({
+      defaultThinkingLevel: 'high',
+      thinkingLevelMap: { off: null, minimal: null, low: 'low', xhigh: 'xhigh' },
+    })
+    expect(getSupportedThinkingLevels(cursorModel('grok-4.6-fast', 'Grok 4.6 Fast', true))).toEqual([
+      'low', 'medium', 'high', 'xhigh',
+    ])
+    expect(getSupportedThinkingLevels(cursorModel('grok-4.5', 'Grok 4.5', true))).toEqual([
+      'low', 'medium', 'high',
+    ])
+    expect(getSupportedThinkingLevels(cursorModel('gpt-5.4', 'GPT-5.4', true))).toEqual([
+      'off', 'minimal', 'low', 'medium', 'high', 'xhigh',
+    ])
+    expect(cursorModel('gpt-5.4', 'GPT-5.4', true).thinkingLevelMap?.off).toBe('none')
+    expect(getSupportedThinkingLevels(cursorModel('gpt-5', 'GPT-5', true))).toEqual([
+      'off', 'minimal', 'low', 'medium', 'high',
+    ])
+    expect(getSupportedThinkingLevels(cursorModel('claude-4.6-sonnet', 'Sonnet', true))).toEqual([
+      'off', 'low', 'medium', 'high',
+    ])
+    expect(getSupportedThinkingLevels(cursorModel('gemini-3-pro', 'Gemini', true))).toEqual([
+      'minimal', 'low', 'medium', 'high',
+    ])
+    expect(getSupportedThinkingLevels(cursorModel('composer-2.5', 'Composer', true))).toEqual([
+      'low', 'medium', 'high',
+    ])
+    expect(getSupportedThinkingLevels(cursorModel('k3', 'K3', true))).toEqual([
+      'low', 'medium', 'high',
+    ])
+    expect(getSupportedThinkingLevels(cursorModel('kimi-k2.5', 'Kimi', true))).toEqual([
+      'low', 'medium', 'high',
+    ])
+    expect(getSupportedThinkingLevels(cursorModel('glm-5', 'GLM', true))).toEqual([
+      'low', 'high', 'max',
+    ])
+    expect(getSupportedThinkingLevels(cursorModel('grok-code', 'Grok Code', true))).toEqual([
+      'low', 'medium', 'high',
+    ])
+    expect(getSupportedThinkingLevels(cursorModel('mystery', 'Mystery', true))).toEqual([
+      'low', 'medium', 'high',
+    ])
+    expect(cursorModel('plain', 'Plain', false).thinkingLevelMap).toBeUndefined()
   })
 
   it('skips live GetUsableModels when network listing is disabled', async () => {
@@ -667,6 +713,44 @@ describe('cursor request encoding', () => {
     })
     expect(fieldString(decodeFields(encoded), 5)).toBe('conv')
     expect(encodeMcpArgMap({ command: 'ls' }).byteLength).toBeGreaterThan(0)
+    const withEffort = encodeAgentRunRequest({
+      conversationId: 'c',
+      userText: 'hi',
+      modelId: 'grok-4.6',
+      thinking: true,
+      thinkingEffort: 'xhigh',
+    })
+    const details = fieldRepeated(decodeFields(withEffort), 3)[0]
+    const thinking = details === undefined ? undefined : fieldRepeated(decodeFields(details), 2)[0]
+    expect(thinking === undefined ? '' : fieldString(decodeFields(thinking), 1)).toBe('xhigh')
+    const defaultThinking = encodeAgentRunRequest({
+      conversationId: 'c',
+      userText: 'hi',
+      modelId: 'grok-4.6',
+      thinking: true,
+    })
+    const defaultDetails = fieldRepeated(decodeFields(defaultThinking), 3)[0]
+    const emptyThinking = defaultDetails === undefined
+      ? undefined
+      : fieldRepeated(decodeFields(defaultDetails), 2)[0]
+    expect(emptyThinking?.byteLength).toBe(0)
+    const offNamed = encodeAgentRunRequest({
+      conversationId: 'c',
+      userText: 'hi',
+      modelId: 'gpt-5',
+      thinking: true,
+      thinkingEffort: 'off',
+    })
+    const offDetails = fieldRepeated(decodeFields(offNamed), 3)[0]
+    const offThinking = offDetails === undefined ? undefined : fieldRepeated(decodeFields(offDetails), 2)[0]
+    expect(offThinking?.byteLength).toBe(0)
+    expect(encodeAgentRunRequest({
+      conversationId: 'c',
+      userText: 'hi',
+      modelId: 'gpt-5',
+      thinking: false,
+      thinkingEffort: 'low',
+    }).byteLength).toBeGreaterThan(0)
   })
 
   it('flattens image placeholders and empty tool results', () => {
@@ -731,6 +815,31 @@ describe('cursor request encoding', () => {
 })
 
 describe('cursor streamSimple', () => {
+  it('sends the selected thinking effort and omits ThinkingDetails when off', async () => {
+    let captured: Uint8Array | undefined
+    cursorConnectInternals.request = async function* (request) {
+      captured = request.body
+      yield frameConnectMessage(interactionUpdate(14, new Uint8Array()))
+    }
+    await collect(streamCursor(
+      cursorModel('grok-4.6', 'Grok 4.6', true),
+      { messages: [{ role: 'user', content: 'hi', timestamp: 0 }] },
+      { headers: { authorization: 'Bearer tok' }, reasoning: 'low' },
+    ))
+    const details = fieldRepeated(decodeFields(captured ?? new Uint8Array()), 3)[0]
+    const thinking = details === undefined ? undefined : fieldRepeated(decodeFields(details), 2)[0]
+    expect(thinking === undefined ? '' : fieldString(decodeFields(thinking), 1)).toBe('low')
+
+    captured = undefined
+    await collect(streamCursor(
+      cursorModel('gpt-5', 'GPT-5', true),
+      { messages: [{ role: 'user', content: 'hi', timestamp: 0 }] },
+      { headers: { authorization: 'Bearer tok' }, reasoning: 'off' },
+    ))
+    const offDetails = fieldRepeated(decodeFields(captured ?? new Uint8Array()), 3)[0]
+    const offThinking = offDetails === undefined ? undefined : fieldRepeated(decodeFields(offDetails), 2)[0]
+    expect(offThinking).toBeUndefined()
+  })
   it('maps text, thinking, MCP tools, and ignores native exec', async () => {
     const mcp = encodeMessage(15, encodeMessage(1, concat(
       encodeString(1, 'bash'),

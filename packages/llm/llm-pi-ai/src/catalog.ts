@@ -26,6 +26,9 @@ import type {
 import { CURSOR_PROVIDER } from './cursor/constants.ts'
 import { cursorFallbackModels } from './cursor/models.ts'
 import { cursorProvider } from './cursor/provider.ts'
+import { THINKING_LEVELS } from './thinking-levels.ts'
+
+export { THINKING_LEVELS } from './thinking-levels.ts'
 
 /**
  * Pricing for a model the installed catalog does not describe. The harness
@@ -62,25 +65,6 @@ export const MODALITIES = Object.keys(MODALITY_GATE) as readonly PiAiModality[]
 function declaredInput(configured: readonly PiAiModality[] | undefined): Model<Api>['input'] | undefined {
   return configured === undefined || configured.length === 0 ? undefined : [...configured]
 }
-
-/**
- * Every pi-ai thinking level, in pi-ai's canonical escalation order. The
- * `Record` key type is a drift gate: a pi-ai upgrade that adds or removes a
- * level fails compilation here naming the drifted key, instead of silently
- * narrowing what a profile may declare.
- */
-const THINKING_LEVEL_GATE: Record<ModelThinkingLevel, true> = {
-  off: true,
-  minimal: true,
-  low: true,
-  medium: true,
-  high: true,
-  xhigh: true,
-  max: true,
-}
-
-/** Every pi-ai thinking level a profile may declare, in escalation order. */
-export const THINKING_LEVELS = Object.keys(THINKING_LEVEL_GATE) as readonly ModelThinkingLevel[]
 
 /** The `compat.thinkingFormat` spellings pi-ai accepts on an `openai-completions` model. */
 type PiThinkingFormat = NonNullable<OpenAICompletionsCompat['thinkingFormat']>

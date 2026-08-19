@@ -65,6 +65,7 @@ import {
 } from './listing.ts'
 import { CURSOR_PROVIDER } from './cursor/constants.ts'
 import { listCursorModels } from './cursor/models.ts'
+import { advertisedDefaultEffort } from './thinking-levels.ts'
 import { rethrowPiAiError, toStreamChunks } from './stream.ts'
 
 /** One resolution's frozen view: the profiles and the collection built from them. */
@@ -203,13 +204,15 @@ function reasoningInfo(
 ): Pick<LlmResolvedModelInfo, 'reasoning'> | Record<string, never> {
   if (!model.reasoning) return {}
   const levels = getSupportedThinkingLevels(model)
+  const advertised = describableReasoningLevel(model, advertisedDefaultEffort(model))
+  const resolvedDefault = defaultLevel ?? advertised
   return {
     reasoning: {
       efforts: levels.map(level => ({
         id: ReasoningEffortId(level),
         name: `${level.charAt(0).toUpperCase()}${level.slice(1)}`,
       })),
-      ...defaultLevel === undefined ? {} : { defaultEffort: ReasoningEffortId(defaultLevel) },
+      ...resolvedDefault === undefined ? {} : { defaultEffort: ReasoningEffortId(resolvedDefault) },
     },
   }
 }

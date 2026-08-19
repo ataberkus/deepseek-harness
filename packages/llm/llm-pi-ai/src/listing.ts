@@ -4,7 +4,8 @@
  *
  * A catalog OpenRouter route that keeps its installed catalog (no explicit
  * `models` list) overlays the endpoint's current listing onto that catalog:
- * installed ids keep catalog metadata, and tool-capable ids the snapshot does
+ * installed ids keep catalog name and capacities, live `reasoning.supported_efforts`
+ * replaces the snapshot effort map, and tool-capable ids the snapshot does
  * not ship are appended. Overlay is the `openrouter` catalog id, or a listable
  * route whose listing host is `openrouter.ai` / `*.openrouter.ai`. Other
  * catalog endpoints share the inference URL and are not listed. An explicit
@@ -23,27 +24,22 @@
 import { LlmError } from '@deepseek-ai/dsh-llm'
 import type { LlmDiscoveredModel } from '@deepseek-ai/dsh-llm'
 import { attributionHeaders } from '@deepseek-ai/dsh-llm'
-import type { Api, Model, ThinkingLevelMap } from '@earendil-works/pi-ai'
+import type { Api, Model, ModelThinkingLevel, ThinkingLevelMap } from '@earendil-works/pi-ai'
 import { catalogModels, catalogProvider } from './catalog.ts'
+import { attachThinking, openRouterThinkingFromListing, thinkingLevelMapFromOffered } from './thinking-levels.ts'
 
 /**
  * One listing row plus OpenRouter capability flags the wire discovery view
  * does not carry. `reasoning` is set only when the endpoint named a reasoning
- * parameter; absence means the overlay must not invent a selector.
+ * parameter or a `reasoning` object with selectable efforts.
  */
 export interface ListedModel extends LlmDiscoveredModel {
   /** Whether this id disclosed a selectable reasoning parameter. */
   reasoning?: boolean
-}
-
-/**
- * OpenRouter effort map for a live-only reasoning model. Catalog ids keep
- * their installed map; this is only for ids the snapshot does not ship.
- */
-const OPENROUTER_LIVE_THINKING: ThinkingLevelMap = {
-  low: 'low',
-  medium: 'medium',
-  high: 'high',
+  /** Exact effort map when the listing named one; overlay copies it onto the model. */
+  thinkingLevelMap?: ThinkingLevelMap
+  /** Listing `default_effort` when it is one of the offered levels. */
+  defaultEffort?: ModelThinkingLevel
 }
 
 /** OpenRouter `supported_parameters` values that mean the model takes an effort. */
@@ -88,6 +84,8 @@ interface ListingEntry {
   architecture?: unknown
   top_provider?: unknown
   supported_parameters?: unknown
+  /** OpenRouter per-model effort object; absent from generic OpenAI listings. */
+  reasoning?: unknown
 }
 
 /** Injectable listing HTTP so tests pin loopback servers without hitting provider APIs. */
@@ -309,13 +307,17 @@ export function readListing(body: unknown): ListedModel[] {
       topProvider?.['max_completion_tokens'],
       architecture?.['output_length'],
     )
-    const reasoning = listingRowSupportsReasoning(entry)
+    const thinking = openRouterThinkingFromListing(entry.reasoning, listingRowSupportsReasoning(entry))
     models.push({
       id,
       ...name === undefined ? {} : { name },
       ...contextWindow === undefined ? {} : { contextWindow },
       ...maxTokens === undefined ? {} : { maxTokens },
-      ...reasoning ? { reasoning: true } : {},
+      ...thinking === undefined ? {} : {
+        reasoning: true,
+        thinkingLevelMap: thinking.map,
+        ...thinking.defaultEffort === undefined ? {} : { defaultEffort: thinking.defaultEffort },
+      },
     })
   }
   return models
@@ -448,11 +450,12 @@ export function discoveredFromListing(row: LlmDiscoveredModel): LlmDiscoveredMod
 
 /**
  * Overlay a live listing onto installed pi-ai models so the picker and the
- * request path share one catalog. Known ids keep the installed descriptor;
- * live-only ids clone the first installed model's protocol and endpoint.
- * A live-only id that disclosed a reasoning parameter is marked reasoning
- * with the OpenRouter effort map; others stay non-reasoning so the composer
- * does not offer a selector the endpoint cannot honour.
+ * request path share one catalog. Known ids keep the installed descriptor
+ * except a live effort map replaces the snapshot map. Live-only ids clone
+ * the first installed model's protocol and endpoint. A live-only id that
+ * disclosed selectable efforts is marked reasoning with that map; others
+ * stay non-reasoning so the composer does not offer a selector the endpoint
+ * cannot honour.
  * @param installed - models the route already serves.
  * @param live - tool-filtered listing rows.
  * @param fallback - capacities for a live-only id the listing did not size.
@@ -465,22 +468,45 @@ export function overlayLiveCatalogModels(
 ): Model<Api>[] {
   const template = installed[0]
   if (template === undefined) return []
-  const seen = new Set(installed.map(model => model.id))
-  const extra: Model<Api>[] = []
+  const liveById = new Map(live.map(row => [row.id, row]))
+  const seen = new Set<string>()
+  const merged: Model<Api>[] = []
+  for (const model of installed) {
+    seen.add(model.id)
+    merged.push(applyLiveThinking(model, liveById.get(model.id)))
+  }
   for (const row of live) {
     if (seen.has(row.id)) continue
     seen.add(row.id)
     const { thinkingLevelMap: _catalogMap, ...rest } = template
-    extra.push({
+    const created: Model<Api> = {
       ...rest,
       id: row.id,
       name: row.name ?? row.id,
       reasoning: row.reasoning === true,
-      ...row.reasoning === true ? { thinkingLevelMap: OPENROUTER_LIVE_THINKING } : {},
       contextWindow: row.contextWindow ?? fallback.contextWindow,
       maxTokens: row.maxTokens ?? fallback.maxTokens,
       input: ['text'],
-    })
+    }
+    merged.push(applyLiveThinking(created, row))
   }
-  return [...installed, ...extra]
+  return merged
+}
+
+/**
+ * Copy a listing row's effort map onto a served model. Absence leaves the
+ * installed snapshot map in place; a live map replaces it so DeepSeek and
+ * Grok ids do not keep a stale catalog offer.
+ * @param model - installed or cloned descriptor.
+ * @param row - matching listing row, when any.
+ * @returns the model, or a copy with the live map.
+ */
+function applyLiveThinking(model: Model<Api>, row: ListedModel | undefined): Model<Api> {
+  if (row?.thinkingLevelMap !== undefined) {
+    return attachThinking(model, row.thinkingLevelMap, row.defaultEffort)
+  }
+  if (row?.reasoning === true) {
+    return attachThinking(model, thinkingLevelMapFromOffered(['low', 'medium', 'high']))
+  }
+  return model
 }

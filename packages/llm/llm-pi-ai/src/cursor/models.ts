@@ -4,7 +4,7 @@
  * @module dsh-llm-pi-ai/cursor/models
  */
 
-import type { Api, Model } from '@earendil-works/pi-ai'
+import type { Api, Model, ModelThinkingLevel } from '@earendil-works/pi-ai'
 import {
   CURSOR_API,
   CURSOR_BASE_URL,
@@ -18,6 +18,7 @@ import {
   fieldRepeated,
   fieldString,
 } from './protobuf.ts'
+import { attachThinking, thinkingLevelMapFromOffered } from '../thinking-levels.ts'
 
 const NO_COST = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }
 
@@ -91,7 +92,7 @@ export function cursorModel(
   reasoning: boolean,
   contextWindow: number = CURSOR_DEFAULT_CONTEXT_WINDOW,
 ): Model<Api> {
-  return {
+  const model: Model<Api> = {
     id,
     name,
     api: CURSOR_API,
@@ -103,6 +104,68 @@ export function cursorModel(
     contextWindow,
     maxTokens: CURSOR_DEFAULT_MAX_TOKENS,
   }
+  if (!reasoning) return model
+  const spec = cursorThinkingSpec(id)
+  return attachThinking(
+    model,
+    thinkingLevelMapFromOffered(spec.efforts, spec.offWire),
+    spec.defaultEffort,
+  )
+}
+
+interface CursorThinkingSpec {
+  efforts: readonly ModelThinkingLevel[]
+  defaultEffort: ModelThinkingLevel
+  offWire?: string
+}
+
+/**
+ * Documented Cursor family effort lists. GetUsableModels `ThinkingDetails` is
+ * a presence flag with no effort names, so the picker cannot read them live.
+ * @param id - Cursor model id, including `-fast` siblings.
+ * @returns offered levels; unknown reasoning ids get `low`/`medium`/`high`.
+ */
+function cursorThinkingSpec(id: string): CursorThinkingSpec {
+  const bare = id.replace(/-fast$/i, '').toLowerCase()
+  if (bare.includes('grok-code')) {
+    return { efforts: ['low', 'medium', 'high'], defaultEffort: 'high' }
+  }
+  if (bare.includes('grok-4.6')) {
+    return { efforts: ['low', 'medium', 'high', 'xhigh'], defaultEffort: 'high' }
+  }
+  if (bare.includes('grok')) {
+    return { efforts: ['low', 'medium', 'high'], defaultEffort: 'high' }
+  }
+  if (bare.includes('gpt-5.4')) {
+    return {
+      efforts: ['off', 'minimal', 'low', 'medium', 'high', 'xhigh'],
+      defaultEffort: 'medium',
+      offWire: 'none',
+    }
+  }
+  if (/gpt-|codex/.test(bare)) {
+    return {
+      efforts: ['off', 'minimal', 'low', 'medium', 'high'],
+      defaultEffort: 'medium',
+      offWire: 'none',
+    }
+  }
+  if (/claude|opus|sonnet|haiku/.test(bare)) {
+    return { efforts: ['off', 'low', 'medium', 'high'], defaultEffort: 'high' }
+  }
+  if (bare.includes('gemini')) {
+    return { efforts: ['minimal', 'low', 'medium', 'high'], defaultEffort: 'high' }
+  }
+  if (bare.includes('kimi') || /(^|\/)k3$/.test(bare)) {
+    return { efforts: ['low', 'medium', 'high'], defaultEffort: 'high' }
+  }
+  if (bare.includes('glm')) {
+    return { efforts: ['low', 'high', 'max'], defaultEffort: 'high' }
+  }
+  if (bare.includes('composer')) {
+    return { efforts: ['low', 'medium', 'high'], defaultEffort: 'high' }
+  }
+  return { efforts: ['low', 'medium', 'high'], defaultEffort: 'high' }
 }
 
 /** Injectable listing so tests never hit Cursor. */

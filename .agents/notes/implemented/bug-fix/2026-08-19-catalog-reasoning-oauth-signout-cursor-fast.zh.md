@@ -16,13 +16,13 @@ Cursor 登录成功后仍会漏掉 Grok 4.6 与 Fast SKU。捆绑 fallback 是�
 
 ## 决策
 
-OpenRouter 实时叠加读取 `supported_parameters`。仅实时 id 若点名 `reasoning` 或 `reasoning_effort`，会被标为具备推理能力，并带上 OpenRouter 映射 `{ low, medium, high }`。其余仅实时 id 仍不具备推理能力。已安装 catalog id 保留快照映射。发现回复仍省略 `reasoning`，因此 `llm.discoverModels` 只携带 id／名称／容量。[OpenRouter 实时叠加](../feature/2026-08-18-openrouter-live-catalog.md) 拥有这份并集；本笔记拥有推理标志。
+OpenRouter 实时叠加在 `supported_parameters` 点名 `reasoning` 或 `reasoning_effort`，或 listing 携带带有可选档位的 `reasoning` 对象时，把该行标为具备推理。档位名与公布的默认值来自该对象，已安装 id 也一样；[按模型的 listing 档位](2026-08-19-per-model-listing-reasoning-efforts.md) 拥有这份映射。其余仅实时 id 仍不具备推理能力。发现回复仍省略 `reasoning`，因此 `llm.discoverModels` 只携带 id／名称／容量。[OpenRouter 实时叠加](../feature/2026-08-18-openrouter-live-catalog.md) 拥有这份并集；本笔记拥有推理标志。
 
 `LlmAdapter.logout`／`LlmRuntime.logout`／`llm.logout` 通过与 `/logout` 相同的 `logoutHostedOAuth` 路径删除托管 OAuth 凭据。模型页上 `auth: oauth` 行的删除会先确认，再调用该 RPC 并重新加载。它不走 `settings.mutate`。[Codex](../feature/2026-08-18-openai-codex-oauth-host.md) 与 [Cursor](../feature/2026-08-18-cursor-oauth-host.md) 登录仍只走命令；本笔记补的是断开，不是 Sign-in。「获取可用模型」沿用同一份叠加，并加上搜索框，以及针对**已过滤**候选列表的全选／取消全选。
 
 composer 选择器在点击后立即回显：`ModelDirectory.select` 在 `session.selectModel` 返回前写入 `current`，菜单在提交时关闭。Host 拒绝则恢复上一次 current。`PiAiAdapter` 按 snapshot 记住实时叠加，因此 `session.models` 不会为每个已公布 id 再重建一遍 OpenRouter 列表。已经有 groups 的选择器在 catalog 刷新期间保持 `ready`。
 
-Cursor 列表以实时为准：GetUsableModels 描述在 id 冲突时胜出，捆绑 fallback 补上回复遗漏的已记录 id（含 `grok-4.6`／`grok-4.6-fast` 以及 Cursor 提供的其他 Fast SKU），且 `withFastVariants` 只在 fallback 表里有该 id 时才补 `{id}-fast`。不会合成 `gpt-5.4-fast` 这类未记录 Fast id。推理先看 thinking details，再看 fallback 行，再看 id／名称标记（`grok`、`claude`、`gpt-`、`composer`……），`grok-code` 除外。
+Cursor 列表以实时为准：GetUsableModels 描述在 id 冲突时胜出，捆绑 fallback 补上回复遗漏的已记录 id（含 `grok-4.6`／`grok-4.6-fast` 以及 Cursor 提供的其他 Fast SKU），且 `withFastVariants` 只在 fallback 表里有该 id 时才补 `{id}-fast`。不会合成 `gpt-5.4-fast` 这类未记录 Fast id。推理先看 thinking details，再看 fallback 行，再看 id／名称标记（`grok`、`claude`、`gpt-`、`composer`……），`grok-code` 除外。具备推理的 id 上的家族档位映射由[按模型的 listing 档位](2026-08-19-per-model-listing-reasoning-efforts.md)拥有。
 
 ## 考虑过的替代方案
 
@@ -38,8 +38,8 @@ Cursor 列表以实时为准：GetUsableModels 描述在 id 冲突时胜出，�
 
 ## 后果
 
-新列入的 OpenRouter 推理模型会在 composer 上显示档位控件，无需 `settings.yaml` 的 `models` 条目。从设置 → 模型退出 Codex 或 Cursor 登录会注销 live 路由。大型 OpenRouter catalog 上的 Fetch 可搜索。即便 GetUsableModels 遗漏，Cursor 登录也会列出 Grok 4.6 与已记录 Fast 变体。仅实时 OpenRouter id 仍不声称具备图片输入。模型或档位点击会在 Host 往返结束前更新 composer 座位。
+新列入的 OpenRouter 推理模型会在 composer 上显示档位控件，无需 `settings.yaml` 的 `models` 条目；出现哪些档位由[按模型的 listing 档位](2026-08-19-per-model-listing-reasoning-efforts.md)拥有。从设置 → 模型退出 Codex 或 Cursor 登录会注销 live 路由。大型 OpenRouter catalog 上的 Fetch 可搜索。即便 GetUsableModels 遗漏，Cursor 登录也会列出 Grok 4.6 与已记录 Fast 变体。仅实时 OpenRouter id 仍不声称具备图片输入。模型或档位点击会在 Host 往返结束前更新 composer 座位。
 
 ## 测试
 
-`packages/llm/llm-pi-ai/tests/listing.spec.ts` 与 `live-catalog.spec.ts` 钉住仅实时推理叠加、`resolveModelInfo` 档位，以及 listModels 后逐 id resolve 不再二次 GET。`tests/cursor.spec.ts` 钉住 fallback id、实时优先合并、仅已记录 Fast，以及推断出的推理。`packages/llm/llm/tests/service.spec.ts` 钉住默认 `UNSUPPORTED_OPTION` 以及适配器拥有的 logout。`packages/host/apiproxy/tests` 钉住 `llm.logout` 往返与 `oauth-logout-failed`。`packages/client/ui-settings-models/tests` 钉住删除登录以及 Fetch 的搜索／全选。`packages/client/ui-model-selection/tests` 钉住选择器在 Host 应答前关闭菜单，以及 `ModelDirectory` 的乐观回显与拒绝回滚。
+`packages/llm/llm-pi-ai/tests/listing.spec.ts` 与 `live-catalog.spec.ts` 钉住仅实时推理叠加、`resolveModelInfo` 档位，以及 listModels 后逐 id resolve 不再二次 GET。`tests/cursor.spec.ts` 钉住 fallback id、实时优先合并、仅已记录 Fast，以及推断出的推理。档位名映射由[按模型的 listing 档位](2026-08-19-per-model-listing-reasoning-efforts.md)拥有。`packages/llm/llm/tests/service.spec.ts` 钉住默认 `UNSUPPORTED_OPTION` 以及适配器拥有的 logout。`packages/host/apiproxy/tests` 钉住 `llm.logout` 往返与 `oauth-logout-failed`。`packages/client/ui-settings-models/tests` 钉住删除登录以及 Fetch 的搜索／全选。`packages/client/ui-model-selection/tests` 钉住选择器在 Host 应答前关闭菜单，以及 `ModelDirectory` 的乐观回显与拒绝回滚。

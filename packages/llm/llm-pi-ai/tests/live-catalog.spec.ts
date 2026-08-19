@@ -106,13 +106,42 @@ describe('live catalog overlay', () => {
     await ctx.plugin(LlmPiAi, { providers: { openrouter: { baseURL: server.url } } })
 
     const resolved = await ctx.llm.resolveModelInfo('openrouter', 'deepseek/deepseek-flash')
-    expect(resolved.reasoning?.efforts.map(effort => effort.id)).toEqual(
-      expect.arrayContaining([
-        ReasoningEffortId('low'),
-        ReasoningEffortId('medium'),
-        ReasoningEffortId('high'),
-      ]),
-    )
+    expect(resolved.reasoning?.efforts.map(effort => effort.id)).toEqual([
+      ReasoningEffortId('low'),
+      ReasoningEffortId('medium'),
+      ReasoningEffortId('high'),
+    ])
+  })
+
+  it('uses OpenRouter supported_efforts and default_effort for a live DeepSeek id', async () => {
+    const catalog = getBuiltinModels('openrouter')
+    const known = catalog[0]
+    if (known === undefined) throw new Error('expected an OpenRouter catalog model')
+    const server = await listingServer({
+      data: [
+        { id: known.id, supported_parameters: ['tools'] },
+        {
+          id: 'deepseek/deepseek-v4-flash',
+          name: 'DeepSeek V4 Flash',
+          supported_parameters: ['tools', 'reasoning', 'reasoning_effort'],
+          reasoning: {
+            mandatory: false,
+            supported_efforts: ['xhigh', 'high'],
+            default_effort: 'high',
+          },
+        },
+      ],
+    })
+    const ctx = new Context()
+    await ctx.plugin(LlmRuntime)
+    await ctx.plugin(LlmPiAi, { providers: { openrouter: { baseURL: server.url } } })
+
+    const resolved = await ctx.llm.resolveModelInfo('openrouter', 'deepseek/deepseek-v4-flash')
+    expect(resolved.reasoning?.efforts.map(effort => effort.id)).toEqual([
+      ReasoningEffortId('high'),
+      ReasoningEffortId('xhigh'),
+    ])
+    expect(resolved.reasoning?.defaultEffort).toBe(ReasoningEffortId('high'))
   })
 
   it('does not overlay when the profile names an explicit models list', async () => {

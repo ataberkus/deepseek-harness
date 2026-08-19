@@ -41,8 +41,10 @@ export interface AgentRunEncodeInput {
   tools?: readonly Tool[]
   /** When true, set ModelDetails.max_mode. */
   maxMode?: boolean
-  /** When true, include an empty ThinkingDetails so Cursor enables thinking. */
+  /** When true, include ThinkingDetails so Cursor enables thinking. */
   thinking?: boolean
+  /** Canonical effort sent inside ThinkingDetails when thinking is on. */
+  thinkingEffort?: string
 }
 
 /**
@@ -53,7 +55,7 @@ export interface AgentRunEncodeInput {
 export function encodeAgentRunRequest(input: AgentRunEncodeInput): Uint8Array {
   const modelDetails = concat(
     encodeString(1, input.modelId),
-    input.thinking === true ? encodeEmptyMessage(2) : new Uint8Array(),
+    encodeThinkingDetails(input.thinking === true, input.thinkingEffort),
     encodeString(4, input.modelName ?? input.modelId),
     encodeBool(7, input.maxMode === true),
   )
@@ -169,6 +171,19 @@ export function encodeMcpArgMap(args: Readonly<Record<string, unknown>>): Uint8A
  */
 export function streamMaxMode(options: SimpleStreamOptions | undefined): boolean {
   return options?.reasoning === 'max' || options?.reasoning === 'xhigh'
+}
+
+/**
+ * ThinkingDetails for one run: an empty message enables thinking at Cursor's
+ * default, and a named effort is field 1 inside that message.
+ * @param thinking - whether the model should think.
+ * @param effort - canonical effort; omitted or `off` sends no field 1.
+ * @returns ModelDetails field 2, or empty when thinking is off.
+ */
+function encodeThinkingDetails(thinking: boolean, effort: string | undefined): Uint8Array {
+  if (!thinking) return new Uint8Array()
+  if (effort === undefined || effort === 'off') return encodeEmptyMessage(2)
+  return encodeMessage(2, encodeString(1, effort))
 }
 
 function encodeUserMessage(text: string): Uint8Array {
