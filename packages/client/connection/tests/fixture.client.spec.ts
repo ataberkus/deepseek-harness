@@ -156,6 +156,9 @@ describe('createFixtureApi', () => {
           outputTokens: 0,
           cacheReadTokens: 0,
           cacheWriteTokens: 0,
+          estimatedCostUsd: 0,
+          unpricedSteps: 0,
+          approximateSteps: 0,
         },
         // No request ran, so neither pressure nor capacity is known yet.
         contextPressure: {},

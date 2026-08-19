@@ -124,6 +124,9 @@ export interface FinishReasonMap {
 /** Any known finish reason, derived from {@link FinishReasonMap}; switch on `kind` and fall through unknowns (merge-extensible). */
 export type FinishReason = FinishReasonMap[keyof FinishReasonMap]
 
+/** Basis for a recorded per-call USD estimate. */
+export type TokenCostBasis = 'reported-usage' | 'estimated-input'
+
 /**
  * Token accounting for one model call (cache fields are optional).
  *
@@ -138,6 +141,14 @@ export interface TokenUsage {
   cacheReadTokens?: number
   cacheWriteTokens?: number
   reasoningTokens?: number
+  /**
+   * USD estimate for this call, when the provider/model rate and required
+   * token buckets are known. Historical sessions retain this value rather
+   * than recalculating it from current pricing.
+   */
+  estimatedCostUsd?: number
+  /** Whether the estimate used complete provider usage or an input approximation. */
+  costBasis?: TokenCostBasis
 }
 
 /** Display metadata for one registered provider route. */

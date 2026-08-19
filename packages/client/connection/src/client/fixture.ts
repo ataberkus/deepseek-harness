@@ -814,6 +814,9 @@ interface FixtureTokenUsageProjection {
   outputTokens: number
   cacheReadTokens: number
   cacheWriteTokens: number
+  estimatedCostUsd: number
+  unpricedSteps: number
+  approximateSteps: number
 }
 
 interface FixtureUsageSample {
@@ -850,6 +853,9 @@ function tokenUsageOf(log: readonly SessionEvent[]): FixtureTokenUsageProjection
     outputTokens: 0,
     cacheReadTokens: 0,
     cacheWriteTokens: 0,
+    estimatedCostUsd: 0,
+    unpricedSteps: 0,
+    approximateSteps: 0,
   }
   let last: {
     turn: number
@@ -864,6 +870,13 @@ function tokenUsageOf(log: readonly SessionEvent[]): FixtureTokenUsageProjection
       outputTokens: sample.usage.outputTokens,
       cacheReadTokens: sample.usage.cacheReadTokens ?? 0,
       cacheWriteTokens: sample.usage.cacheWriteTokens ?? 0,
+      estimatedCostUsd: sample.usage.estimatedCostUsd ?? 0,
+      unpricedSteps: sample.usage.estimatedCostUsd === undefined
+        && sample.usage.inputTokens + sample.usage.outputTokens
+          + (sample.usage.cacheReadTokens ?? 0) + (sample.usage.cacheWriteTokens ?? 0) > 0
+        ? 1
+        : 0,
+      approximateSteps: sample.usage.costBasis === 'estimated-input' ? 1 : 0,
     }
     const previous = last?.turn === sample.turn && last.step === sample.step
       ? last.buckets
@@ -872,6 +885,9 @@ function tokenUsageOf(log: readonly SessionEvent[]): FixtureTokenUsageProjection
     totals.outputTokens += buckets.outputTokens - (previous?.outputTokens ?? 0)
     totals.cacheReadTokens += buckets.cacheReadTokens - (previous?.cacheReadTokens ?? 0)
     totals.cacheWriteTokens += buckets.cacheWriteTokens - (previous?.cacheWriteTokens ?? 0)
+    totals.estimatedCostUsd += buckets.estimatedCostUsd - (previous?.estimatedCostUsd ?? 0)
+    totals.unpricedSteps += buckets.unpricedSteps - (previous?.unpricedSteps ?? 0)
+    totals.approximateSteps += buckets.approximateSteps - (previous?.approximateSteps ?? 0)
     last = { turn: sample.turn, step: sample.step, buckets }
   }
   return totals

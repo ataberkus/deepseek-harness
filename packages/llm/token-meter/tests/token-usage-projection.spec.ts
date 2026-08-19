@@ -14,6 +14,9 @@ const ZERO: TokenUsageProjection = {
   outputTokens: 0,
   cacheReadTokens: 0,
   cacheWriteTokens: 0,
+  estimatedCostUsd: 0,
+  unpricedSteps: 0,
+  approximateSteps: 0,
 }
 
 async function harness(): Promise<{
@@ -120,8 +123,51 @@ describe('tokenUsage session projection', () => {
       outputTokens: 4,
       cacheReadTokens: 7,
       cacheWriteTokens: 2,
+      estimatedCostUsd: 0,
+      unpricedSteps: 1,
+      approximateSteps: 0,
     })
     expect(changes).toHaveLength(1)
+  })
+
+  it('accumulates estimated cost and marks missing or approximate pricing per step', async () => {
+    const { ctx, session } = await harness()
+    startStep(session, 1, 1)
+    const priced = usageChunk(session, {
+      inputTokens: 10,
+      outputTokens: 4,
+      estimatedCostUsd: 0.0123,
+      costBasis: 'reported-usage',
+    }, 1, 1)
+    finalUsage(session, {
+      inputTokens: 10,
+      outputTokens: 4,
+      estimatedCostUsd: 0.0123,
+      costBasis: 'reported-usage',
+    }, 1, 1, [priced])
+
+    startStep(session, 1, 2)
+    const approximate = usageChunk(session, {
+      inputTokens: 20,
+      outputTokens: 5,
+      estimatedCostUsd: 0.004,
+      costBasis: 'estimated-input',
+    }, 1, 2)
+    finalUsage(session, {
+      inputTokens: 20,
+      outputTokens: 5,
+      estimatedCostUsd: 0.004,
+      costBasis: 'estimated-input',
+    }, 1, 2, [approximate])
+
+    startStep(session, 1, 3)
+    usageChunk(session, { inputTokens: 30, outputTokens: 6 }, 1, 3)
+
+    expect(projected(ctx, session)).toMatchObject({
+      unpricedSteps: 1,
+      approximateSteps: 1,
+    })
+    expect(projected(ctx, session).estimatedCostUsd).toBeCloseTo(0.0163)
   })
 
   it('replaces an earlier same-step chunk sample with the final usage', async () => {
@@ -144,6 +190,9 @@ describe('tokenUsage session projection', () => {
       outputTokens: 5,
       cacheReadTokens: 8,
       cacheWriteTokens: 1,
+      estimatedCostUsd: 0,
+      unpricedSteps: 1,
+      approximateSteps: 0,
     })
   })
 
@@ -181,6 +230,9 @@ describe('tokenUsage session projection', () => {
       outputTokens: 15,
       cacheReadTokens: 2,
       cacheWriteTokens: 4,
+      estimatedCostUsd: 0,
+      unpricedSteps: 2,
+      approximateSteps: 0,
     })
   })
 
@@ -194,6 +246,9 @@ describe('tokenUsage session projection', () => {
       outputTokens: 1,
       cacheReadTokens: 0,
       cacheWriteTokens: 0,
+      estimatedCostUsd: 0,
+      unpricedSteps: 1,
+      approximateSteps: 0,
     })
   })
 
@@ -220,6 +275,9 @@ describe('tokenUsage session projection', () => {
       outputTokens: 3,
       cacheReadTokens: 0,
       cacheWriteTokens: 0,
+      estimatedCostUsd: 0,
+      unpricedSteps: 1,
+      approximateSteps: 0,
     })
   })
 
@@ -240,6 +298,9 @@ describe('tokenUsage session projection', () => {
       outputTokens: 2,
       cacheReadTokens: 5,
       cacheWriteTokens: 0,
+      estimatedCostUsd: 0,
+      unpricedSteps: 1,
+      approximateSteps: 0,
     })
   })
 })
