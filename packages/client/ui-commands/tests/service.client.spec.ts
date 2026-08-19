@@ -897,12 +897,12 @@ describe('openai-codex login tab', () => {
     vi.stubGlobal('window', { open })
     const { source, warm, executeCalls } = await loginBench()
     await warm(proj('s1'))
-    await source.matchEnter!(proj('s1'), '/plan', new AbortController().signal)
+    await source.matchEnter!(proj('s1'), '/plan', new AbortController().signal, { images: 0 })
     await submitLogin(source, 'anthropic')
     expect(open).not.toHaveBeenCalled()
     expect(executeCalls).toEqual([
-      { sessionId: sid('s1'), line: '/plan' },
-      { sessionId: sid('s1'), line: '/login anthropic' },
+      { sessionId: sid('s1'), line: '/plan', images: [] },
+      { sessionId: sid('s1'), line: '/login anthropic', images: [] },
     ])
   })
 

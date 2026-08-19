@@ -102,7 +102,7 @@ describe('ModelsSettingsStore', () => {
   })
 
   it('treats an OAuth live route as configured without a settings address', async () => {
-    const { face, seenRefs } = api({
+    const { face, mirror, seenRefs } = api({
       providers: () => Promise.resolve(ok({
         providers: [
           ...DIRECTORY,
@@ -118,7 +118,7 @@ describe('ModelsSettingsStore', () => {
         ],
       })),
     })
-    const store = new ModelsSettingsStore(face)
+    const store = new ModelsSettingsStore(face, settingsSchema, mirror)
     await store.load()
     const byProvider = new Map(store.store.getSnapshot().rows.map(row => [row.entry.provider, row]))
     expect(byProvider.get('ghost')).toMatchObject({ configured: false, removable: false })
