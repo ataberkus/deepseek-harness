@@ -38,7 +38,7 @@ Cursor 列表以实时为准：GetUsableModels 描述在 id 冲突时胜出，�
 
 ## 后果
 
-新列入的 OpenRouter 推理模型会在 composer 上显示档位控件，无需 `settings.yaml` 的 `models` 条目。从设置 → 模型退出 Codex 或 Cursor 登录会注销 live 路由。大型 OpenRouter catalog 上的 Fetch 可搜索。即便 GetUsableModels 遗漏，Cursor 登录也会列出 Grok 4.6 与已记录 Fast 变体。仅实时 OpenRouter id 仍不声称具备图片输入。模型或档位点击会在 Host 往返结束前更新 composer 座位。
+新列入的 OpenRouter 推理模型会在 composer 上显示档位控件，无需 `settings.yaml` 的 `models` 条目。从设置 → 模型退出 Codex 或 Cursor 登录会注销 live 路由。大型 OpenRouter catalog 上的 Fetch 可搜索。即便 GetUsableModels 遗漏，Cursor 登录也会列出 Grok 4.6 与已记录 Fast 变体。[图片模态](2026-08-19-cursor-openrouter-image-modalities.md) 拥有仅实时 OpenRouter id 与托管 Cursor 聊天家族的图片输入。模型或档位点击会在 Host 往返结束前更新 composer 座位。
 
 ## 测试
 

@@ -38,7 +38,7 @@ Cursor listing is live-first: GetUsableModels descriptors win on id collision, t
 
 ## Consequences
 
-A newly listed OpenRouter reasoning model shows the composer effort control without a `settings.yaml` `models` entry. Signing out of Codex or Cursor from Settings → Models unregisters the live route. Fetch on a large OpenRouter catalog is searchable. Cursor login lists Grok 4.6 and documented Fast variants even when GetUsableModels omits them. Image input on live-only OpenRouter ids remains unclaimed. A model or effort click updates the composer seat before the Host round trip finishes.
+A newly listed OpenRouter reasoning model shows the composer effort control without a `settings.yaml` `models` entry. Signing out of Codex or Cursor from Settings → Models unregisters the live route. Fetch on a large OpenRouter catalog is searchable. Cursor login lists Grok 4.6 and documented Fast variants even when GetUsableModels omits them. Image input on live-only OpenRouter ids and hosted Cursor chat families is owned by [vision modalities](2026-08-19-cursor-openrouter-image-modalities.md). A model or effort click updates the composer seat before the Host round trip finishes.
 
 ## Testing
 

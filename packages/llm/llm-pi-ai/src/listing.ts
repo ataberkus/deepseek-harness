@@ -29,11 +29,14 @@ import { catalogModels, catalogProvider } from './catalog.ts'
 /**
  * One listing row plus OpenRouter capability flags the wire discovery view
  * does not carry. `reasoning` is set only when the endpoint named a reasoning
- * parameter; absence means the overlay must not invent a selector.
+ * parameter; `input` is set only when the listing disclosed image input.
+ * Absence means the overlay must not invent a selector or an image claim.
  */
 export interface ListedModel extends LlmDiscoveredModel {
   /** Whether this id disclosed a selectable reasoning parameter. */
   reasoning?: boolean
+  /** Request modalities when the listing disclosed image input. */
+  input?: Model<Api>['input']
 }
 
 /**
@@ -261,6 +264,28 @@ function listingRowSupportsTools(entry: ListingEntry): boolean {
 }
 
 /**
+ * Whether one listing row disclosed image input. OpenRouter names that in
+ * `architecture.input_modalities` or `architecture.modality` (`text+image->text`).
+ * Listings that omit architecture (generic OpenAI `GET /models`) do not claim
+ * image — inventing it would admit an attachment the endpoint then rejects.
+ * @param architecture - parsed `architecture` object, when any.
+ * @returns whether the overlay should mark the model as taking images.
+ */
+function listingRowSupportsImage(architecture: Record<string, unknown> | undefined): boolean {
+  if (architecture === undefined) return false
+  const declared = architecture['input_modalities']
+  if (Array.isArray(declared)) {
+    return declared.some(value => typeof value === 'string' && value.toLowerCase() === 'image')
+  }
+  const modality = architecture['modality']
+  if (typeof modality !== 'string') return false
+  const arrow = modality.indexOf('->')
+  const left = arrow === -1 ? modality : modality.slice(0, arrow)
+  const inputs = left.split('+').map(part => part.trim().toLowerCase())
+  return inputs.includes('image')
+}
+
+/**
  * Whether one listing row disclosed a selectable reasoning parameter.
  * Listings that omit `supported_parameters` (generic OpenAI `GET /models`)
  * do not claim reasoning — inventing a selector would offer levels the
@@ -310,12 +335,14 @@ export function readListing(body: unknown): ListedModel[] {
       architecture?.['output_length'],
     )
     const reasoning = listingRowSupportsReasoning(entry)
+    const image = listingRowSupportsImage(architecture)
     models.push({
       id,
       ...name === undefined ? {} : { name },
       ...contextWindow === undefined ? {} : { contextWindow },
       ...maxTokens === undefined ? {} : { maxTokens },
       ...reasoning ? { reasoning: true } : {},
+      ...image ? { input: ['text', 'image'] } : {},
     })
   }
   return models
@@ -413,7 +440,7 @@ async function readListingFromNetwork(
  * Merge an installed catalog's discovered rows with a live listing. Installed
  * ids keep catalog name and capacities (a listing rarely matches those);
  * live-only ids append in listing order. Listing-only flags such as
- * `reasoning` are dropped so a discovery reply stays `LlmDiscoveredModel`.
+ * `reasoning` and `input` are dropped so a discovery reply stays `LlmDiscoveredModel`.
  * @param installed - catalog rows in catalog order.
  * @param live - tool-filtered listing rows.
  * @returns the union, catalog ids first.
@@ -452,7 +479,9 @@ export function discoveredFromListing(row: LlmDiscoveredModel): LlmDiscoveredMod
  * live-only ids clone the first installed model's protocol and endpoint.
  * A live-only id that disclosed a reasoning parameter is marked reasoning
  * with the OpenRouter effort map; others stay non-reasoning so the composer
- * does not offer a selector the endpoint cannot honour.
+ * does not offer a selector the endpoint cannot honour. A live-only id that
+ * disclosed image input is marked `[text, image]`; others stay text-only so
+ * the harness does not admit an attachment the endpoint then rejects.
  * @param installed - models the route already serves.
  * @param live - tool-filtered listing rows.
  * @param fallback - capacities for a live-only id the listing did not size.
@@ -479,7 +508,7 @@ export function overlayLiveCatalogModels(
       ...row.reasoning === true ? { thinkingLevelMap: OPENROUTER_LIVE_THINKING } : {},
       contextWindow: row.contextWindow ?? fallback.contextWindow,
       maxTokens: row.maxTokens ?? fallback.maxTokens,
-      input: ['text'],
+      input: row.input ?? ['text'],
     })
   }
   return [...installed, ...extra]
