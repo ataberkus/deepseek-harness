@@ -10,7 +10,7 @@ import { Context } from '@deepseek-ai/cordis'
 import AgentRegistry, { agentEvents } from '@deepseek-ai/dsh-agent'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import AttachmentStore from '@deepseek-ai/dsh-attachment'
-import LlmRuntime, { LlmAdapter, ReasoningEffortId } from '@deepseek-ai/dsh-llm'
+import LlmRuntime, { LlmAdapter, LlmError, ReasoningEffortId } from '@deepseek-ai/dsh-llm'
 import type {
   GenerateOptions, LlmCallConfig, LlmModelInfo, LlmModelReasoningInfo, LlmProviderInfo,
   LlmResolvedModelInfo, StreamChunk,
@@ -275,6 +275,26 @@ describe('Web session model selection', () => {
     expect(readImage).toHaveBeenCalledOnce()
     await ctx.fiber.dispose()
   })
+  it('preserves a Harness catalog failure code for clients', async () => {
+    const { ctx, sessionId } = await harness()
+    ctx.llm.registerAdapter(['coded'], new CatalogAdapter(
+      'Coded Provider',
+      new LlmError('Cursor GetUsableModels returned no usable models', 'CURSOR_NO_USABLE_MODELS'),
+    ))
+    const api = createApiProxy(ctx, {
+      defaultModelSelection: () => ({ provider: 'deepseek-official', model: 'deepseek-chat' }),
+      cwd: '/tmp',
+    })
+    const catalog = expectValue(await api.sessions.models(request({ sessionId })))
+    expect(catalog.failures).toContainEqual({
+      id: 'coded',
+      name: 'Coded Provider',
+      message: 'Cursor GetUsableModels returned no usable models',
+      code: 'CURSOR_NO_USABLE_MODELS',
+    })
+    await ctx.fiber.dispose()
+  })
+
   it('groups successful providers and leaves an unlisted current selection out of the catalog', async () => {
     const { ctx, sessionId } = await harness({
       provider: 'deepseek-official',
@@ -309,6 +329,7 @@ describe('Web session model selection', () => {
         id: 'duplicate',
         name: 'Duplicate Provider',
         message: 'adapter returned invalid or duplicate model metadata for provider "duplicate"',
+        code: 'INVALID_CATALOG',
       },
     ])
     await ctx.fiber.dispose()

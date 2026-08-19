@@ -146,6 +146,8 @@ export interface ModelCatalogFailure {
   name: string
   /** Lookup failure diagnostic. */
   message: string
+  /** Stable Harness code when the provider raised a typed error. */
+  code?: string
 }
 
 /** Detached model-directory snapshot for one session. */

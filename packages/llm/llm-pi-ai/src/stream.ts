@@ -12,6 +12,7 @@ import { CallId, CONTEXT_WINDOW_EXCEEDED_CODE, EMPTY_RESPONSE_CODE, isContextWin
 import type { FinishReason, StreamChunk, TokenUsage } from '@deepseek-ai/dsh-llm'
 import { isContextOverflow } from '@earendil-works/pi-ai'
 import type { AssistantMessage, AssistantMessageEvent, Usage as PiUsage } from '@earendil-works/pi-ai'
+import { CURSOR_EMPTY_STREAM_CODE, CURSOR_PROVIDER } from './cursor/constants.ts'
 import { hostedOAuthProvider, OPENAI_CODEX_PROVIDER } from './oauth-hosts.ts'
 import { toPiReplayState } from './replay.ts'
 
@@ -26,6 +27,7 @@ export function mapUsage(usage: PiUsage): TokenUsage {
     outputTokens: usage.output,
     ...usage.cacheRead > 0 ? { cacheReadTokens: usage.cacheRead } : {},
     ...usage.cacheWrite > 0 ? { cacheWriteTokens: usage.cacheWrite } : {},
+    ...usage.cost.total > 0 ? { costUsd: usage.cost.total } : {},
   }
 }
 
@@ -101,8 +103,8 @@ export function missingCredentialMessage(message: string): string {
  * @param contextWindow - resolved catalog capacity for usage-based overflow detection.
  * @returns the mapped harness reason. Recognized error text, `stop` usage above
  *   `contextWindow`, and zero-output `length` usage that fills the window map
- *   to `CONTEXT_WINDOW_EXCEEDED`; a `stop` with no content blocks maps to an
- *   `EMPTY_RESPONSE` error.
+ *   to `CONTEXT_WINDOW_EXCEEDED`; a Cursor `stop` with no content blocks maps to
+ *   `CURSOR_EMPTY_STREAM`, while other empty stops map to `EMPTY_RESPONSE`.
  */
 export function mapStopReason(message: AssistantMessage, contextWindow?: number): FinishReason {
   const piAiOverflow = isContextOverflow(message, contextWindow)
@@ -124,6 +126,15 @@ export function mapStopReason(message: AssistantMessage, contextWindow?: number)
       // A terminal stop that produced no content blocks is a degenerate
       // provider completion, not a successful (empty) assistant message.
       if (message.content.length === 0) {
+        if (message.provider === CURSOR_PROVIDER) {
+          return {
+            kind: 'error',
+            failure: {
+              message: `Cursor backend returned a heartbeat-only response with no content for model "${message.model}"; retry after the Cursor service recovers`,
+              code: CURSOR_EMPTY_STREAM_CODE,
+            },
+          }
+        }
         return {
           kind: 'error',
           failure: {

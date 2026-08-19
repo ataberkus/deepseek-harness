@@ -5,10 +5,12 @@
  */
 
 import type { Api, Model, ModelThinkingLevel } from '@earendil-works/pi-ai'
+import { LlmError } from '@deepseek-ai/dsh-llm'
 import {
   CURSOR_API,
   CURSOR_BASE_URL,
   CURSOR_MODELS_PATH,
+  CURSOR_NO_USABLE_MODELS_CODE,
   CURSOR_PROVIDER,
 } from './constants.ts'
 import { connectUnary } from './connect.ts'
@@ -223,8 +225,8 @@ export function decodeUsableModels(payload: Uint8Array): Model<Api>[] {
 /**
  * Overlay live GetUsableModels onto the bundled fallback. Live ids win;
  * fallback fills documented ids (including `-fast` siblings) the reply
- * omitted. Network failure or an empty reply returns the fallback so a
- * picker never goes empty.
+ * omitted. Network failure returns the fallback; a successful empty reply
+ * fails so the picker does not advertise unconfirmed models.
  * @param accessToken - Cursor access token; never logged.
  * @param signal - abort listing.
  * @returns live ids first, then fallback-only ids including priced Fast SKUs.
@@ -234,14 +236,20 @@ export async function listCursorModels(
   signal?: AbortSignal,
 ): Promise<Model<Api>[]> {
   const fallback = cursorFallbackModels()
+  let payload: Uint8Array
   try {
-    const payload = await cursorListingInternals.fetch(accessToken, signal)
-    const live = decodeUsableModels(payload)
-    if (live.length === 0) return withFastVariants(fallback)
-    return withFastVariants(mergeCursorCatalogs(live, fallback))
+    payload = await cursorListingInternals.fetch(accessToken, signal)
   } catch {
     return withFastVariants(fallback)
   }
+  const live = decodeUsableModels(payload)
+  if (live.length === 0) {
+    throw new LlmError(
+      'Cursor GetUsableModels returned no usable models; check the Cursor service and retry model discovery',
+      CURSOR_NO_USABLE_MODELS_CODE,
+    )
+  }
+  return withFastVariants(mergeCursorCatalogs(live, fallback))
 }
 
 /**

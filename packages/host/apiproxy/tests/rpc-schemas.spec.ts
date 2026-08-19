@@ -225,6 +225,12 @@ describe('sessions domain schemas', () => {
       }],
       failures: [{ id: 'broken', name: 'Broken', message: 'offline' }],
     }).groups[0]?.models[0]?.id).toBe('deepseek-v4-flash')
+    expect(sessionModelsValueSchema.parse({
+      current: { provider: 'deepseek-official', model: 'deepseek-v4-flash' },
+      routable: true,
+      groups: [],
+      failures: [{ id: 'cursor', name: 'Cursor', message: 'no usable models', code: 'CURSOR_NO_USABLE_MODELS' }],
+    }).failures[0]?.code).toBe('CURSOR_NO_USABLE_MODELS')
     expect(sessionSelectModelRequestSchema.parse({
       sessionId: 's1',
       provider: 'deepseek-official',

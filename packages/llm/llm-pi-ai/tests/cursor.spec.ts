@@ -55,6 +55,7 @@ import {
   streamMaxMode,
 } from '../src/cursor/request.ts'
 import { resetCursorSessions, streamCursor } from '../src/cursor/stream.ts'
+import { toStreamChunks } from '../src/stream.ts'
 import { hostedOAuthProvider, hostedOAuthProviders } from '../src/oauth-hosts.ts'
 import { FileOAuthStore, OAUTH_CREDENTIALS_FILENAME } from '../src/oauth-store.ts'
 import { PiAiAdapter } from '../src/adapter.ts'
@@ -542,19 +543,20 @@ describe('cursor models', () => {
     expect(listed.map(model => model.id)).toContain('composer-1.5')
   })
 
-  it('keeps the fallback when listing is empty or throws', async () => {
+  it('rejects a successful empty listing but keeps the fallback on transport failure', async () => {
     cursorListingInternals.fetch = async () => new Uint8Array()
-    const empty = await listCursorModels('token')
-    expect(empty.length).toBeGreaterThan(0)
-    expect(empty.map(model => model.id)).toEqual(expect.arrayContaining([
-      'grok-4.6',
-      'grok-4.6-fast',
-      'composer-1.5',
-    ]))
+    await expect(listCursorModels('token')).rejects.toMatchObject({
+      code: 'CURSOR_NO_USABLE_MODELS',
+      message: expect.stringContaining('GetUsableModels') as string,
+    })
     cursorListingInternals.fetch = async () => {
       throw new Error('down')
     }
-    await expect(listCursorModels('token')).resolves.toEqual(empty)
+    await expect(listCursorModels('token')).resolves.toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: 'grok-4.6' }),
+      expect.objectContaining({ id: 'grok-4.6-fast' }),
+      expect.objectContaining({ id: 'composer-1.5' }),
+    ]))
   })
 
   it('encodes a GetUsableModels request and infers context windows', () => {
@@ -1010,6 +1012,27 @@ describe('cursor streamSimple', () => {
     expect(types.at(-1)).toBe('done')
   })
 
+  it('classifies a heartbeat-only Run as a provider-specific empty stream', async () => {
+    cursorConnectInternals.request = async function* () {
+      yield frameConnectMessage(interactionUpdate(13, new Uint8Array()))
+      yield frameConnectMessage(interactionUpdate(14, new Uint8Array()))
+    }
+    const chunks = []
+    for await (const chunk of toStreamChunks(streamCursor(MODEL, {
+      messages: [{ role: 'user', content: 'hi', timestamp: 0 }],
+    }, { headers: { authorization: 'Bearer tok' } }))) chunks.push(chunk)
+    expect(chunks.at(-1)).toMatchObject({
+      type: 'finish',
+      reason: {
+        kind: 'error',
+        failure: {
+          code: 'CURSOR_EMPTY_STREAM',
+          message: expect.stringContaining('heartbeat-only') as string,
+        },
+      },
+    })
+  })
+
   it('reuses a checkpoint for a later user turn and flattens tool results', async () => {
     cursorConnectInternals.request = async function* () {
       yield frameConnectMessage(encodeBytes(3, Uint8Array.of(1, 2)))
@@ -1319,6 +1342,34 @@ describe('cursor adapter listing', () => {
     const models = await adapter.listModels('cursor')
     expect(models.map(model => model.id)).toContain('live-only')
     expect(models.map(model => model.id)).toContain('composer-1.5')
+  })
+
+  it('retries model discovery after a successful empty listing', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'dsh-cursor-retry-'))
+    const store = new FileOAuthStore(join(dir, OAUTH_CREDENTIALS_FILENAME))
+    await store.modify('cursor', async () => ({
+      type: 'oauth',
+      access: 'access-token',
+      refresh: 'refresh-token',
+      expires: Date.now() + 60_000,
+    }))
+    let attempts = 0
+    cursorListingInternals.fetch = async () => {
+      attempts += 1
+      return attempts === 1
+        ? new Uint8Array()
+        : encodeMessage(1, concat(encodeString(1, 'live-only'), encodeString(4, 'Live Only')))
+    }
+    const adapter = new PiAiAdapter({
+      profiles: () => resolveProfiles({ cursor: {} }),
+      resolveApiKey: async () => undefined,
+      credentials: store,
+    })
+    await expect(adapter.listModels('cursor')).rejects.toMatchObject({ code: 'CURSOR_NO_USABLE_MODELS' })
+    await expect(adapter.listModels('cursor')).resolves.toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: 'live-only' }),
+    ]))
+    expect(attempts).toBe(2)
   })
 
   it('keeps the fallback when no access token is stored', async () => {

@@ -740,6 +740,16 @@ describe('mapStopReason / mapUsage', () => {
     })
   })
 
+  it('classifies an empty Cursor stop as a non-retryable Cursor backend failure', () => {
+    expect(mapStopReason(assistant({ provider: 'cursor' }))).toEqual({
+      kind: 'error',
+      failure: {
+        code: 'CURSOR_EMPTY_STREAM',
+        message: expect.stringContaining('heartbeat-only') as string,
+      },
+    })
+  })
+
   it('keeps a thinking-only stop successful (any block counts as content)', () => {
     expect(mapStopReason(assistant({ stopReason: 'stop', content: [{ type: 'thinking', thinking: 'mull' }] })))
       .toEqual({ kind: 'stop' })
@@ -842,6 +852,17 @@ describe('mapStopReason / mapUsage', () => {
       cacheReadTokens: 8,
       cacheWriteTokens: 2,
     })
+    expect(mapUsage(usage(10, 5))).toEqual({ inputTokens: 10, outputTokens: 5 })
+  })
+
+  it('maps a positive pi-ai cost total', () => {
+    expect(mapUsage({
+      ...usage(10, 5),
+      cost: { input: 0.1, output: 0.1, cacheRead: 0, cacheWrite: 0, total: 0.2 },
+    })).toEqual({ inputTokens: 10, outputTokens: 5, costUsd: 0.2 })
+  })
+
+  it('omits a zero pi-ai cost total', () => {
     expect(mapUsage(usage(10, 5))).toEqual({ inputTokens: 10, outputTokens: 5 })
   })
 })

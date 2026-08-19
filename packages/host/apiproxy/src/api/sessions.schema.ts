@@ -185,6 +185,7 @@ export const modelCatalogFailureSchema = z.object({
   id: z.string().min(1),
   name: z.string().min(1),
   message: z.string(),
+  code: z.string().min(1).optional(),
 }) satisfies z.ZodType<Wire<ModelCatalogFailure>>
 
 /**

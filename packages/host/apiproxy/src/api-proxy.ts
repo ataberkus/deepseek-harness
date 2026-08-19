@@ -12,7 +12,7 @@ import type { Agent, ModelSelection, ModelSelectionRef, AgentOptions, AgentStatu
 import type {} from '@deepseek-ai/dsh-agent-presets/types'
 import { AttachmentError } from '@deepseek-ai/dsh-attachment'
 import type { ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
-import { contentHasImage, createUserMessage, freezeMessage, ReasoningEffortId } from '@deepseek-ai/dsh-llm'
+import { contentHasImage, createUserMessage, freezeMessage, HarnessError, ReasoningEffortId } from '@deepseek-ai/dsh-llm'
 import { errorChain } from '@deepseek-ai/dsh-llm'
 import type { ContentBlock, MessageSource } from '@deepseek-ai/dsh-llm'
 import { isAppendSurfaceEvent, isJsonValue } from '@deepseek-ai/dsh-session'
@@ -335,6 +335,7 @@ async function buildModelCatalog(ctx: Context): Promise<{
         id: provider.id,
         name: provider.name,
         message: error instanceof Error ? error.message : String(error),
+        ...(error instanceof HarnessError ? { code: error.code } : {}),
       }
       return { kind: 'failure' as const, failure }
     }

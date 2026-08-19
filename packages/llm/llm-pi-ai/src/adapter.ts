@@ -269,20 +269,26 @@ export class PiAiAdapter extends LlmAdapter {
    * Models this route currently serves: the installed catalog plus a live
    * OpenRouter listing overlay when the profile has no explicit `models` list,
    * or a Cursor GetUsableModels overlay for the hosted `cursor` route.
-   * An explicit list is left untouched. Listing failure returns the installed
-   * set so a picker never goes empty.
+   * An explicit list is left untouched. Transport failure returns the
+   * installed set; a successful empty Cursor listing fails instead of
+   * advertising unconfirmed models.
    */
   private async servedModels(snapshot: PiAiSnapshot, provider: string): Promise<readonly Model<Api>[]> {
     const cached = snapshot.served.get(provider)
     if (cached !== undefined) return cached
     const pending = this.loadServedModels(snapshot, provider)
     snapshot.served.set(provider, pending)
-    return pending
+    try {
+      return await pending
+    } catch (error) {
+      if (snapshot.served.get(provider) === pending) snapshot.served.delete(provider)
+      throw error
+    }
   }
 
   /**
-   * Compute {@link servedModels} for one route. Listing failure returns the
-   * installed set so a picker never goes empty.
+   * Compute {@link servedModels} for one route. Transport listing failure
+   * returns the installed set; a successful empty Cursor listing fails.
    * @param snapshot Frozen profiles and collection.
    * @param provider Route id.
    * @returns Models this route currently serves.

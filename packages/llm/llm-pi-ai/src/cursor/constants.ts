@@ -11,6 +11,12 @@ export const CURSOR_PROVIDER = 'cursor'
 /** Selector and Models-page label. */
 export const CURSOR_DISPLAY_NAME = 'Cursor'
 
+/** Successful GetUsableModels response contained no usable model rows. */
+export const CURSOR_NO_USABLE_MODELS_CODE = 'CURSOR_NO_USABLE_MODELS'
+
+/** Cursor Run closed after heartbeat updates without text, thinking, or tools. */
+export const CURSOR_EMPTY_STREAM_CODE = 'CURSOR_EMPTY_STREAM'
+
 /** pi-ai `Model.api` for the hosted Cursor provider. */
 export const CURSOR_API = 'cursor-agent'
 
