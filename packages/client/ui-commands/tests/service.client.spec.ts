@@ -843,7 +843,7 @@ describe('openai-codex login tab', () => {
   async function submitLogin(source: InputTriggerSource, args: string) {
     const outcome = source.matchSpace!(proj('s1'), '/login')
     if (outcome === undefined || outcome === 'handled' || !('claim' in outcome)) throw new Error('expected login claim')
-    return outcome.claim.submit(args, new Context())
+    return outcome.claim.submit(args, new Context(), [])
   }
 
   it('opens a blank tab on the /login keystroke and navigates it when commands/open-url arrives', async () => {

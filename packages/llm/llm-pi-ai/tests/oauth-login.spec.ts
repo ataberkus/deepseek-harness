@@ -350,7 +350,7 @@ describe('login and logout commands', () => {
     expect(ctx.llm.listConfigurableProviders().map(entry => entry.provider)).not.toContain(OPENAI_CODEX_PROVIDER)
 
     const agent = fakeAgent()
-    const login = await ctx.commands.execute(agent, '/login', AbortSignal.timeout(5_000))
+    const login = await ctx.commands.execute(agent, '/login', [], AbortSignal.timeout(5_000))
     expect(login?.result).toEqual({
       kind: 'success',
       text: 'Signed in to OpenAI Codex. Select an openai-codex model to use the ChatGPT Codex subscription.',
@@ -370,7 +370,7 @@ describe('login and logout commands', () => {
     await ctx.llm.logout(OPENAI_CODEX_PROVIDER)
     expect(ctx.llm.listProviders()).toEqual([])
 
-    const logout = await ctx.commands.execute(agent, '/logout openai-codex', AbortSignal.timeout(5_000))
+    const logout = await ctx.commands.execute(agent, '/logout openai-codex', [], AbortSignal.timeout(5_000))
     expect(logout?.result).toEqual({ kind: 'success', text: 'Signed out of OpenAI Codex.' })
     expect(ctx.llm.listProviders()).toEqual([])
   })
@@ -394,7 +394,7 @@ describe('login and logout commands', () => {
     await ctx.plugin(CommandRuntime)
     await ctx.plugin(LlmPiAi, {})
     expect(ctx.llm.listConfigurableProviders().map(entry => entry.provider)).not.toContain('cursor')
-    const login = await ctx.commands.execute(fakeAgent(), '/login cursor', AbortSignal.timeout(5_000))
+    const login = await ctx.commands.execute(fakeAgent(), '/login cursor', [], AbortSignal.timeout(5_000))
     expect(login?.result).toEqual({
       kind: 'success',
       text: 'Signed in to Cursor. Select a cursor model to use the Cursor subscription.',
@@ -408,7 +408,7 @@ describe('login and logout commands', () => {
     expect(models[0]?.provider).toBe('cursor')
     const stored = JSON.parse(await readFile(join(home, OAUTH_CREDENTIALS_FILENAME), 'utf8'))
     expect(stored.cursor).toMatchObject({ type: 'oauth', refresh: 'cursor-refresh' })
-    const logout = await ctx.commands.execute(fakeAgent(), '/logout cursor', AbortSignal.timeout(5_000))
+    const logout = await ctx.commands.execute(fakeAgent(), '/logout cursor', [], AbortSignal.timeout(5_000))
     expect(logout?.result).toEqual({ kind: 'success', text: 'Signed out of Cursor.' })
     expect(ctx.llm.listProviders()).toEqual([])
   })
@@ -437,7 +437,7 @@ describe('login and logout commands', () => {
     await ctx.plugin(LlmPiAi, {})
     expect(ctx.llm.listConfigurableProviders().map(entry => entry.provider))
       .not.toContain('google-gemini-cli')
-    const login = await ctx.commands.execute(fakeAgent(), '/login google-gemini-cli', AbortSignal.timeout(5_000))
+    const login = await ctx.commands.execute(fakeAgent(), '/login google-gemini-cli', [], AbortSignal.timeout(5_000))
     expect(login?.result).toEqual({
       kind: 'success',
       text: 'Signed in to Gemini CLI. Select a google-gemini-cli model to use the Gemini CLI subscription.',
@@ -459,6 +459,7 @@ describe('login and logout commands', () => {
     const logout = await ctx.commands.execute(
       fakeAgent(),
       '/logout google-gemini-cli',
+      [],
       AbortSignal.timeout(5_000),
     )
     expect(logout?.result).toEqual({ kind: 'success', text: 'Signed out of Gemini CLI.' })
@@ -473,9 +474,9 @@ describe('login and logout commands', () => {
     await ctx.plugin(CommandRuntime)
     await ctx.plugin(LlmPiAi, {})
     const agent = fakeAgent()
-    expect((await ctx.commands.execute(agent, '/login anthropic', AbortSignal.timeout(1_000)))?.result)
+    expect((await ctx.commands.execute(agent, '/login anthropic', [], AbortSignal.timeout(1_000)))?.result)
       .toEqual({ kind: 'error', text: OAUTH_LOGIN_UNSUPPORTED })
-    expect((await ctx.commands.execute(agent, '/logout anthropic', AbortSignal.timeout(1_000)))?.result)
+    expect((await ctx.commands.execute(agent, '/logout anthropic', [], AbortSignal.timeout(1_000)))?.result)
       .toEqual({ kind: 'error', text: OAUTH_LOGOUT_UNSUPPORTED })
   })
 
@@ -487,9 +488,9 @@ describe('login and logout commands', () => {
     await ctx.plugin(LlmRuntime)
     await ctx.plugin(CommandRuntime)
     await ctx.plugin(LlmPiAi, {})
-    expect((await ctx.commands.execute(fakeAgent(), '/login openai-codex', AbortSignal.timeout(1_000)))?.result)
+    expect((await ctx.commands.execute(fakeAgent(), '/login openai-codex', [], AbortSignal.timeout(1_000)))?.result)
       .toEqual({ kind: 'error', text: OAUTH_LOGIN_UNSUPPORTED })
-    expect((await ctx.commands.execute(fakeAgent(), '/logout openai-codex', AbortSignal.timeout(1_000)))?.result)
+    expect((await ctx.commands.execute(fakeAgent(), '/logout openai-codex', [], AbortSignal.timeout(1_000)))?.result)
       .toEqual({ kind: 'error', text: OAUTH_LOGOUT_UNSUPPORTED })
   })
 
@@ -529,7 +530,7 @@ describe('login and logout commands', () => {
     const opened: string[] = []
     ctx.on('commands/open-url', (authUrl) => { opened.push(authUrl) })
     const write = vi.spyOn(process.stderr, 'write').mockReturnValue(true)
-    const result = await ctx.commands.execute(fakeAgent(), '/login openai-codex', AbortSignal.timeout(5_000))
+    const result = await ctx.commands.execute(fakeAgent(), '/login openai-codex', [], AbortSignal.timeout(5_000))
     expect(result?.result).toMatchObject({ kind: 'success' })
     expect(opened).toEqual([url])
     expect(write).toHaveBeenCalledWith(authUrlFallbackMessage(url))
@@ -558,9 +559,9 @@ describe('login and logout commands', () => {
     await ctx.plugin(CommandRuntime)
     await ctx.plugin(LlmPiAi, {})
     const agent = fakeAgent()
-    const first = ctx.commands.execute(agent, '/login openai-codex', AbortSignal.timeout(5_000))
+    const first = ctx.commands.execute(agent, '/login openai-codex', [], AbortSignal.timeout(5_000))
     await vi.waitFor(() => expect(login).toHaveBeenCalledTimes(1))
-    expect((await ctx.commands.execute(agent, '/login', AbortSignal.timeout(1_000)))?.result)
+    expect((await ctx.commands.execute(agent, '/login', [], AbortSignal.timeout(1_000)))?.result)
       .toEqual({ kind: 'error', text: OAUTH_LOGIN_IN_PROGRESS })
     expect(login).toHaveBeenCalledTimes(1)
     release({
@@ -726,7 +727,7 @@ describe('login and logout commands', () => {
     await ctx.plugin(LlmRuntime)
     await ctx.plugin(CommandRuntime)
     await ctx.plugin(LlmPiAi, {})
-    const result = await ctx.commands.execute(fakeAgent(), '/login openai-codex', AbortSignal.timeout(1_000))
+    const result = await ctx.commands.execute(fakeAgent(), '/login openai-codex', [], AbortSignal.timeout(1_000))
     expect(result?.result).toEqual({ kind: 'error', text: 'denied by provider' })
   })
 
@@ -740,7 +741,7 @@ describe('login and logout commands', () => {
     await ctx.plugin(LlmRuntime)
     await ctx.plugin(CommandRuntime)
     await ctx.plugin(LlmPiAi, {})
-    const result = await ctx.commands.execute(fakeAgent(), '/login', AbortSignal.timeout(1_000))
+    const result = await ctx.commands.execute(fakeAgent(), '/login', [], AbortSignal.timeout(1_000))
     expect(result?.result).toEqual({ kind: 'error', text: 'OpenAI Codex login failed' })
     expect(JSON.stringify(result?.result)).not.toContain('token-secret-must-not-appear')
   })
@@ -755,7 +756,7 @@ describe('login and logout commands', () => {
     await ctx.plugin(LlmRuntime)
     await ctx.plugin(CommandRuntime)
     await ctx.plugin(LlmPiAi, {})
-    const result = await ctx.commands.execute(fakeAgent(), '/login', AbortSignal.timeout(1_000))
+    const result = await ctx.commands.execute(fakeAgent(), '/login', [], AbortSignal.timeout(1_000))
     expect(result?.result).toEqual({ kind: 'error', text: 'OpenAI Codex login failed' })
   })
 
@@ -767,7 +768,7 @@ describe('login and logout commands', () => {
     await ctx.plugin(LlmRuntime)
     await ctx.plugin(CommandRuntime)
     await ctx.plugin(LlmPiAi, {})
-    const result = await ctx.commands.execute(fakeAgent(), '/logout', AbortSignal.timeout(1_000))
+    const result = await ctx.commands.execute(fakeAgent(), '/logout', [], AbortSignal.timeout(1_000))
     expect(result?.result).toEqual({ kind: 'error', text: 'disk full' })
   })
 
@@ -793,7 +794,7 @@ describe('login and logout commands', () => {
     ctx.llm.registerAdapter([OPENAI_CODEX_PROVIDER], new StubAdapter())
     const logged = vi.spyOn(ctx.logger, 'error').mockImplementation(() => undefined)
     await ctx.plugin(LlmPiAi, {})
-    const result = await ctx.commands.execute(fakeAgent(), '/login openai-codex', AbortSignal.timeout(5_000))
+    const result = await ctx.commands.execute(fakeAgent(), '/login openai-codex', [], AbortSignal.timeout(5_000))
     expect(result?.result).toMatchObject({ kind: 'success' })
     expect(logged.mock.calls.some(([value]) =>
       typeof value === 'string' && value.includes('OAuth credential change'),

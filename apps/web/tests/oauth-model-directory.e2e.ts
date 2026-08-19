@@ -117,6 +117,7 @@ describe('web e2e: Gemini OAuth refreshes an open model directory', () => {
     const login = await scaffold.ctx.commands.execute(
       agent.agent,
       '/login google-gemini-cli',
+      [],
       AbortSignal.timeout(15_000),
     )
     expect(login?.result).toEqual({
