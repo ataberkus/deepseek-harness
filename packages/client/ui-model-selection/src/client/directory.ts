@@ -63,12 +63,12 @@ export class ModelDirectory {
   async load(): Promise<SessionModels> {
     this.assertAvailable()
     const generation = ++this.generation
-    const refreshInPlace = this.store.getSnapshot().groups.length > 0
     this.store.update((s) => {
       // A picker that already has groups keeps showing them while the Host
-      // rebuilds a large live overlay; flipping to `loading` would freeze
-      // the checkmark until that round trip returns.
-      if (!refreshInPlace) s.status = 'loading'
+      // rebuilds a large live overlay. The loading status reports the retry
+      // without hiding those groups or the current checkmark.
+      s.status = 'loading'
+      s.failures = []
       s.error = null
     })
     const { result } = await this.sessions.models({ sessionId: this.sessionId })

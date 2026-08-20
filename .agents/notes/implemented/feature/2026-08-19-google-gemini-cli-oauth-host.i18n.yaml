@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-08-19-google-gemini-cli-oauth-host.md
-2026-08-19-google-gemini-cli-oauth-host.md: d0c43b0725e1b10f2df77977ff1aa6f9728845e6
-2026-08-19-google-gemini-cli-oauth-host.zh.md: c264dd0e7081ae1e905717d057677a0a03481d5c
+2026-08-19-google-gemini-cli-oauth-host.md: 8f6ae068dc8506b5dbbdc5cb34163e94eb9f4a4d
+2026-08-19-google-gemini-cli-oauth-host.zh.md: d3f405f8f4f0e2196ed0aa0c65383c90678cd8c4

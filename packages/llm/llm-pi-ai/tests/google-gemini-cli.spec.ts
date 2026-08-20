@@ -289,6 +289,9 @@ describe('gemini CLI oauth', () => {
       expect(favicon.status).toBe(404)
       const ok = await fetch(`${retry.redirectUri}?code=loop-code&state=loop-state`)
       expect(ok.status).toBe(200)
+      const body = await ok.text()
+      expect(body).toContain('Google authorization response received')
+      expect(body).not.toContain('Signed in to Gemini CLI')
       await expect(waiting).resolves.toEqual({ code: 'loop-code', state: 'loop-state' })
     } finally {
       await retry.close()

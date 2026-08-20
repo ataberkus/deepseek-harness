@@ -483,7 +483,11 @@ function handleCallbackRequest(
     done({ ok: false, error: new Error('Gemini CLI callback is missing code or state') })
     return
   }
-  writeHtml(response, 200, 'Signed in to Gemini CLI. You can close this tab.')
+  writeHtml(
+    response,
+    200,
+    'Google authorization response received. Return to DeepSeek Harness while Gemini CLI sign-in finishes. You can close this tab.',
+  )
   done({ ok: true, value: { code, state } })
 }
 

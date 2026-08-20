@@ -192,6 +192,49 @@ describe('ModelSelect reasoning effort', () => {
     expect(screen.queryByRole('button', { name: '重试' })).toBeNull()
   })
 
+  it('reruns a failed provider catalog load from Retry', async () => {
+    const directory = createSnapshotStore<ModelDirectoryState>(state({
+      current: { provider: 'cursor', model: 'cursor-model' },
+      groups: [],
+      failures: [{
+        id: 'cursor',
+        name: 'Cursor',
+        message: 'GetUsableModels returned no usable models',
+      }],
+    }))
+    let attempts = 0
+    const load = vi.fn(() => {
+      attempts += 1
+      if (attempts === 3) {
+        directory.set(state({
+          current: { provider: 'cursor', model: 'cursor-model' },
+          groups: [{
+            id: 'cursor',
+            name: 'Cursor',
+            models: [{ id: 'cursor-model', name: 'Cursor Model' }],
+          }],
+          failures: [],
+        }))
+      }
+    })
+    render(<ModelSelect
+      locked={false}
+      available
+      directory={directory}
+      load={load}
+      select={vi.fn().mockResolvedValue(true)}
+      t={t}
+    />)
+
+    fireEvent.click(screen.getByRole('button', { name: '选择模型' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: /模型/ }))
+    fireEvent.click(screen.getByRole('button', { name: '重试' }))
+    await waitFor(() => {
+      expect(screen.getByRole('menuitemradio', { name: 'Cursor Model' })).toBeTruthy()
+    })
+    expect(load).toHaveBeenCalledTimes(3)
+  })
+
   it('renders no Agent-bound control for an addressed subagent session', () => {
     const load = vi.fn()
     render(<ModelSelect

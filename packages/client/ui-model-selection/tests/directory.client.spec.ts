@@ -73,10 +73,40 @@ describe('ModelDirectory', () => {
     }, sessionId, () => true)
     await directory.load()
     const refresh = directory.load()
-    expect(directory.store.getSnapshot().status).toBe('ready')
+    expect(directory.store.getSnapshot().status).toBe('loading')
     expect(directory.store.getSnapshot().groups).toHaveLength(1)
     release()
     await refresh
     expect(directory.store.getSnapshot().status).toBe('ready')
+  })
+
+  it('clears provider failures while retrying and commits a recovered catalog', async () => {
+    let loads = 0
+    const directory = new ModelDirectory({
+      models: () => {
+        loads += 1
+        return loads === 1
+          ? Promise.resolve(ok({
+            current: { provider: 'cursor', model: 'cursor-model' },
+            routable: true,
+            groups: [],
+            failures: [{
+              id: 'cursor',
+              name: 'Cursor',
+              message: 'GetUsableModels returned no usable models',
+            }],
+          }))
+          : modelsOk({ provider: 'cursor', model: 'cursor-model' })
+      },
+      selectModel: () => Promise.reject(new Error('unused')),
+    }, sessionId, () => true)
+
+    await directory.load()
+    expect(directory.store.getSnapshot().failures).toHaveLength(1)
+    const retry = directory.load()
+    expect(directory.store.getSnapshot()).toMatchObject({ status: 'loading', failures: [] })
+    await retry
+    expect(directory.store.getSnapshot()).toMatchObject({ status: 'ready', failures: [] })
+    expect(directory.store.getSnapshot().groups[0]?.id).toBe('p')
   })
 })
