@@ -490,10 +490,10 @@ export function InputBar({
     if (el !== null) toggleCommandMenu?.(selectionOf(el))
   }
 
-  // Ordinary sessions retain their primary Send/Stop toggle. A continuable
-  // child keeps Send as the primary action and exposes Stop independently so
-  // pointer users can queue follow-ups while its current turn is running.
-  const primaryStops = running && subagent === null
+  // Ordinary sessions retain their primary Send/Stop toggle. An active edit
+  // submits the rollback request instead of stopping the current run; a
+  // continuable child keeps Send as the primary action and exposes Stop independently.
+  const primaryStops = running && subagent === null && editTarget === undefined
   const interruptible = running && continuable
   const primaryLabel = primaryStops ? t('input.stop') : t('input.send')
   const onPrimary = (): void => {

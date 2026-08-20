@@ -601,6 +601,26 @@ describe('Enter semantics', () => {
 })
 
 describe('running and lock semantics', () => {
+  it('edit mode keeps Send primary while running and forwards the edit target', () => {
+    const h = bench({ running: true })
+    act(() => {
+      h.shell.actions.beginEdit?.({
+        messageSeq: 7,
+        checkpointId: 'cp-7' as never,
+        originalText: '原始消息',
+      })
+    })
+    fireEvent.change(h.textarea, { target: { value: '修改后的消息' } })
+    const send = h.view.getByRole('button', { name: '发送消息' })
+    expect(send.disabled).toBe(false)
+    fireEvent.click(send)
+    expect(h.stop).not.toHaveBeenCalled()
+    expect(h.sink).toHaveBeenCalledWith(
+      '修改后的消息', [], 'queue', expect.any(AbortSignal),
+      expect.objectContaining({ messageSeq: 7, checkpointId: 'cp-7', originalText: '原始消息' }),
+    )
+  })
+
   it('running keeps the input free (typing + Enter queue) while the primary turns stop', () => {
     const { textarea, button, stop, sink } = bench({ running: true, draft: '排队消息' })
     expect(textarea.disabled).toBe(false)

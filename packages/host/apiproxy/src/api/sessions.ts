@@ -341,10 +341,10 @@ export interface SessionsApi {
   Promise<RpcResponse<{ sessionId: SessionId }>>
 
   /**
-   * Restores the workspace checkpoint immediately before one settled direct
-   * user message, publishes a child session from the inherited prefix, and
-   * queues the replacement message on that child. The source session remains
-   * append-only and addressable.
+   * Cancels and awaits an active source turn, restores the workspace checkpoint
+   * immediately before one direct user message, publishes a child session from
+   * the inherited prefix, and queues the replacement message on that child.
+   * The source session remains append-only and addressable.
    */
   edit(request: RpcRequest<{
     sessionId: SessionId

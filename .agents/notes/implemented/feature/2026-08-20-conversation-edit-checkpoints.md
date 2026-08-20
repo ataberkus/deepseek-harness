@@ -12,11 +12,11 @@ Editing a settled user message needs to rerun the conversation from the files th
 
 `WorkspaceCheckpoint` owns content-addressed workspace snapshots, journaled restore, emergency snapshots, recovery markers, leases, and retention. The capture consumer records the initial tree and settled-turn boundaries, and blocks model and top-level tool work while recovery is required.
 
-`session.edit` validates a settled direct user message, its preceding ready checkpoint, the idle source, and the workspace association. It captures an emergency snapshot, restores the selected tree, creates a child from the prefix before the edited turn, records the source/selected/emergency/child relation in durable session sidecars, and queues only the replacement message on the child. `session.activate` restores the latest usable non-emergency checkpoint for an idle session.
+`session.edit` cancels and awaits an active source turn, then validates the direct user message after cancellation, its preceding ready checkpoint, and the workspace association. It captures an emergency snapshot, restores the selected tree, creates a child from the prefix before the edited turn, records the source/selected/emergency/child relation in durable session sidecars, and queues only the replacement message on the child. `session.activate` restores the latest usable non-emergency checkpoint for an idle session.
 
 The edit operation passes its held workspace lease into the child's initial checkpoint capture. The local provider treats a matching capture lease as reentrant for that operation, so the transaction retains exclusivity without waiting for its own lease to release.
 
-The `session/checkpoints` projection carries checkpoint rows, operation phases, applied and recovery state, the selected branch label, and workspace resumability. The Web client retains this baseline before Session creation, renders `Edit and rerun` only for eligible direct user messages, and reports an unrestorable workspace without hiding readable conversation history.
+The `session/checkpoints` projection carries checkpoint rows, operation phases, applied and recovery state, the selected branch label, and workspace resumability. The Web client retains this baseline before Session creation, renders `Edit and rerun` for eligible direct user messages even while the source is running, and reports an unrestorable workspace without hiding readable conversation history.
 
 ## Alternatives considered
 
@@ -34,4 +34,4 @@ An edit preserves both conversation branches and provides a durable emergency pa
 
 ## Testing
 
-Service, provider, lease, restore, retention, Host RPC, wire-schema, runtime projection, input-state, and browser component tests cover the checkpoint and edit paths. The assembled Web snapshot suite covers the real Host/client transport, edit affordance, branch label, recovery diagnostic, child execution, and reconnect projection.
+Service, provider, lease, restore, retention, Host RPC including running-source cancellation, wire-schema, runtime projection, input-state, and browser component tests cover the checkpoint and edit paths. The assembled Web snapshot suite covers the real Host/client transport, edit affordance, branch label, recovery diagnostic, child execution, and reconnect projection.

@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-08-20-conversation-edit-checkpoints.md
-2026-08-20-conversation-edit-checkpoints.md: dc3cb279b1ce35c46ad8461080433a9e35db9c26
-2026-08-20-conversation-edit-checkpoints.zh.md: fb38a145a7de7ad33e2ecb744c2e041800d0feda
+2026-08-20-conversation-edit-checkpoints.md: a36c681d81f58195f5e1fbeb2618fb85dddae2d8
+2026-08-20-conversation-edit-checkpoints.zh.md: 2d0398eea2807905f532951cf3d858faffa5ae96

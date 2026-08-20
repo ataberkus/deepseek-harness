@@ -175,6 +175,8 @@ describe.skipIf(MODE === 'record')('web e2e: conversation edit checkpoints', () 
     ).toBeGreaterThan(0)
     await expect.poll(() => page.getByText(REPLACEMENT_TEXT, { exact: true }).count(), { timeout: 15_000 })
       .toBeGreaterThan(0)
+    await expect.poll(() => page.getByText('EDIT_CHILD_OK', { exact: true }).count(), { timeout: 15_000 })
+      .toBeGreaterThan(0)
 
     await scaffold.ctx.workspaceCheckpoint.markRecoveryRequired(sessionCwd, RECOVERY_REASON)
     expect(await page.getByText('Conversation is readable, but workspace files cannot be restored', { exact: true }).first()

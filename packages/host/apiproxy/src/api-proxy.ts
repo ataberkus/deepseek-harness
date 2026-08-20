@@ -2654,6 +2654,32 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
         }
 
         const sourceAgent = ctx.agents.get(sessionId)
+        if (sourceAgent !== undefined && sourceAgent.status !== 'idle') {
+          // Editing owns cancellation so the selected checkpoint becomes the
+          // rollback point for the turn currently changing the workspace.
+          sourceAgent.cancel({ kind: 'user' })
+          try {
+            await sourceAgent.whenIdle()
+          } catch (error: unknown) {
+            return err(request, {
+              code: 'agent-busy',
+              message: `session "${sessionId}" could not be stopped for editing: ${String(error)}`,
+              details: { reason: 'source cancellation did not settle' },
+            })
+          }
+          try {
+            source = await readSessionState(sessionId)
+          } catch (error: unknown) {
+            if (error instanceof SessionNotFound) {
+              return err(request, { code: 'session-not-found', message: error.message, details: { sessionId } })
+            }
+            return err(request, {
+              code: 'internal',
+              message: `edit source unavailable after cancellation for session "${sessionId}": ${String(error)}`,
+              details: {},
+            })
+          }
+        }
         if (sourceAgent !== undefined && (sourceAgent.status !== 'idle' || sourceAgent.inbox.hasPending)) {
           return err(request, {
             code: 'agent-busy',

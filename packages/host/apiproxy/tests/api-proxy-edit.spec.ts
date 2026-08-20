@@ -1,5 +1,5 @@
 /**
- * Host checkpoint commands: edit validates the settled source boundary,
+ * Host checkpoint commands: edit settles an active source boundary,
  * restores the selected workspace, and publishes an isolated child session.
  */
 
@@ -212,6 +212,71 @@ describe('session.edit and session.activate', () => {
         sessionId: child.id,
         role: 'initial',
         parentCheckpointId: checkpointAfterTurn1.id,
+      }))
+    } finally {
+      await ctx.fiber.dispose()
+      await rm(cwd, { recursive: true, force: true })
+    }
+  })
+
+  it('cancels a running source before restoring its checkpoint and branching', async () => {
+    const cwd = await mkdtemp(join(tmpdir(), 'dsh-edit-running-'))
+    const { ctx, checkpoint, capture } = await composed()
+    try {
+      const parent = ctx.sessions.create(sid('running-parent'), { meta: { cwd } })
+      addTurn(parent, 1, 'A')
+      await writeFile(join(cwd, 'note.txt'), 'after-turn-1')
+      const checkpointAfterTurn1 = await checkpoint.capture({
+        sessionId: parent.id,
+        cwd,
+        boundarySeq: parent.events.at(-1)?.seq ?? -1,
+        role: 'turn',
+        turnOutcome: 'completed',
+      })
+      parent.append('turn/start', { turn: 2 })
+      const messageB = parent.append('user/message', createUserMessage({
+        content: [{ type: 'text', text: 'B' }],
+        source: { kind: 'user' },
+      }), { surfaceOp: 'append' })
+      await writeFile(join(cwd, 'note.txt'), 'while-running')
+
+      let status: Agent['status'] = 'running'
+      const cancel = vi.fn(() => {
+        parent.append('turn/end', { turn: 2, reason: { kind: 'aborted', reason: { kind: 'user' } } })
+        status = 'idle'
+      })
+      const whenIdle = vi.fn(async () => undefined)
+      ctx.agents.register({
+        id: parent.id,
+        session: parent,
+        get status() { return status },
+        inbox: { hasPending: false },
+        ctx,
+        cancel,
+        whenIdle,
+      } as unknown as Agent)
+
+      const result = await createApiProxy(ctx, {
+        defaultModelSelection: () => ({ provider: 'provider', model: 'model' }),
+        cwd,
+      }).sessions.edit(request({
+        sessionId: parent.id,
+        messageSeq: messageB.seq,
+        checkpointId: checkpointAfterTurn1.id,
+        text: 'edited B',
+      }))
+      expect(result.result.ok).toBe(true)
+      expect(cancel).toHaveBeenCalledWith({ kind: 'user' })
+      expect(whenIdle).toHaveBeenCalledOnce()
+      if (!result.result.ok) return
+      const child = ctx.sessions.get(result.result.value.sessionId)
+      if (child === undefined) throw new Error('edit did not publish a child')
+      expect(parent.events.at(-1)?.type).toBe('turn/end')
+      expect(await readFile(join(cwd, 'note.txt'), 'utf8')).toBe('after-turn-1')
+      expect(child.events.some(event => event.type === 'user/message' && messageText(event) === 'edited B')).toBe(true)
+      expect(capture).toHaveBeenCalledWith(expect.objectContaining({
+        sessionId: parent.id,
+        role: 'emergency',
       }))
     } finally {
       await ctx.fiber.dispose()

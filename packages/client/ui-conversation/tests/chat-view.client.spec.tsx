@@ -377,6 +377,37 @@ describe('Chat node rendering', () => {
 })
 
 describe('ChatView', () => {
+  it('offers message editing while the addressed session is running', () => {
+    const message = { ...user(2, 'before'), turn: 1 } as UserMessageNode & { readonly turn: number }
+    const h = makeHarness({
+      nodes: [message, assistant(3, 'done', 1)],
+      turnTimings: new Map([[1, { startTime: 1_000, endTime: 4_000 }]]),
+      turnEnds: new Map([[1, 5]]),
+      running: true,
+      checkpoints: {
+        checkpoints: [{
+          id: 'cp1', sessionId: SID, boundarySeq: 1, labelIndex: 1, role: 'turn',
+          status: { kind: 'ready' }, restoreEligible: true, fileCount: 1, createdAt: 0,
+        }],
+        workspaceResumable: true,
+      } as unknown as NonNullable<ConversationSnapshot['checkpoints']>,
+    })
+    const beginEdit = vi.fn()
+    h.props.inputActions.beginEdit = beginEdit
+    const view = render(<h.ChatView {...h.props} />)
+    const editButton = view.getByRole('button', { name: '编辑并重新运行' })
+    expect(editButton).toBeTruthy()
+    fireEvent.click(editButton)
+    expect(beginEdit).toHaveBeenCalledWith(expect.objectContaining({
+      messageSeq: 2,
+      checkpointId: 'cp1',
+      originalText: 'before',
+    }))
+
+    act(() => { h.set({ running: false }) })
+    expect(view.getByRole('button', { name: '编辑并重新运行' })).toBeTruthy()
+  })
+
   it('hands a windowless tool result to the Tool seat with an empty tool name', () => {
     const h = makeHarness({
       nodes: [{ ...toolResult(3, 'w1'), call: null }],

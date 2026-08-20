@@ -214,6 +214,11 @@ export function ChatView({
       originalText: text,
     })
   }, [checkpointSnapshot, inputActions, nodeStore])
+  // Host session.edit cancels a running source before restoring the selected
+  // checkpoint, so keep the action available while that run is in flight.
+  const availableEditMessage = inputActions.beginEdit !== undefined
+    ? editMessage
+    : undefined
   const [fileOpenError, setFileOpenError] = useState<{ path: string; message: string } | null>(null)
   const [fileOpenBusy, setFileOpenBusy] = useState(false)
   // Close/retry must ignore a settlement that started before the latest
@@ -482,7 +487,7 @@ export function ChatView({
               openFile={requestOpenFile}
               inspectCall={inspectCall}
               forkAt={forkAt}
-              editMessage={editMessage}
+              {...availableEditMessage === undefined ? {} : { editMessage: availableEditMessage }}
               renderMessageImages={renderMessageImages}
               fileMentions={fileMentions}
               renderSlot={renderSlot}
