@@ -15,6 +15,10 @@ export const configurableProviderViewSchema = z.object({
   displayName: z.string().min(1),
   settingsNs: z.string(),
   settingsPath: z.array(z.string()),
+  defaults: z.object({
+    api: z.string().min(1).optional(),
+    baseURL: z.string().min(1).optional(),
+  }).optional(),
   active: z.boolean(),
   declared: z.boolean().optional(),
   auth: z.literal('oauth').optional(),

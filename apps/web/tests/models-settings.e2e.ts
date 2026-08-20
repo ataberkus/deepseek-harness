@@ -27,6 +27,7 @@ import { ZH_BROWSER_LOCALE, saveFailureShot } from './support.ts'
 
 const SNAPSHOT_DIR = fileURLToPath(new URL('./snapshots/models-settings', import.meta.url))
 const EMPTY_EXPECTED = join(SNAPSHOT_DIR, 'empty.expected.md')
+const LM_STUDIO_EXPECTED = join(SNAPSHOT_DIR, 'lmstudio.expected.md')
 const CONFIGURED_EXPECTED = join(SNAPSHOT_DIR, 'configured.expected.md')
 const DECLARED_EXPECTED = join(SNAPSHOT_DIR, 'declared.expected.md')
 const DECLARED_EDIT_EXPECTED = join(SNAPSHOT_DIR, 'declared-edit.expected.md')
@@ -75,7 +76,17 @@ describe('web e2e: Models settings page configures a dormant provider', () => {
     await expect.poll(async () => pick.locator('option').count(), { timeout: 10_000 }).toBeGreaterThan(30)
     const options = await pick.locator('option').allTextContents()
     expect(options).toContain('anthropic')
+    expect(options).toContain('LM Studio')
+    expect(await pick.locator('option[value="lmstudio"]').count()).toBe(1)
     expect(options).toContain('minimax-cn')
+
+    await pick.selectOption('lmstudio')
+    await expect.poll(() => dialog.getByLabel('API 地址').inputValue()).toBe('http://127.0.0.1:1234/v1')
+    await expect.poll(() => dialog.getByLabel('API 协议').inputValue()).toBe('openai-completions')
+    await dialog.getByText('自定义设置', { exact: true }).click()
+    const lmStudioSnapshot = await captureStableAria(page, '[role="dialog"]', scaffold.workspaceCwd)
+    await compareOrRefreshGolden(LM_STUDIO_EXPECTED, lmStudioSnapshot, MODE)
+
     await pick.selectOption('minimax-cn')
     await dialog.getByRole('textbox', { name: 'API 密钥', exact: true }).waitFor({ timeout: 10_000 })
     const snapshot = await captureStableAria(page, '[role="dialog"]', scaffold.workspaceCwd)
@@ -199,7 +210,7 @@ describe('web e2e: Models settings page configures a dormant provider', () => {
     expect(await boxes.evaluateAll(nodes => nodes.map(node => (node as HTMLInputElement).checked))).toEqual(
       Array.from({ length: count }, () => false),
     )
-    await picker.getByRole('button', { name: '全选' }).waitFor()
+    await picker.getByRole('button', { name: '全选', exact: true }).waitFor()
     const snapshot = await captureStableAria(
       page,
       '[role="dialog"][aria-label="选择要添加的模型"]',
@@ -207,7 +218,7 @@ describe('web e2e: Models settings page configures a dormant provider', () => {
     )
     await compareOrRefreshGolden(MODEL_PICKER_EXPECTED, snapshot, MODE)
 
-    await picker.getByRole('button', { name: '全选' }).click()
+    await picker.getByRole('button', { name: '全选', exact: true }).click()
     expect(await boxes.evaluateAll(nodes => nodes.map(node => (node as HTMLInputElement).checked))).toEqual(
       Array.from({ length: count }, () => true),
     )
@@ -317,8 +328,8 @@ describe('web e2e: Models settings page configures a dormant provider', () => {
   it.skipIf(MODE === 'record')('keeps the fixture inventory closed', async () => {
     await assertFixtureInventory(SNAPSHOT_DIR, [
       'configured.expected.md', 'declared-edit.expected.md', 'declared.expected.md',
-      'delete.expected.md', 'empty.expected.md', 'model-picker.expected.md',
-      'native-delete.expected.md',
+      'delete.expected.md', 'empty.expected.md', 'lmstudio.expected.md',
+      'model-picker.expected.md', 'native-delete.expected.md',
     ])
   })
 })

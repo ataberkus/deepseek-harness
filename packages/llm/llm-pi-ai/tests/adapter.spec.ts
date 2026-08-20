@@ -79,6 +79,48 @@ describe('PiAiAdapter provider routing', () => {
     expect(server.paths).toEqual(['/chat/completions'])
   })
 
+  it('uses keyless LM Studio requests and honors an explicit credential override', async () => {
+    const server = await mockServer([{ events: textEvents }, { events: textEvents }])
+    const ctx = new Context()
+    await ctx.plugin(LlmRuntime)
+    await ctx.plugin(LlmPiAi, {
+      providers: {
+        lmstudio: {
+          baseURL: server.url + '/v1',
+          models: [{ id: 'qwen/qwen3-4b@q4_k_m' }],
+        },
+      },
+    })
+    const keyless = await assemble(ctx, {
+      provider: 'lmstudio',
+      model: 'qwen/qwen3-4b@q4_k_m',
+      messages: [],
+    })
+    expect(keyless.finish).toEqual({ kind: 'stop' })
+    expect(server.paths[0]).toBe('/v1/chat/completions')
+    expect(server.headers[0]?.authorization).toBe('Bearer lm-studio')
+
+    vi.stubEnv('LM_STUDIO_TEST_KEY', 'real-key')
+    const authenticated = new Context()
+    await authenticated.plugin(LlmRuntime)
+    await authenticated.plugin(LlmPiAi, {
+      providers: {
+        lmstudio: {
+          apiKeyEnv: 'LM_STUDIO_TEST_KEY',
+          baseURL: server.url + '/v1',
+          models: [{ id: 'qwen/qwen3-4b@q4_k_m' }],
+        },
+      },
+    })
+    await assemble(authenticated, {
+      provider: 'lmstudio',
+      model: 'qwen/qwen3-4b@q4_k_m',
+      messages: [],
+    })
+    expect(server.paths[1]).toBe('/v1/chat/completions')
+    expect(server.headers[1]?.authorization).toBe('Bearer real-key')
+  })
+
   it('merges profile headers with Harness attribution winning', async () => {
     const server = await mockServer([{ events: textEvents }])
     const ctx = await harness(server.url, {

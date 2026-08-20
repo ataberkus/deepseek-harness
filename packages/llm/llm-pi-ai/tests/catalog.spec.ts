@@ -149,10 +149,21 @@ describe('hand-declared providers', () => {
       // configuration surfaces mark as a route this deployment declared.
       declared: true,
     })
+    expect(directory).toContainEqual({
+      provider: 'lmstudio',
+      displayName: 'LM Studio',
+      settingsNs: 'llm-pi-ai',
+      settingsPath: ['providers', 'lmstudio'],
+      defaults: {
+        api: 'openai-completions',
+        baseURL: 'http://127.0.0.1:1234/v1',
+      },
+      declared: true,
+    })
     // Membership of the catalog, not of the settings document: a shipped
     // provider carries a stored profile the moment anyone corrects it.
     expect(directory.filter(entry => entry.declared).map(entry => entry.provider))
-      .toEqual(['acme-gateway'])
+      .toEqual(['lmstudio', 'acme-gateway'])
     expect(directory.find(entry => entry.provider === 'deepseek')?.declared).toBe(false)
   })
 

@@ -3510,7 +3510,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'LlmConfigurableProvider',
-    declaration: 'export interface LlmConfigurableProvider {\n    provider: string;\n    displayName: string;\n    settingsNs: string;\n    settingsPath: readonly string[];\n    declared?: boolean;\n}',
+    declaration: 'export interface LlmConfigurableProvider {\n    provider: string;\n    displayName: string;\n    settingsNs: string;\n    settingsPath: readonly string[];\n    defaults?: LlmProviderConfigDefaults;\n    declared?: boolean;\n}',
   },
   {
     name: 'LlmDiscoveredModel',
@@ -3535,6 +3535,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'LlmModelReasoningInfo',
     declaration: 'export interface LlmModelReasoningInfo {\n    efforts: readonly LlmReasoningEffortInfo[];\n    defaultEffort?: ReasoningEffortId;\n}',
+  },
+  {
+    name: 'LlmProviderConfigDefaults',
+    declaration: 'export interface LlmProviderConfigDefaults {\n    api?: string;\n    baseURL?: string;\n}',
   },
   {
     name: 'LlmProviderInfo',

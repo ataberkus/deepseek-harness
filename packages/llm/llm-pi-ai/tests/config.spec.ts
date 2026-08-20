@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { assertServiceable, Config } from '../src/config.ts'
+import { assertServiceable, Config, resolveProfiles } from '../src/config.ts'
 
 /** Validate one hand-declared route, with the caller's fields layered onto it. */
 const routeWith = (profile: Record<string, unknown>): (() => unknown) =>
@@ -17,6 +17,41 @@ const routeWith = (profile: Record<string, unknown>): (() => unknown) =>
 /** Validate that route with the caller's fields on its single model entry. */
 const configWith = (model: Record<string, unknown>): (() => unknown) =>
   routeWith({ models: [{ id: 'm', ...model }] })
+
+describe('LM Studio route defaults', () => {
+  it('materializes the local OpenAI-compatible defaults while preserving opaque models', () => {
+    const profile = resolveProfiles({
+      lmstudio: { models: [{ id: 'qwen/qwen3-4b@q4_k_m' }] },
+    }).get('lmstudio')
+    expect(profile).toMatchObject({
+      provider: 'lmstudio',
+      displayName: 'LM Studio',
+      api: 'openai-completions',
+      baseURL: 'http://127.0.0.1:1234/v1',
+    })
+    expect(profile?.piProvider.getModels().map(model => model.id)).toEqual(['qwen/qwen3-4b@q4_k_m'])
+  })
+
+  it('keeps explicit endpoint and protocol overrides', () => {
+    const profile = resolveProfiles({
+      lmstudio: {
+        displayName: 'Office LM Studio',
+        api: 'openai-responses',
+        baseURL: 'http://192.168.1.20:1234/v1',
+        models: [{ id: 'local-model' }],
+      },
+    }).get('lmstudio')
+    expect(profile).toMatchObject({
+      displayName: 'Office LM Studio',
+      api: 'openai-responses',
+      baseURL: 'http://192.168.1.20:1234/v1',
+    })
+  })
+
+  it('still requires an explicit model list', () => {
+    expect(() => resolveProfiles({ lmstudio: {} })).toThrow(/resolves no models/)
+  })
+})
 
 describe('reasoning schema boundary', () => {
   it('rejects a level pi-ai does not know at the write that produced it', () => {

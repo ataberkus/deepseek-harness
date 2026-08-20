@@ -425,6 +425,8 @@ interface LlmConfigurableProvider {
    * object; empty when the whole section is the profile.
    */
   settingsPath: readonly string[]
+  /** Values a settings surface may seed when creating this provider's profile. */
+  defaults?: LlmProviderConfigDefaults
   /**
    * Whether the owning adapter knows this route only because configuration
    * declared it — a gateway or self-hosted server it ships nothing about.

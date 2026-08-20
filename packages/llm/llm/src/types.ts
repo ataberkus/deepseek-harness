@@ -168,6 +168,14 @@ export interface ModelModalityMap {
 /** Any declared provider model modality. */
 export type ModelModality = ModelModalityMap[keyof ModelModalityMap]
 
+/** Values a settings surface may seed when creating a provider profile. */
+export interface LlmProviderConfigDefaults {
+  /** Wire protocol written when a new profile does not choose one. */
+  api?: string
+  /** Endpoint written when a new profile does not choose one. */
+  baseURL?: string
+}
+
 /**
  * One provider route an adapter plugin can activate through configuration,
  * whether or not the route is currently registered. Configuration surfaces
@@ -186,6 +194,8 @@ export interface LlmConfigurableProvider {
    * object; empty when the whole section is the profile.
    */
   settingsPath: readonly string[]
+  /** Values a settings surface may seed when creating this provider's profile. */
+  defaults?: LlmProviderConfigDefaults
   /**
    * Whether the owning adapter knows this route only because configuration
    * declared it — a gateway or self-hosted server it ships nothing about.

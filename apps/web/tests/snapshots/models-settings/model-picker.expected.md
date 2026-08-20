@@ -3,7 +3,9 @@
   - button "关闭":
     - img
   - paragraph: 以下是模型提供方的可用模型，勾选要添加的模型。
+  - searchbox "搜索模型"
   - button "全选"
+  - button "取消全选"
   - list:
     - listitem:
       - checkbox "MiniMax-M2.7"

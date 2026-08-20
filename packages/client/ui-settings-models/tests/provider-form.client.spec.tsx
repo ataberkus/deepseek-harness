@@ -73,6 +73,8 @@ function scriptedFace(options: {
   baseProviders?: Record<string, unknown>
   /** Routes the adapter reports as hand-declared; the rest come back as shipped. */
   declaredRoutes?: readonly string[]
+  /** Setup defaults carried by directory rows. */
+  defaults?: Record<string, { api?: string; baseURL?: string }>
   discover?: ReturnType<typeof vi.fn>
   mutate?: ReturnType<typeof vi.fn>
   set?: ReturnType<typeof vi.fn>
@@ -92,6 +94,7 @@ function scriptedFace(options: {
           displayName: provider,
           settingsNs: 'llm-pi-ai',
           settingsPath: ['providers', provider],
+          ...options.defaults?.[provider] === undefined ? {} : { defaults: { ...options.defaults[provider] } },
           active: true,
           declared: options.declaredRoutes?.includes(provider) ?? false,
         })),
@@ -799,6 +802,36 @@ describe('hand-declared providers', () => {
     })
     openEditor('acme-gateway')
     expect(fields()).toEqual([en.keyInput, en.customDisplayName, en.baseUrl, en.customApi])
+  })
+
+  it('prefills LM Studio defaults for discovery and persists them on apply', async () => {
+    const discover = vi.fn(() => Promise.resolve(ok({ models: [] })))
+    const { mutate } = await mountSection({
+      providers: { lmstudio: { models: [{ id: 'qwen/qwen3-4b@q4_k_m' }] } },
+      declaredRoutes: ['lmstudio'],
+      defaults: { lmstudio: { api: 'openai-completions', baseURL: 'http://127.0.0.1:1234/v1' } },
+      discover,
+    })
+    openEditor('lmstudio')
+
+    expect(screen.getByLabelText<HTMLInputElement>(en.baseUrl).value).toBe('http://127.0.0.1:1234/v1')
+    expect(screen.getByLabelText<HTMLSelectElement>(en.customApi).value).toBe('openai-completions')
+    fireEvent.click(screen.getByText(en.fetchModels))
+    await waitFor(() => { expect(discover).toHaveBeenCalledOnce() })
+    expect(firstProbe(discover)).toEqual({
+      settingsNs: 'llm-pi-ai',
+      provider: 'lmstudio',
+      baseURL: 'http://127.0.0.1:1234/v1',
+      api: 'openai-completions',
+    })
+
+    fireEvent.click(screen.getByText(en.apply))
+    await waitFor(() => { expect(mutate).toHaveBeenCalledOnce() })
+    const paths = firstMutate(mutate).ops.map(op => op.path.join('.'))
+    expect(paths).toEqual(expect.arrayContaining([
+      'providers.lmstudio.api',
+      'providers.lmstudio.baseURL',
+    ]))
   })
 
   it('renames a declared route and falls back to its id when the name is cleared', async () => {

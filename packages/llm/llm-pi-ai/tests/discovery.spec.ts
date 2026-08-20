@@ -161,6 +161,30 @@ describe('catalog-route model discovery', () => {
 })
 
 describe('draft-provider model discovery', () => {
+  it('discovers opaque LM Studio model ids without catalog filtering', async () => {
+    const server = await listingServer({
+      body: JSON.stringify({
+        data: [
+          { id: 'qwen/qwen3-4b@q4_k_m' },
+          { id: 'google/gemma-3-4b-it' },
+        ],
+      }),
+    })
+    const ctx = await harness()
+
+    const models = await ctx.llm.discoverModels('llm-pi-ai', {
+      provider: 'lmstudio',
+      baseURL: server.url + '/v1',
+    })
+
+    expect(models.map(model => model.id)).toEqual([
+      'qwen/qwen3-4b@q4_k_m',
+      'google/gemma-3-4b-it',
+    ])
+    expect(server.paths).toEqual(['/v1/models'])
+    expect(server.headers[0]?.authorization).toBeUndefined()
+  })
+
   it('reads an OpenAI-compatible listing and keeps the capacities it discloses', async () => {
     const server = await listingServer({
       body: JSON.stringify({

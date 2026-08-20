@@ -5,8 +5,10 @@
  * under the profile's reference, deriving `<ROUTE>_API_KEY` when the profile
  * has none. The pi-ai profile records that derivation as `apiKeyEnv` only when
  * a key is entered; a blank key materializes a reference-free profile for
- * provider-native authentication);
- * the collapsed 自定义设置 area carries the per-family extras (`baseURL` for
+ * provider-native authentication. Directory-provided defaults seed fields
+ * absent from both the user profile and effective profile, so named presets such
+ * as LM Studio can be used without requiring a copied endpoint.
+ * The collapsed 自定义设置 area carries the per-family extras (`baseURL` for
  * both families, DeepSeek's id/name/context-window model catalog, and the
  * display name and wire protocol of a pi-ai route the adapter does not ship —
  * the two fields the create card asked that route for, editable here for the
@@ -23,7 +25,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
-import type { CredentialView, IApiClient, SettingsNamespaceView, SettingsPathOpView } from '@deepseek-ai/dsh-api-remotes/client'
+import type { ConfigurableProviderView, CredentialView, IApiClient, SettingsNamespaceView, SettingsPathOpView } from '@deepseek-ai/dsh-api-remotes/client'
 import {
   DeepSeekModelsEditor, modelDrafts, validateDeepSeekModels,
 } from './DeepSeekModelsEditor.tsx'
@@ -40,6 +42,8 @@ type EditorLayout = 'deepseek' | 'pi-ai' | 'unknown'
 
 /** The public DeepSeek endpoint shown as the deepseek base-URL placeholder. */
 const DEEPSEEK_PUBLIC_BASE_URL = 'https://api.deepseek.com'
+
+type ProviderDefaults = NonNullable<ConfigurableProviderView['defaults']>
 
 /** Props of {@link ProviderEditor}. */
 export interface ProviderEditorProps {
@@ -63,6 +67,8 @@ export interface ProviderEditorProps {
   schema: SettingsSchemaOperations
   /** Path from the section root to this provider's profile. */
   settingsPath: readonly string[]
+  /** Values to seed when neither the user nor effective profile supplies them. */
+  defaults?: ProviderDefaults
   /** Wire faces for writes and for interrogating a provider endpoint. */
   api: Pick<IApiClient, 'settings' | 'credentials' | 'llm'>
   /** Section copy. */
@@ -85,15 +91,26 @@ export interface ProviderEditorProps {
   onClose: (changed: boolean) => void
 }
 
-/** A user-section subtree as a plain draft object (absent → empty). */
+/** Build a user-section draft and seed directory defaults only when both layers omit a field. */
 function draftAt(
   schema: SettingsSchemaOperations,
   namespace: SettingsNamespaceView,
   path: readonly string[],
+  defaults?: ProviderDefaults,
 ): Record<string, unknown> {
   const subtree = schema.getPath(namespace.user, path)
-  if (typeof subtree !== 'object' || subtree === null || Array.isArray(subtree)) return {}
-  return structuredClone(subtree) as Record<string, unknown>
+  const draft = typeof subtree === 'object' && subtree !== null && !Array.isArray(subtree)
+    ? structuredClone(subtree) as Record<string, unknown>
+    : {}
+  const effective = schema.getPath(namespace.value, path)
+  const effectiveProfile = typeof effective === 'object' && effective !== null && !Array.isArray(effective)
+    ? effective as Record<string, unknown>
+    : undefined
+  for (const [key, value] of Object.entries(defaults ?? {})) {
+    if (draft[key] !== undefined || effectiveProfile !== undefined && key in effectiveProfile) continue
+    draft[key] = value
+  }
+  return draft
 }
 
 /**
@@ -153,7 +170,7 @@ function refFor(
  */
 export function ProviderEditor(props: ProviderEditorProps): ReactNode {
   const { namespace, schema, settingsPath, api, t } = props
-  const [draft, setDraft] = useState<Record<string, unknown>>(() => draftAt(schema, namespace, settingsPath))
+  const [draft, setDraft] = useState<Record<string, unknown>>(() => draftAt(schema, namespace, settingsPath, props.defaults))
   const [keyDraft, setKeyDraft] = useState('')
   const [keyState, setKeyState] = useState<CredentialView | undefined>(undefined)
   const [busy, setBusy] = useState(false)

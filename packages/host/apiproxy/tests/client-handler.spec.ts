@@ -736,6 +736,7 @@ describe('config unary surface', () => {
       displayName: 'openai',
       settingsNs: 'llm-pi-ai',
       settingsPath: ['providers', 'openai'],
+      defaults: { api: 'openai-completions', baseURL: 'https://proxy.test/v1' },
       active: false,
     }
     const group = { id: 'deepseek-official', name: 'DeepSeek', models: [{ id: 'deepseek-v4-flash', name: 'Flash' }] }

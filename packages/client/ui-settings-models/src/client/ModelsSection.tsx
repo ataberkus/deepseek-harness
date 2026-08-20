@@ -8,7 +8,8 @@
  * configured key renders as its open setup card instead of a row, but only in
  * the first-run posture — no provider on the page can serve requests yet — and
  * only until the user closes that card; the add flow is a card carrying the
- * dormant-provider select. Each card kind owns its own open state, so closing
+ * dormant-provider select; directory entries may also carry setup defaults
+ * for named presets such as LM Studio. Each card kind owns its own open state, so closing
  * one never discards a draft in another. Every mutation writes through the
  * wire, while a provider removal first requires confirmation; the page
  * re-renders from pushed invalidations or the post-apply reload.
@@ -63,6 +64,8 @@ export interface ProviderIdentity {
 interface EditorTarget extends ProviderIdentity {
   settingsNs: string
   settingsPath: readonly string[]
+  /** Values a settings surface may seed when creating this provider's profile. */
+  defaults?: ProviderEditorProps['defaults']
   /** Writable credential identified under this page's conventional reference. */
   credentialRef?: string
   /** The adapter reports this route as one it does not ship (see {@link ProviderEditorProps.declared}). */
@@ -90,6 +93,7 @@ function renderProviderEditor({ target, ...props }: ProviderEditorRenderProps): 
       provider={target.provider}
       displayName={target.displayName}
       settingsPath={target.settingsPath}
+      {...target.defaults === undefined ? {} : { defaults: target.defaults }}
       {...target.declared === true ? { declared: true } : {}}
       {...props}
     />
@@ -183,6 +187,7 @@ function targetOf(row: ProviderRow): EditorTarget {
     displayName: row.entry.displayName,
     settingsNs: row.entry.settingsNs,
     settingsPath: row.entry.settingsPath,
+    ...row.entry.defaults === undefined ? {} : { defaults: { ...row.entry.defaults } },
     ...credentialRef === undefined ? {} : { credentialRef },
     // Absent is not "shipped": an adapter that answers nothing leaves the
     // route-level fields only a declared route owns off the card, exactly as
@@ -511,6 +516,8 @@ function Loaded({ injected }: { injected: ModelsSectionFace }): ReactNode {
                 namespace={addNamespace}
                 schema={schema}
                 settingsPath={addTarget.settingsPath}
+                {...addTarget.defaults === undefined ? {} : { defaults: addTarget.defaults }}
+                {...addTarget.declared === true ? { declared: true } : {}}
                 api={api}
                 t={t}
                 readOnly={!state.writable}

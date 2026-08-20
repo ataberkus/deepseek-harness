@@ -164,10 +164,23 @@ describe('configurable-provider directory', () => {
     [entry({ displayName: '' }), /non-empty provider/],
     [entry({ settingsNs: '' }), /non-empty provider/],
     [entry({ settingsPath: ['providers', ''] }), /empty settingsPath segment/],
+    [entry({ defaults: { api: '' } }), /empty default api/],
+    [entry({ defaults: { baseURL: '' } }), /empty default baseURL/],
   ])('rejects invalid entries all-or-nothing', async (invalid, message) => {
     const ctx = await setup()
     expect(() => ctx.llm.registerConfigurableProviders([entry({ provider: 'valid-first' }), invalid])).toThrow(message)
     expect(ctx.llm.listConfigurableProviders()).toEqual([])
+  })
+
+  it('detaches nested setup defaults from callers and readers', async () => {
+    const ctx = await setup()
+    const defaults = { api: 'openai-completions', baseURL: 'https://local.test/v1' }
+    ctx.llm.registerConfigurableProviders([entry({ defaults })])
+    defaults.api = 'mutated-after-registration'
+    const first = ctx.llm.listConfigurableProviders()[0]
+    expect(first?.defaults).toEqual({ api: 'openai-completions', baseURL: 'https://local.test/v1' })
+    if (first?.defaults !== undefined) first.defaults.baseURL = 'mutated-after-read'
+    expect(ctx.llm.listConfigurableProviders()[0]?.defaults?.baseURL).toBe('https://local.test/v1')
   })
 
   it('replaces its entries atomically, keeping the old set when a candidate collides', async () => {

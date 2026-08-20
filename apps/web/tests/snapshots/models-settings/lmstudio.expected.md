@@ -38,7 +38,7 @@
     - option "huggingface"
     - option "kimi-coding"
     - option "minimax"
-    - option "minimax-cn" [selected]
+    - option "minimax-cn"
     - option "mistral"
     - option "moonshotai"
     - option "moonshotai-cn"
@@ -58,10 +58,27 @@
     - option "xiaomi-token-plan-sgp"
     - option "zai"
     - option "zai-coding-cn"
-    - option "LM Studio"
+    - option "LM Studio" [selected]
   - text: API 密钥
   - textbox "API 密钥":
     - /placeholder: 输入 API 密钥，或留空使用环境认证
-  - group: 自定义设置
+  - group:
+    - text: 自定义设置 显示名称
+    - textbox "显示名称":
+      - /placeholder: lmstudio
+    - text: API 地址
+    - textbox "API 地址":
+      - /placeholder: 提供方默认
+      - text: http://127.0.0.1:1234/v1
+    - text: API 协议
+    - combobox "API 协议":
+      - option "openai-completions" [selected]
+      - option "openai-responses"
+      - option "anthropic-messages"
+    - region "模型目录":
+      - text: 模型目录 正在使用适配器默认模型
+      - button "获取可用模型"
+      - paragraph: 模型选择器中将不显示任何模型；目录外 ID 仍可直接发送。
+      - button "添加模型"
   - button "取消"
   - button "保存"

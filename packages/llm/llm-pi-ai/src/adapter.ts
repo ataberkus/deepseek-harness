@@ -16,8 +16,10 @@
  * API-key credentials stay outside that collection. The harness resolves a
  * route's key through its own seam and passes it as the request's `apiKey`
  * option, which pi-ai treats as the highest-priority auth override, so a named
- * `apiKeyEnv` keeps fail-loud reference semantics. OAuth credentials use the
- * optional collection store: pi-ai refreshes them under `CredentialStore.modify`,
+ * `apiKeyEnv` keeps fail-loud reference semantics; the named LM Studio route
+ * uses a non-secret placeholder only when no explicit reference is configured.
+ * OAuth credentials use the optional collection store: pi-ai refreshes them under
+ * `CredentialStore.modify`,
  * and a missing stored token fails as `Provider is not configured`.
  *
  * @module dsh-llm-pi-ai/adapter
@@ -90,7 +92,8 @@ export interface PiAiAdapterOptions {
    * Resolve the credential for one already-resolved profile; called once per
    * stream call and frozen for that call. `undefined` defers to the route's own
    * pi-ai auth, which for an installed catalog route is its provider-native
-   * ambient discovery; the plugin allows that only for a profile naming no
+   * ambient discovery; the named LM Studio route returns a non-secret placeholder
+   * instead. The plugin allows ambient discovery only for a profile naming no
    * credential at all, because a named reference that misses throws `LlmError`
    * `MISSING_CREDENTIAL` rather than falling back.
    */

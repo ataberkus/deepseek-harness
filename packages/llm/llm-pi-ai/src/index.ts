@@ -2,11 +2,12 @@
  * Generic pi-ai-backed LLM adapter plugin. One plugin instance owns a dict of
  * provider routes; a route naming an installed pi-ai provider inherits that
  * provider's endpoint, protocol, and model catalog as defaults, and a route
- * pi-ai does not ship is declared outright. Profile facts resolve per request
- * over the optional `llm-pi-ai` user-settings section and the optional
- * credential seam, so a changed key, endpoint, model, or knob reaches the next
- * request without a restart; a changed *route set* (or a route's
- * registration-captured retry policy) re-registers the same adapter instance
+ * pi-ai does not ship is declared outright. The named `lmstudio` route is an
+ * OpenAI-compatible preset with local endpoint and protocol defaults. Profile
+ * facts resolve per request over the optional `llm-pi-ai` user-settings
+ * section and credential seam, so a changed key, endpoint, model, or knob
+ * reaches the next request without a restart; a changed *route set* (or a
+ * route's registration-captured retry policy) re-registers the same adapter instance
  * in place.
  *
  * ```yaml
@@ -26,6 +27,10 @@
  *         models:
  *           - id: claude-sonnet-4-5
  *             contextWindow: 200000
+ *       # First-class LM Studio route; models remain explicit.
+ *       lmstudio:
+ *         models:
+ *           - id: qwen/qwen3-4b@q4_k_m
  *       # Hand-declared route: pi-ai ships nothing under this key.
  *       acme-gateway:
  *         displayName: Acme Gateway
@@ -69,6 +74,13 @@ import type { ResolvedPiAiProviderProfile } from './config.ts'
 import { discoverModels } from './discovery.ts'
 import { logoutHostedOAuth, oauthProviderProfiles, registerOAuthCommands } from './oauth-login.ts'
 import { FileOAuthStore, OAUTH_CREDENTIALS_FILENAME } from './oauth-store.ts'
+import {
+  LM_STUDIO_API,
+  LM_STUDIO_BASE_URL,
+  LM_STUDIO_DISPLAY_NAME,
+  LM_STUDIO_PLACEHOLDER_API_KEY,
+  LM_STUDIO_PROVIDER,
+} from './lmstudio.ts'
 
 export { PiAiAdapter } from './adapter.ts'
 export type { PiAiAdapterOptions } from './adapter.ts'
@@ -117,28 +129,34 @@ function registrationFacts(profiles: ReadonlyMap<string, ResolvedPiAiProviderPro
 
 /**
  * The configurable-provider directory: every installed catalog route this
- * adapter can authenticate, plus every route the current profiles declare. A
- * hand-declared route has no catalog entry, so without this union it would
- * have no settings address and configuration surfaces could neither show nor
- * edit it.
+ * adapter can authenticate, the named LM Studio preset, plus every route the
+ * current profiles declare. A hand-declared route has no catalog entry, so
+ * without this union it would have no settings address and configuration
+ * surfaces could neither show nor edit it.
  *
  * The profile half is unconditional, which is what keeps a route already
  * stored against a withheld provider editable and deletable rather than
  * stranded in the settings document with nothing on the page to remove it.
  * @param profiles - the currently resolved provider profiles.
- * @returns the directory entries in catalog order, declared routes last.
+ * @returns the directory entries in catalog order, followed by LM Studio and
+ * profile-only routes.
  */
 function directoryEntries(
   profiles: ReadonlyMap<string, ResolvedPiAiProviderProfile>,
 ): LlmConfigurableProvider[] {
   const catalog = new Set(catalogProviderIds())
   const entries = new Map<string, LlmConfigurableProvider>()
-  const declare = (provider: string, displayName: string): void => {
+  const declare = (
+    provider: string,
+    displayName: string,
+    defaults?: LlmConfigurableProvider['defaults'],
+  ): void => {
     entries.set(provider, {
       provider,
       displayName,
       settingsNs: NS,
       settingsPath: ['providers', provider],
+      ...defaults === undefined ? {} : { defaults: { ...defaults } },
       // Membership of the installed catalog, not of the settings document:
       // narrowing a shipped provider's models stores a profile too, and that
       // route is still one pi-ai knows.
@@ -153,7 +171,19 @@ function directoryEntries(
   for (const provider of catalog) {
     if (catalogProviderTakesApiKey(provider)) declare(provider, provider)
   }
-  for (const [provider, profile] of profiles) declare(provider, profile.displayName)
+  declare(LM_STUDIO_PROVIDER, LM_STUDIO_DISPLAY_NAME, {
+    api: LM_STUDIO_API,
+    baseURL: LM_STUDIO_BASE_URL,
+  })
+  for (const [provider, profile] of profiles) {
+    declare(
+      provider,
+      profile.displayName,
+      provider === LM_STUDIO_PROVIDER
+        ? { api: LM_STUDIO_API, baseURL: LM_STUDIO_BASE_URL }
+        : undefined,
+    )
+  }
   return [...entries.values()]
 }
 
@@ -211,11 +241,15 @@ export function apply(ctx: Context, config: Config): void {
   ): Promise<string | undefined> => {
     const ref = profile.apiKeyEnv
     // Only a profile that names no credential at all defers to pi-ai's
-    // provider-native discovery. Once one is named, a miss must fail loud:
+    // provider-native discovery; LM Studio receives its non-secret placeholder
+    // below because pi-ai's OpenAI client still requires a key-shaped value. Once
+    // one is named, a miss must fail loud:
     // handing pi-ai `undefined` would let it pick up an unrelated ambient key
     // (OPENAI_API_KEY and friends), billing another tenant for a request the
     // deployment meant to authenticate differently.
-    if (ref === undefined) return undefined
+    if (ref === undefined) {
+      return provider === LM_STUDIO_PROVIDER ? LM_STUDIO_PLACEHOLDER_API_KEY : undefined
+    }
     const credentials = ctx.get('credentials')
     const hit = credentials !== undefined
       ? (await credentials.resolve(ref))?.value
@@ -270,11 +304,11 @@ export function apply(ctx: Context, config: Config): void {
   }
   ensureDirectory()
   /**
-   * The credential a named route already resolves, for an interrogation whose
-   * draft carries none. A route being declared for the first time names no
-   * profile yet, and a profile that names no credential defers to pi-ai's own
-   * discovery, so both answer `undefined` and the endpoint is asked
-   * unauthenticated — the same posture a request to that route would take.
+   * The credential a named route already resolves for an interrogation whose
+   * draft carries none. A route being declared for the first time has no stored
+   * profile, so discovery is unauthenticated. A stored profile follows the same
+   * resolver as requests: provider-native discovery when no credential is named,
+   * LM Studio's non-secret placeholder, or the explicitly referenced credential.
    */
   const storedApiKey = async (provider: string | undefined): Promise<string | undefined> => {
     if (provider === undefined) return undefined

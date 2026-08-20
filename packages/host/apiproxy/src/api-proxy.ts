@@ -3970,6 +3970,7 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
           displayName: entry.displayName,
           settingsNs: entry.settingsNs,
           settingsPath: [...entry.settingsPath],
+          ...entry.defaults === undefined ? {} : { defaults: { ...entry.defaults } },
           active: active.has(entry.provider),
           ...entry.declared === undefined ? {} : { declared: entry.declared },
         }))

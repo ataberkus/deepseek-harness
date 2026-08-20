@@ -5,8 +5,10 @@
  *
  * A route key is not required to name an installed pi-ai provider. When it does,
  * that provider's endpoint, protocol, display name, and model catalog are the
- * profile's defaults and the profile overrides them field by field; when it does
- * not, the profile is the whole provider declaration. Resolution therefore ends
+ * profile's defaults and the profile overrides them field by field; the named
+ * `lmstudio` route supplies its local endpoint and protocol defaults but still
+ * requires an explicit model list. For every other unknown key, the profile is
+ * the whole provider declaration. Resolution therefore ends
  * in a built pi-ai `Provider` per route: everything a request needs is decided
  * once, while the configuration key that made a route unserviceable can still be
  * named in the failure.
@@ -38,6 +40,7 @@ import type {
   PiAiReasoningEfforts,
 } from './catalog.ts'
 import { buildProvider, supportedProtocols } from './provider.ts'
+import { LM_STUDIO_API, LM_STUDIO_BASE_URL, LM_STUDIO_DISPLAY_NAME, LM_STUDIO_PROVIDER } from './lmstudio.ts'
 
 /** Default maximum idle interval while an adapter stream read is outstanding. */
 export const DEFAULT_STREAM_IDLE_TIMEOUT_MS = 300_000
@@ -84,19 +87,21 @@ export type {
 export interface PiAiProviderProfile {
   /** Credential reference (environment-variable name) resolved per request through `ctx.credentials`. */
   apiKeyEnv?: string
-  /** Name shown by configuration surfaces; defaults to the route key. */
+  /** Name shown by configuration surfaces; LM Studio defaults to its product name, other routes to the route key. */
   displayName?: string
   /**
    * Wire protocol every model on this route speaks. Omission keeps each
    * installed catalog model's own protocol, which is why a catalog route needs
-   * no protocol at all; a route the catalog does not ship must name one.
+   * no protocol at all; LM Studio supplies its OpenAI-compatible default, and every
+   * other route the catalog does not ship must name one.
    */
   api?: string
-  /** Endpoint for this route's models; defaults to the installed catalog's endpoint. */
+  /** Endpoint for this route's models; LM Studio defaults locally, other catalog routes use their installed endpoint. */
   baseURL?: string
   /**
    * This route's model catalog. Omission serves the installed catalog for the
-   * route unchanged; an explicit list replaces it, each entry defaulting its
+   * route unchanged, except that LM Studio requires an explicit list; an explicit
+   * list replaces it, each entry defaulting its
    * unset fields from the installed model of the same id.
    */
   models?: PiAiModelProfile[]
@@ -410,11 +415,14 @@ export function resolveProfiles(
     // The route key, not the installed provider's own name: the directory has
     // always shown route keys, and a catalog route must not silently rename
     // itself on every configuration surface just because it gained a profile.
-    const displayName = source.displayName ?? provider
+    const api = source.api ?? (provider === LM_STUDIO_PROVIDER ? LM_STUDIO_API : undefined)
+    const baseURL = source.baseURL ?? (provider === LM_STUDIO_PROVIDER ? LM_STUDIO_BASE_URL : undefined)
+    const displayName = source.displayName
+      ?? (provider === LM_STUDIO_PROVIDER ? LM_STUDIO_DISPLAY_NAME : provider)
     const catalog = resolveRouteModels({
       provider,
-      ...source.api === undefined ? {} : { api: source.api },
-      ...source.baseURL === undefined ? {} : { baseURL: source.baseURL },
+      ...api === undefined ? {} : { api },
+      ...baseURL === undefined ? {} : { baseURL },
       ...source.models === undefined ? {} : { models: source.models },
       ...source.modelOverrides === undefined ? {} : { modelOverrides: source.modelOverrides },
       ...source.compat === undefined ? {} : { compat: source.compat },
@@ -422,11 +430,21 @@ export function resolveProfiles(
       defaultContextWindow: source.defaultContextWindow ?? DEFAULT_CONTEXT_WINDOW,
       defaultMaxTokens: source.defaultMaxTokens ?? DEFAULT_MAX_TOKENS,
     })
-    const { apiKeyEnv, retryPolicy, models: _models, displayName: _displayName, ...rest } = source
+    const {
+      api: _api,
+      baseURL: _baseURL,
+      apiKeyEnv,
+      retryPolicy,
+      models: _models,
+      displayName: _displayName,
+      ...rest
+    } = source
     resolved.set(provider, {
       ...rest,
       provider,
       displayName,
+      ...api === undefined ? {} : { api },
+      ...baseURL === undefined ? {} : { baseURL },
       ...apiKeyEnv === undefined ? {} : { apiKeyEnv: credentialRef(apiKeyEnv) },
       streamIdleTimeoutMs,
       maxRequestImageBytes,
@@ -438,8 +456,8 @@ export function resolveProfiles(
       piProvider: buildProvider({
         provider,
         displayName,
-        ...source.api === undefined ? {} : { api: source.api },
-        ...source.baseURL === undefined ? {} : { baseURL: source.baseURL },
+        ...api === undefined ? {} : { api },
+        ...baseURL === undefined ? {} : { baseURL },
         models: catalog.models,
         namesCredential: apiKeyEnv !== undefined,
       }),

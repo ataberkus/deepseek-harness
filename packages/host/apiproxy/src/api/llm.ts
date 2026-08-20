@@ -21,6 +21,13 @@ export interface ConfigurableProviderView {
   settingsNs: string
   /** Path from that section's root to the provider's profile object (empty = whole section). */
   settingsPath: string[]
+  /** Values a settings surface may seed when creating this provider's profile. */
+  defaults?: {
+    /** Wire protocol written when a new profile does not choose one. */
+    api?: string
+    /** Endpoint written when a new profile does not choose one. */
+    baseURL?: string
+  }
   /** Whether the route is currently registered (its models are requestable). */
   active: boolean
   /**

@@ -461,11 +461,21 @@ export class LlmRuntime extends Service {
         if (entry.settingsPath.some(segment => segment.length === 0)) {
           throw new LlmError(`configurable provider "${entry.provider}" has an empty settingsPath segment`, 'INVALID_DIRECTORY')
         }
+        if (entry.defaults?.api !== undefined && entry.defaults.api.length === 0) {
+          throw new LlmError(`configurable provider "${entry.provider}" has an empty default api`, 'INVALID_DIRECTORY')
+        }
+        if (entry.defaults?.baseURL !== undefined && entry.defaults.baseURL.length === 0) {
+          throw new LlmError(`configurable provider "${entry.provider}" has an empty default baseURL`, 'INVALID_DIRECTORY')
+        }
         if ((this.directory.has(entry.provider) && !own.has(entry.provider))
           || detached.some(seen => seen.provider === entry.provider)) {
           throw new LlmError(`configurable provider "${entry.provider}" is already declared`, 'DUPLICATE_DIRECTORY')
         }
-        detached.push({ ...entry, settingsPath: [...entry.settingsPath] })
+        detached.push({
+          ...entry,
+          settingsPath: [...entry.settingsPath],
+          ...entry.defaults === undefined ? {} : { defaults: { ...entry.defaults } },
+        })
       }
       for (const entry of held) this.directory.delete(entry.provider)
       for (const entry of detached) this.directory.set(entry.provider, entry)
@@ -501,7 +511,11 @@ export class LlmRuntime extends Service {
    * @returns detached directory entries in declaration order.
    */
   listConfigurableProviders(): LlmConfigurableProvider[] {
-    return [...this.directory.values()].map(entry => ({ ...entry, settingsPath: [...entry.settingsPath] }))
+    return [...this.directory.values()].map(entry => ({
+      ...entry,
+      settingsPath: [...entry.settingsPath],
+      ...entry.defaults === undefined ? {} : { defaults: { ...entry.defaults } },
+    }))
   }
 
   /**
