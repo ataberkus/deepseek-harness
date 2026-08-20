@@ -9,7 +9,7 @@ import {
   SubagentCatalogAction, type SubagentCatalogActionProps,
 } from '../src/client/SubagentCatalogAction.tsx'
 import { SubagentReadOnlyComposer } from '../src/client/SubagentReadOnlyComposer.tsx'
-import { zh } from '../src/client/locales.ts'
+import { en, zh } from '../src/client/locales.ts'
 
 afterEach(() => {
   cleanup()
@@ -277,14 +277,14 @@ describe('SubagentCatalogAction', () => {
         outputTokens: 200,
         cacheReadTokens: 3_000,
         cacheWriteTokens: 400,
-        costUsd: 0,
+        costUsd: 0.0123,
       },
       finished: {
         uncachedInputTokens: 123,
         outputTokens: 0,
         cacheReadTokens: 0,
         cacheWriteTokens: 0,
-        costUsd: 0,
+        costUsd: 1.2,
       },
       interrupted: {
         uncachedInputTokens: 123_000_000,
@@ -330,14 +330,21 @@ describe('SubagentCatalogAction', () => {
     expect(within(trigger).getByText('9 个子代理')).toBeTruthy()
     fireEvent.click(trigger)
 
-    const runningRow = screen.getByRole('treeitem', { name: /running.*4\.6K tok · 1分10秒/ })
+    const runningRow = screen.getByRole('treeitem', {
+      name: /running.*花费 \$0\.0123.*4\.6K tok · 1分10秒/,
+    })
     const runningMetrics = within(runningRow)
+    const costMetric = runningMetrics.getByText('花费 $0.0123')
     const tokenMetric = runningMetrics.getByText('4.6K tok')
     const durationMetric = runningMetrics.getByText('1分10秒')
-    expect(tokenMetric.parentElement).toBe(durationMetric.parentElement)
+    expect(costMetric.parentElement).toBe(tokenMetric.parentElement)
+    expect(costMetric.nextElementSibling).toBe(tokenMetric)
     expect(tokenMetric.nextElementSibling).toBe(durationMetric)
-    expect(screen.getByRole('treeitem', { name: /finished.*123 tok · 1小时02分03秒/ })).toBeTruthy()
+    expect(screen.getByRole('treeitem', {
+      name: /finished.*花费 \$1\.20.*123 tok · 1小时02分03秒/,
+    })).toBeTruthy()
     expect(screen.getByRole('treeitem', { name: /interrupted.*123M tok · 6秒/ })).toBeTruthy()
+    expect(screen.queryByText('花费 $0.00')).toBeNull()
     expect(screen.getByRole('treeitem', { name: /days.*12天05小时06分07秒/ })).toBeTruthy()
     expect(screen.getByText('12天5小时').getAttribute('title'))
       .toBe('总活跃耗时：12天05小时06分07秒')
@@ -348,9 +355,42 @@ describe('SubagentCatalogAction', () => {
     expect(screen.getByText('约1年')).toBeTruthy()
 
     await vi.advanceTimersByTimeAsync(1_000)
-    expect(screen.getByRole('treeitem', { name: /running.*4\.6K tok · 1分11秒/ })).toBeTruthy()
-    expect(screen.getByRole('treeitem', { name: /finished.*123 tok · 1小时02分03秒/ })).toBeTruthy()
+    expect(screen.getByRole('treeitem', {
+      name: /running.*花费 \$0\.0123.*4\.6K tok · 1分11秒/,
+    })).toBeTruthy()
+    expect(screen.getByRole('treeitem', {
+      name: /finished.*花费 \$1\.20.*123 tok · 1小时02分03秒/,
+    })).toBeTruthy()
     expect(screen.getByRole('treeitem', { name: /interrupted.*123M tok · 6秒/ })).toBeTruthy()
+  })
+
+  it('localizes positive child spend in the catalog row', () => {
+    const input = props(catalog({
+      entries: [{
+        kind: 'child', id: CHILD, mode: 'continuable', label: 'worker',
+        activity: 'inactive', hasChildren: false,
+      }],
+    }), {}, {
+      [CHILD]: {
+        ...summary(CHILD, 1),
+        parentId: PARENT,
+        origin: 'subagent',
+        projectionValues: {
+          tokenUsage: {
+            uncachedInputTokens: 1,
+            outputTokens: 2,
+            cacheReadTokens: 0,
+            cacheWriteTokens: 0,
+            costUsd: 0.0101,
+          },
+        },
+      },
+    })
+    render(<SubagentCatalogAction {...input} t={makeTranslate(en)} />)
+    fireEvent.click(screen.getByRole('button', { name: '1 subagent' }))
+
+    expect(screen.getByRole('treeitem', { name: /worker.*Cost \$0\.0101.*3 tok/ })).toBeTruthy()
+    expect(screen.getByText('Cost $0.0101')).toBeTruthy()
   })
 
   it('lazily expands and collapses descendant catalogs with direct-parent navigation', () => {

@@ -70,6 +70,21 @@ function formatTokens(value: number): string {
   return `${scaled(value / 1_000_000)}M`
 }
 
+/** Format a positive adapter-reported USD spend without losing sub-cent precision. */
+function formatCost(usd: number): string {
+  const cents = usd * 100
+  const hasSubCentPrecision = Math.abs(cents - Math.round(cents)) > 1e-9
+  return usd < 0.01 || hasSubCentPrecision ? `$${usd.toFixed(4)}` : `$${usd.toFixed(2)}`
+}
+
+/** Return positive adapter-reported spend from one durable child projection. */
+function costTotal(
+  usage: SessionProjectionMap['tokenUsage'] | undefined,
+): number | undefined {
+  const cost = usage?.costUsd
+  return typeof cost === 'number' && Number.isFinite(cost) && cost > 0 ? cost : undefined
+}
+
 /** Sum the four disjoint durable provider-usage buckets. */
 function tokenTotal(
   usage: SessionProjectionMap['tokenUsage'] | undefined,
@@ -276,12 +291,17 @@ function CatalogRows({
         const secondary = [summary?.title, mode, activity]
           .filter(value => value !== undefined)
           .join(' · ')
-        const totalTokens = tokenTotal(summary?.projectionValues?.tokenUsage)
+        const usage = summary?.projectionValues?.tokenUsage
+        const totalTokens = tokenTotal(usage)
+        const totalCost = costTotal(usage)
         const durationMs = activityDuration(
           summary,
           entry.activity,
           now,
         )
+        const costMetric = totalCost === undefined
+          ? undefined
+          : t('cost.label', { cost: formatCost(totalCost) })
         const tokenMetric = totalTokens === undefined
           ? undefined
           : `${formatTokens(totalTokens)} tok`
@@ -291,7 +311,7 @@ function CatalogRows({
             compact: formatDuration(durationMs, t),
             exact: formatExactDuration(durationMs, t),
           }
-        const metrics = [tokenMetric, durationMetric?.exact]
+        const metrics = [costMetric, tokenMetric, durationMetric?.exact]
           .filter(value => value !== undefined)
           .join(' · ')
 
@@ -352,6 +372,7 @@ function CatalogRows({
                 </span>
                 {metrics !== '' && (
                   <span className={css.metrics}>
+                    {costMetric !== undefined && <span className={css.metricCost}>{costMetric}</span>}
                     {tokenMetric !== undefined && <span className={css.metricToken}>{tokenMetric}</span>}
                     {durationMetric !== undefined && (
                       <span

@@ -179,21 +179,25 @@
 }
 
 .metrics {
-  display: grid;
-  grid-template-rows: 18px 16px;
+  display: flex;
   flex: none;
+  flex-direction: column;
+  align-items: flex-end;
   font-variant-numeric: tabular-nums;
   text-align: right;
   white-space: nowrap;
 }
 
+.metricCost {
+  line-height: 16px;
+}
+
 .metricToken {
-  grid-row: 1;
   line-height: 18px;
 }
 
 .metricDuration {
-  grid-row: 2;
+  line-height: 16px;
 }
 
 .children {
