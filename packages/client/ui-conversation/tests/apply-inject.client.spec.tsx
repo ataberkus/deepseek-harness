@@ -15,6 +15,7 @@
 // chat-toolview-slot.spec.tsx.
 
 import { describe, expect, it, vi } from 'vitest'
+import type { Context } from '@deepseek-ai/cordis'
 import { SlotTestRuntime, usePinnedBrowserLanguages, stubSettingsScope } from '@deepseek-ai/dsh-client-test-runtime'
 import type { SessionBehaviorOverrides } from '@deepseek-ai/dsh-client-test-runtime'
 import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
@@ -45,7 +46,7 @@ function sessionFakeFor() {
   } satisfies SessionBehaviorOverrides
 }
 
-async function bench() {
+async function bench(options: { afterApply?: (ctx: Context) => void } = {}) {
   const runtime = await SlotTestRuntime.create()
   runtime.provide('connection', { api: { settings: {} }, isLoopback: false })
   // The plugin injects both; these specs exercise no settings path.
@@ -70,7 +71,13 @@ async function bench() {
     'details': { kind: 'single', scope: 'session' },
   }, (_p: { renderSlot?: unknown }) => null)
 
-  const feature = await runtime.mount({ inject: [...inject], apply })
+  const feature = await runtime.mount({
+    inject: [...inject],
+    apply: (ctx) => {
+      apply(ctx)
+      options.afterApply?.(ctx)
+    },
+  })
 
   // The host face (store resolution) exists only inside the installed
   // renderer, so materialize it the way the shell does.
@@ -129,6 +136,17 @@ async function bench() {
 }
 
 describe('conversation slot inject API', () => {
+  it('publishes the conversation service before the apply callback returns', async () => {
+    let published: unknown
+    const b = await bench({ afterApply: (ctx) => {
+      // The apply fiber is still loading; non-strict lookup proves registration
+      // happened synchronously instead of in a child fiber's later activation.
+      published = ctx.get('conversation', false)
+    } })
+    expect(published).toBeDefined()
+    await b.runtime.dispose()
+  })
+
   it('assembles the thin API side-effect-free', async () => {
     const b = await bench()
     const { injected } = b.conversationApi(ROOT)
