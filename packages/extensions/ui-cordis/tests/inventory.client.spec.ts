@@ -87,6 +87,17 @@ describe('reading the registry', () => {
     expect(inventory.getSnapshot().error).toBe('reading the cordis inventory failed')
   })
 
+  it('contains a synchronous remote failure instead of throwing from refresh', async () => {
+    const seam = port(() => Promise.resolve([ROW]))
+    const onError = vi.fn()
+    const broken = { ...seam.port, inventory: undefined } as unknown as CordisDynamicPort
+    const inventory = createCordisInventory(broken, onError)
+
+    expect(() => { inventory.refresh() }).not.toThrow()
+    await vi.waitFor(() => { expect(inventory.getSnapshot().error).toContain('inventory') })
+    expect(onError).toHaveBeenCalledWith(expect.any(TypeError))
+  })
+
   it('forgets everything on reset, because the next host may be a new process', async () => {
     const seam = port(() => Promise.resolve([ROW]))
     const inventory = createCordisInventory(seam.port, vi.fn())

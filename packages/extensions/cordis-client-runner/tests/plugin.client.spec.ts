@@ -52,6 +52,8 @@ interface Bench {
   } }
   /** Resolutions the host received. */
   resolved: { requestId: string; resolution: unknown }[]
+  /** Provider manifests sent after a Connection generation becomes active. */
+  syncs: unknown[][]
   /** What the namespace received. */
   invoked: { pluginId: CordisDynamicPluginId; pluginRunId: CordisDynamicPluginRunId; method: string; args: unknown }[]
   /** Answer of the next invoke call. */
@@ -116,13 +118,14 @@ async function boot(): Promise<Bench> {
     pluginRunId: RUN,
   } }
   const resolved: { requestId: string; resolution: unknown }[] = []
+  const syncs: unknown[][] = []
   const renderFailures: Bench['renderFailures'] = []
   const reportRefused = { current: false }
   // Every generated Remote method resolves to a RemoteResult: the carrier folds
   // its own failures into the error branch, and only an assembly fault rejects.
   const answered = <T>(value: T): Promise<{ ok: true; value: T }> => Promise.resolve({ ok: true as const, value })
   const namespace = {
-    syncInspectManifest: () => answered(null),
+    syncInspectManifest: (providers: readonly unknown[]) => { syncs.push([...providers]); return answered(null) },
     resolveInspectQuery: () => answered({ accepted: true }),
     runHostHalf: () => answered({
       ok: true, pluginId: PLUGIN, packageId: PACKAGE, pluginRunId: RUN, waitingFor: [], startedHere: true,
@@ -186,6 +189,7 @@ async function boot(): Promise<Bench> {
     ctx,
     source,
     resolved,
+    syncs,
     invoked,
     invokeResult,
     invokeThrow,
@@ -207,6 +211,15 @@ describe('browser half', () => {
     const bench = await boot()
     expect(bench.ctx.dynamicCordisRunner.getSnapshot()).toEqual([])
     expect(bench.ctx.dynamicCordisRunner.isLoaded(PLUGIN)).toBe(false)
+  })
+
+  it('waits for an active Connection before syncing inspect providers', async () => {
+    const bench = await boot()
+    await Promise.resolve()
+    expect(bench.syncs).toEqual([])
+
+    bench.ctx.emit('connection/reset')
+    await vi.waitFor(() => { expect(bench.syncs).toHaveLength(1) })
   })
 
   it('unloads on a forwarded withdrawal event', async () => {

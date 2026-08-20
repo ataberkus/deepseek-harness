@@ -186,8 +186,12 @@ export const inject = ['loader', 'modules', 'slots', 'remote', 'remote.dynamicCo
  */
 export function apply(ctx: Context): void {
   provideClientTimer(ctx)
+  // Provider effects can run before the first Connection generation is active.
+  // The reset event is the point at which the remote namespace can be called.
+  let connectionReady = false
   const inspect = new ClientCordisInspectRegistry({
     sync: async (providers) => {
+      if (!connectionReady) return
       const answered = await ctx.remote.dynamicCordisRunner.syncInspectManifest(providers)
       if (!answered.ok) throw new Error(`${answered.error.code}: ${answered.error.message}`)
     },
@@ -200,7 +204,10 @@ export function apply(ctx: Context): void {
   for (const provider of clientInspectProviders(ctx)) {
     ctx.effect(() => inspect.register(provider), `cordis-client-runner: inspect ${provider.manifest.id}`)
   }
-  ctx.on('connection/reset', () => { inspect.publish() })
+  ctx.on('connection/reset', () => {
+    connectionReady = true
+    inspect.publish()
+  })
 
   const runner = new DynamicCordisPackageRunner({
     ctx,

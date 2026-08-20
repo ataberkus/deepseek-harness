@@ -75,7 +75,16 @@ export function createCordisInventory(
     refresh: () => {
       if (inFlight !== undefined) return
       const issued = generation
-      inFlight = port.inventory().then(
+      // A generated remote proxy can throw before returning a Promise when the
+      // Connection is not active or a stale artifact lacks this method. Normalize
+      // that path so a failed read remains an inventory error, not an apply throw.
+      let request: Promise<readonly CordisInventoryRow[]>
+      try {
+        request = port.inventory()
+      } catch (error) {
+        request = Promise.reject(error)
+      }
+      inFlight = request.then(
         (rows) => {
           if (issued !== generation) return
           const removed = new Set(snapshot.removed)
