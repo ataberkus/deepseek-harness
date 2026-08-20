@@ -430,14 +430,97 @@ describe('cursor connect', () => {
 
   it('dials through the default HTTP/2 client using an injectable session', async () => {
     const payload = encodeString(1, 'ok')
+    const requestBody = encodeString(1, 'request')
     const framed = frameConnectMessage(payload)
+    const stream = new EventEmitter() as EventEmitter & {
+      end: (body: Uint8Array) => void
+      close: () => void
+    }
+    let sentBody: Uint8Array | undefined
+    let sentHeaders: Record<string, unknown> | undefined
+    stream.end = (body) => {
+      sentBody = body
+      queueMicrotask(() => {
+        stream.emit('response', { ':status': 200 })
+        stream.emit('data', Buffer.from(framed))
+        stream.emit('end')
+      })
+    }
+    stream.close = () => undefined
+    cursorConnectInternals.connect = () => ({
+      request: (headers: Record<string, unknown>) => {
+        sentHeaders = headers
+        return stream
+      },
+      close: () => undefined,
+    }) as unknown as ReturnType<typeof cursorConnectInternals.connect>
+    await expect(connectUnary({
+      baseUrl: 'https://api2.cursor.sh/',
+      path: '/agent.v1.AgentService/GetUsableModels',
+      accessToken: 't',
+      body: requestBody,
+    })).resolves.toEqual(payload)
+    expect(sentHeaders).toMatchObject({
+      ':method': 'POST',
+      ':path': '/agent.v1.AgentService/GetUsableModels',
+      'content-type': 'application/proto',
+      'connect-protocol-version': '1',
+      te: 'trailers',
+    })
+    expect(sentBody).toEqual(requestBody)
+  })
+
+  it('keeps Connect framing for streaming HTTP/2 requests', async () => {
+    const payload = encodeString(1, 'response')
+    const requestBody = encodeString(1, 'request')
+    const stream = new EventEmitter() as EventEmitter & {
+      end: (body: Uint8Array) => void
+      close: () => void
+    }
+    let sentBody: Uint8Array | undefined
+    let sentHeaders: Record<string, unknown> | undefined
+    stream.end = (body) => {
+      sentBody = body
+      queueMicrotask(() => {
+        stream.emit('response', { ':status': 200 })
+        stream.emit('data', Buffer.from(frameConnectMessage(payload)))
+        stream.emit('end')
+      })
+    }
+    stream.close = () => undefined
+    cursorConnectInternals.connect = () => ({
+      request: (headers: Record<string, unknown>) => {
+        sentHeaders = headers
+        return stream
+      },
+      close: () => undefined,
+    }) as unknown as ReturnType<typeof cursorConnectInternals.connect>
+    const received: Uint8Array[] = []
+    for await (const chunk of connectStream({
+      baseUrl: 'https://api2.cursor.sh/',
+      path: '/agent.v1.AgentService/Run',
+      accessToken: 't',
+      body: requestBody,
+    })) received.push(chunk)
+    expect(received).toEqual([payload])
+    expect(sentHeaders).toMatchObject({
+      ':path': '/agent.v1.AgentService/Run',
+      'content-type': 'application/connect+proto',
+      'connect-protocol-version': '1',
+      te: 'trailers',
+    })
+    expect(sentBody).toEqual(frameConnectMessage(requestBody))
+  })
+
+  it('rejects non-success HTTP/2 responses before decoding their body', async () => {
     const stream = new EventEmitter() as EventEmitter & {
       end: (body: Uint8Array) => void
       close: () => void
     }
     stream.end = () => {
       queueMicrotask(() => {
-        stream.emit('data', Buffer.from(framed))
+        stream.emit('response', { ':status': 415 })
+        stream.emit('data', Buffer.from('unsupported'))
         stream.emit('end')
       })
     }
@@ -447,11 +530,11 @@ describe('cursor connect', () => {
       close: () => undefined,
     }) as unknown as ReturnType<typeof cursorConnectInternals.connect>
     await expect(connectUnary({
-      baseUrl: 'https://api2.cursor.sh/',
+      baseUrl: 'https://api2.cursor.sh',
       path: '/agent.v1.AgentService/GetUsableModels',
       accessToken: 't',
       body: new Uint8Array(),
-    })).resolves.toEqual(payload)
+    })).rejects.toThrow('HTTP 415')
   })
 
   it('propagates HTTP/2 stream errors and abort', async () => {

@@ -1,5 +1,5 @@
 /**
- * Connect protocol frames over HTTP/2 for Cursor AgentService RPCs.
+ * Connect/protobuf requests over HTTP/2 for Cursor AgentService RPCs.
  *
  * @module dsh-llm-pi-ai/cursor/connect
  */
@@ -24,15 +24,15 @@ export interface ConnectDataFrame {
 /** Injectable HTTP/2 so tests never open a real Cursor connection. */
 export const cursorConnectInternals = {
   /**
-   * POST `path` on `baseUrl` with Connect+proto body and yield response bytes.
-   * Tests replace this with a fixture iterator.
+   * POST `path` on `baseUrl` with a raw protobuf or Connect+proto body and
+   * yield response bytes. Tests replace this with a fixture iterator.
    */
   request: defaultHttp2Request,
   /* v8 ignore next -- tests replace `connect` so this never dials Cursor. */
   connect: (origin: string): http2.ClientHttp2Session => http2.connect(origin),
 }
 
-/** Options for one Connect RPC. */
+/** Options for one Cursor AgentService RPC. */
 export interface ConnectRequest {
   /** AgentService origin, no trailing slash. */
   baseUrl: string
@@ -40,8 +40,10 @@ export interface ConnectRequest {
   path: string
   /** Bearer access token; never logged. */
   accessToken: string
-  /** Encoded protobuf request (not yet Connect-framed). */
+  /** Encoded protobuf request; unary calls send it raw, streams frame it. */
   body: Uint8Array
+  /** Send a unary protobuf request instead of a Connect-framed stream request. */
+  unary?: boolean
   /** Abort the request. */
   signal?: AbortSignal
 }
@@ -88,13 +90,16 @@ export function decodeConnectFrames(chunks: Uint8Array): ConnectDataFrame[] {
 }
 
 /**
- * Unary Connect RPC: one request frame, one protobuf reply (possibly wrapped
- * in a Connect frame).
- * @param request - origin, path, token, protobuf body.
+ * Unary Cursor RPC: one raw protobuf request and one protobuf reply, with a
+ * Connect-framed reply also accepted for older endpoints.
+ * @param request - origin, path, token, and protobuf body.
  * @returns decoded protobuf payload.
  */
 export async function connectUnary(request: ConnectRequest): Promise<Uint8Array> {
-  const bytes = await readAll(cursorConnectInternals.request(request), MAX_UNARY_BYTES)
+  const bytes = await readAll(
+    cursorConnectInternals.request({ ...request, unary: true }),
+    MAX_UNARY_BYTES,
+  )
   const framed = decodeConnectFrames(bytes)
   if (framed[0] !== undefined) return framed[0].payload
   return bytes
@@ -155,15 +160,15 @@ async function* defaultHttp2Request(request: ConnectRequest): AsyncIterable<Uint
       ':path': request.path,
       ':scheme': 'https',
       ':authority': new URL(origin).host,
-      'content-type': 'application/connect+proto',
+      'content-type': request.unary === true ? 'application/proto' : 'application/connect+proto',
       'connect-protocol-version': '1',
+      te: 'trailers',
       authorization: `Bearer ${request.accessToken}`,
       'x-cursor-client-type': CURSOR_CLIENT_TYPE,
       'x-cursor-client-version': CURSOR_CLIENT_VERSION,
       'x-ghost-mode': 'true',
       'x-request-id': randomUUID(),
     })
-    stream.end(frameConnectMessage(request.body))
     const queue: Uint8Array[] = []
     let pending: ((result: IteratorResult<Uint8Array>) => void) | undefined
     let done = false
@@ -178,22 +183,36 @@ async function* defaultHttp2Request(request: ConnectRequest): AsyncIterable<Uint
       }
       if (chunk !== undefined) queue.push(chunk)
     }
-    stream.on('data', (chunk: Buffer) => { emit(new Uint8Array(chunk)) })
-    stream.on('error', (error: Error) => {
-      failure = error
+    const fail = (error: Error): void => {
+      failure ??= error
       done = true
       emit()
+    }
+    stream.on('response', (headers: http2.IncomingHttpHeaders) => {
+      const status = Number(headers[':status'] ?? 0)
+      if (status > 0 && (status < 200 || status >= 300)) {
+        fail(new Error(`Cursor AgentService request returned HTTP ${status}`))
+      }
     })
+    stream.on('trailers', (headers: http2.IncomingHttpHeaders) => {
+      const status = headers['grpc-status']
+      if (typeof status === 'string' && status !== '0') {
+        fail(new Error(`Cursor AgentService request returned gRPC status ${status}`))
+      }
+    })
+    stream.on('data', (chunk: Buffer) => {
+      if (failure === undefined) emit(new Uint8Array(chunk))
+    })
+    stream.on('error', (error: Error) => { fail(error) })
     stream.on('end', () => {
       done = true
       emit()
     })
     request.signal?.addEventListener('abort', () => {
+      fail(new Error('Cursor AgentService request aborted'))
       stream.close()
-      failure = new Error('Cursor AgentService request aborted')
-      done = true
-      emit()
     }, { once: true })
+    stream.end(request.unary === true ? request.body : frameConnectMessage(request.body))
     while (true) {
       if (queue.length > 0) {
         const next = queue.shift()
