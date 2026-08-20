@@ -18,7 +18,7 @@ interface Probe {
   readonly records: CheckpointRecord[]
 }
 
-function checkpointProbe(): Probe {
+function checkpointProbe(enabled = true): Probe {
   const records: CheckpointRecord[] = []
   let sequence = 0
   const captures = vi.fn(async (request: CaptureRequest): Promise<CheckpointRecord> => {
@@ -41,6 +41,7 @@ function checkpointProbe(): Probe {
     return record
   })
   const service = {
+    enabled,
     capture: captures,
     list: async (sessionId: SessionId): Promise<readonly CheckpointView[]> =>
       records.filter(record => record.sessionId === sessionId).map(record => ({
@@ -65,10 +66,10 @@ function checkpointProbe(): Probe {
   return { service, captures, records }
 }
 
-async function setup(): Promise<{ ctx: Context; probe: Probe }> {
+async function setup(enabled = true): Promise<{ ctx: Context; probe: Probe }> {
   const ctx = new Context()
   contexts.push(ctx)
-  const probe = checkpointProbe()
+  const probe = checkpointProbe(enabled)
   ctx.provide('workspaceCheckpoint', probe.service)
   ctx.provide('llm', {} as never)
   ctx.provide('tools', {} as never)
@@ -88,6 +89,20 @@ afterEach(async () => {
 })
 
 describe('workspace-checkpoint-capture', () => {
+  it('does not capture or flush when the provider is disabled', async () => {
+    const { ctx, probe } = await setup(false)
+    const flushes: Session[] = []
+    ctx.on('session/flush', (session) => { flushes.push(session) })
+    const session = ctx.sessions.create(SessionId('capture-disabled'), { meta: { cwd: process.cwd() } })
+    session.append('turn/start', { turn: 1 })
+    session.append('turn/end', { turn: 1, reason: { kind: 'completed' } })
+
+    await vi.waitFor(() => {
+      expect(probe.records).toHaveLength(0)
+      expect(flushes).toHaveLength(0)
+    })
+  })
+
   it('captures checkpoint 0 at session creation and a later checkpoint after turn/end', async () => {
     const { ctx, probe } = await setup()
     const session = ctx.sessions.create(SessionId('capture-start'), { meta: { cwd: process.cwd() } })

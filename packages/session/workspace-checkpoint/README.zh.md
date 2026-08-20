@@ -18,6 +18,7 @@
 
 | 成员 | 语义 |
 |---|---|
+| `enabled` | 实时功能开关。提供方默认 `false`；关闭时跳过自动捕获和恢复准入，Host 会拒绝编辑/激活，但仍可读取既有元数据。 |
 | `capture(request)` | 快照会话 cwd。捕获是 fail-soft：unavailable 记录不会抹掉已完成的回合。持有工作区租约的调用方可以把租约放入请求，用于多步骤操作。 |
 | `inspect(id)` | 返回一条持久记录，缺失时抛出 `CHECKPOINT_NOT_FOUND`。 |
 | `list(sessionId)` | 按标签顺序的客户端视图，不含 blob 内部细节。 |

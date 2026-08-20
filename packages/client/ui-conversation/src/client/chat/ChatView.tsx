@@ -118,27 +118,24 @@ function runningTurnStartTime(timeline: ConversationTimelineSnapshot): number | 
   return latest
 }
 
-/** Find the latest usable checkpoint before one settled user turn. */
+/** Find the latest usable checkpoint before one user message. */
 function checkpointBeforeUserMessage(
   node: ChatNode<'user'>,
   snapshot: CheckpointSnapshot | undefined,
 ): CheckpointSnapshot['checkpoints'][number] | undefined {
-  if (snapshot === undefined) return undefined
+  if (snapshot === undefined || !snapshot.enabled) return undefined
   const location = node.location
-  if (
-    (location.kind !== 'turn' && location.kind !== 'step')
-    || location.turn.start === undefined
-    || location.turn.end === undefined
-  ) return undefined
-  const turnStartSeq = location.turn.start.seq
-  if (snapshot.operation !== undefined
-    && snapshot.operation.phase !== 'ready'
-    && snapshot.operation.phase !== 'failed') return undefined
-  return [...snapshot.checkpoints]
+  const bound = (location.kind === 'turn' || location.kind === 'step') && location.turn.start !== undefined
+    ? location.turn.start.seq
+    : (node.data as { readonly seq: number }).seq
+  const candidates = snapshot.branchCheckpoint === undefined
+    ? snapshot.checkpoints
+    : [...snapshot.checkpoints, snapshot.branchCheckpoint]
+  return [...candidates]
     .filter(checkpoint => checkpoint.role !== 'emergency'
       && checkpoint.status.kind === 'ready'
       && checkpoint.restoreEligible
-      && checkpoint.boundarySeq < turnStartSeq)
+      && checkpoint.boundarySeq < bound)
     .sort((left, right) => right.boundarySeq - left.boundarySeq)[0]
 }
 
@@ -214,9 +211,16 @@ export function ChatView({
       originalText: text,
     })
   }, [checkpointSnapshot, inputActions, nodeStore])
+  const editCheckpointFor = useCallback((messageSeq: number): boolean => {
+    const node = nodeStore.values().find((candidate) => {
+      if (candidate.kind !== 'user') return false
+      return (candidate.data as { readonly seq: number }).seq === messageSeq
+    }) as ChatNode<'user'> | undefined
+    return node !== undefined && checkpointBeforeUserMessage(node, checkpointSnapshot) !== undefined
+  }, [checkpointSnapshot, nodeStore])
   // Host session.edit cancels a running source before restoring the selected
   // checkpoint, so keep the action available while that run is in flight.
-  const availableEditMessage = inputActions.beginEdit !== undefined
+  const availableEditMessage = checkpointSnapshot?.enabled === true && inputActions.beginEdit !== undefined
     ? editMessage
     : undefined
   const [fileOpenError, setFileOpenError] = useState<{ path: string; message: string } | null>(null)
@@ -487,7 +491,10 @@ export function ChatView({
               openFile={requestOpenFile}
               inspectCall={inspectCall}
               forkAt={forkAt}
-              {...availableEditMessage === undefined ? {} : { editMessage: availableEditMessage }}
+              {...availableEditMessage === undefined ? {} : {
+                editMessage: availableEditMessage,
+                editCheckpointFor,
+              }}
               renderMessageImages={renderMessageImages}
               fileMentions={fileMentions}
               renderSlot={renderSlot}

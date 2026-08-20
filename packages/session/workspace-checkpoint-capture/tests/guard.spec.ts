@@ -10,11 +10,12 @@ import * as workspaceCheckpointCapture from '../src/index.ts'
 
 const contexts: Context[] = []
 
-async function setup(): Promise<{ ctx: Context; recovery: Map<string, string> }> {
+async function setup(enabled = true): Promise<{ ctx: Context; recovery: Map<string, string> }> {
   const ctx = new Context()
   contexts.push(ctx)
   const recovery = new Map<string, string>()
   const checkpoint = {
+    enabled,
     recoveryRequired: async (workspaceKey: string) => recovery.get(workspaceKey),
   } as unknown as WorkspaceCheckpoint
   ctx.provide('workspaceCheckpoint', checkpoint)
@@ -35,6 +36,33 @@ afterEach(async () => {
 })
 
 describe('workspace-checkpoint-capture recovery guard', () => {
+  it('bypasses recovery admission when the provider is disabled', async () => {
+    const { ctx, recovery } = await setup(false)
+    const session = ctx.sessions.create(SessionId('guard-disabled'), { meta: { cwd: process.cwd() } })
+    recovery.set(process.cwd(), 'rollback failed')
+    let dispatched = false
+    ctx.tools.register({
+      name: 'write-disabled',
+      description: 'write',
+      parameters: {},
+      output: { schema: { type: 'null' }, render: () => [] },
+      execute: async () => {
+        dispatched = true
+        return null
+      },
+    })
+
+    await ctx.tools.execute({
+      callId: CallId('guard-disabled-call'),
+      name: 'write-disabled',
+      arguments: {},
+      agent: { session } as Agent,
+      signal: new AbortController().signal,
+    })
+
+    expect(dispatched).toBe(true)
+  })
+
   it('blocks model streaming while recovery is required', async () => {
     const { ctx, recovery } = await setup()
     const session = ctx.sessions.create(SessionId('guard-stream'), { meta: { cwd: process.cwd() } })

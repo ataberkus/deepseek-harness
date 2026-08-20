@@ -262,11 +262,12 @@ describe('list lifecycle', () => {
     expect(manager.getListSnapshot().items[0]?.title).toBe('Durable')
   })
 
-  it('retains checkpoint snapshots before Session creation and clears them on resubscribe', () => {
+  it('retains checkpoint snapshots across resubscribe until a later frame', () => {
     const manager = new SessionManager(new FakeApiClient(), fakeRemote())
     const checkpointFrame = {
       type: 'session/checkpoints',
       sessionId: S1,
+      enabled: true,
       checkpoints: [{
         id: 'cp-1',
         sessionId: S1,
@@ -279,6 +280,17 @@ describe('list lifecycle', () => {
         createdAt: 100,
       }],
       appliedCheckpointId: 'cp-1',
+      branchCheckpoint: {
+        id: 'cp-branch',
+        sessionId: S1,
+        boundarySeq: 3,
+        labelIndex: 1,
+        role: 'turn',
+        status: { kind: 'ready' },
+        restoreEligible: true,
+        fileCount: 2,
+        createdAt: 99,
+      },
       branchLabelIndex: 1,
       workspaceResumable: true,
       operation: {
@@ -291,8 +303,20 @@ describe('list lifecycle', () => {
     manager.handleMuxEnvelope({ rpcId: 'checkpoint' as never, payload: checkpointFrame as never })
     const session = manager.get(S1)
     expect(session.getSnapshot().checkpoints).toMatchObject({
+      enabled: true,
       checkpoints: [{ id: 'cp-1', fileCount: 2 }],
       appliedCheckpointId: 'cp-1',
+      branchCheckpoint: {
+        id: 'cp-branch',
+        sessionId: S1,
+        boundarySeq: 3,
+        labelIndex: 1,
+        role: 'turn',
+        status: { kind: 'ready' },
+        restoreEligible: true,
+        fileCount: 2,
+        createdAt: 99,
+      },
       branchLabelIndex: 1,
       workspaceResumable: true,
       operation: { phase: 'ready' },
@@ -302,7 +326,19 @@ describe('list lifecycle', () => {
       rpcId: 'subscribed' as never,
       payload: { type: 'session/subscribed', sessionId: S1, lastSeq: 4 },
     })
-    expect(session.getSnapshot().checkpoints).toEqual({ checkpoints: [] })
+    expect(session.getSnapshot().checkpoints).toMatchObject({
+      enabled: true,
+      checkpoints: [{ id: 'cp-1', fileCount: 2 }],
+    })
+
+    manager.handleMuxEnvelope({ rpcId: 'checkpoint-disabled' as never, payload: {
+      ...checkpointFrame,
+      enabled: false,
+    } as never })
+    expect(session.getSnapshot().checkpoints?.enabled).toBe(false)
+    const disabledSummary = manager.getListSnapshot().items.find(item => item.sessionId === S1)
+    expect(disabledSummary?.checkpointLabelIndex).toBeUndefined()
+    expect(disabledSummary?.workspaceResumable).toBeUndefined()
   })
 })
 

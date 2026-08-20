@@ -4,11 +4,11 @@
 
 `@deepseek-ai/dsh-workspace-checkpoint-capture` 是 workspace-checkpoint 能力的消费者。
 
-当带有 cwd 的会话创建时，它捕获检查点 0，并在每个已结算的 `turn/end` 之后捕获一个检查点。
+当带有 cwd 的会话创建时，它会在 `ctx.workspaceCheckpoint.enabled` 为 `true` 时捕获检查点 0，并在每个已结算的 `turn/end` 之后捕获一个检查点。因此，提供方默认关闭时不会触碰既有会话和工作区，直到面板启用该功能。
 
 消费者会在读取回合边界前刷新会话持久化，选择最新的可用非 emergency 检查点作为下一个父检查点，并使捕获失败不会进入会话追加路径。
 
-它包装 `llm/stream` 和顶层 `tools/execute`；被标记为 `recoveryRequired` 的工作区在恢复消费者清除标记前不会继续执行模型或工具。
+它包装 `llm/stream` 和顶层 `tools/execute`；被标记为 `recoveryRequired` 的工作区在恢复消费者清除标记前不会继续执行模型或工具。关闭时会跳过这些准入守卫，但 Host 仍可读取已保存的恢复诊断。
 
 ## 组合
 

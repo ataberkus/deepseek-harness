@@ -63,7 +63,7 @@ export function InputBar({
   const live = input !== undefined && keyboard !== undefined && inputActions !== undefined
   const draft = input?.draft ?? ''
   const editTarget = input?.edit
-  const workspaceUnavailable = checkpointSnapshot?.workspaceResumable === false
+  const workspaceUnavailable = checkpointSnapshot?.enabled === true && checkpointSnapshot.workspaceResumable === false
   const attachments = useMemo(
     () => input === undefined || draftImages === undefined ? [] : draftImages(input.imageIds),
     [draftImages, input?.imageIds],

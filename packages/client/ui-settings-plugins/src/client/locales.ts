@@ -4,13 +4,15 @@
 export type PluginsSettingsLocaleKey =
   | 'nav' | 'title' | 'intro' | 'tabs' | 'configurableTab' | 'empty'
   | 'overridden' | 'reset' | 'readOnly' | 'expand' | 'collapse'
-  | 'save' | 'saving' | 'discard' | 'unsaved' | 'saveFailed' | 'invalidNumber'
+  | 'save' | 'saving' | 'discard' | 'unsaved' | 'saveFailed' | 'invalidNumber' | 'invalidBoolean'
   | 'bashTitle' | 'bashDescription' | 'bashTimeoutMs' | 'bashTimeoutMsHint'
   | 'bashMaxOutputBytes' | 'bashMaxOutputBytesHint'
   | 'agentLoopTitle' | 'agentLoopDescription' | 'agentLoopMaxParallel' | 'agentLoopMaxParallelHint'
   | 'webSearchTitle' | 'webSearchDescription'
   | 'webSearchApiKey' | 'webSearchApiKeyHint' | 'webSearchApiKeySet' | 'webSearchApiKeyUnset'
   | 'webSearchBaseUrl' | 'webSearchBaseUrlHint' | 'webSearchMaxUses' | 'webSearchMaxUsesHint'
+  | 'workspaceCheckpointTitle' | 'workspaceCheckpointDescription'
+  | 'workspaceCheckpointEnabled' | 'workspaceCheckpointEnabledHint'
 
 /** English copy. */
 export const en: Record<PluginsSettingsLocaleKey, string> = {
@@ -31,6 +33,7 @@ export const en: Record<PluginsSettingsLocaleKey, string> = {
   unsaved: 'Unsaved',
   saveFailed: 'The deployment did not accept these values; they were left for you to correct.',
   invalidNumber: 'Enter a number, or leave blank to use the default.',
+  invalidBoolean: 'Choose true or false.',
   bashTitle: 'Shell',
   bashDescription: 'Limits every command the agent runs.',
   bashTimeoutMs: 'Command timeout (ms)',
@@ -51,6 +54,10 @@ export const en: Record<PluginsSettingsLocaleKey, string> = {
   webSearchBaseUrlHint: 'Leave blank to use the provider default.',
   webSearchMaxUses: 'Max searches per request',
   webSearchMaxUsesHint: 'How many times one request may search before it must answer.',
+  workspaceCheckpointTitle: 'Workspace checkpoints',
+  workspaceCheckpointDescription: 'Capture workspace state so conversation edits can restore files safely.',
+  workspaceCheckpointEnabled: 'Enable conversation checkpoints',
+  workspaceCheckpointEnabledHint: 'When enabled, saves workspace snapshots after turns and unlocks edit and recovery safeguards.',
 }
 
 /** Simplified Chinese copy. */
@@ -71,7 +78,8 @@ export const zh: Record<PluginsSettingsLocaleKey, string> = {
   discard: '放弃修改',
   unsaved: '未保存',
   saveFailed: '本部署没有接受这些值，已保留供你修改。',
-  invalidNumber: '请填数字；留空表示使用默认值。',
+  invalidNumber: '请输入数字；留空表示使用默认值。',
+  invalidBoolean: '请选择 true 或 false。',
   bashTitle: '终端',
   bashDescription: '限制 agent 运行的每一条命令。',
   bashTimeoutMs: '命令超时（毫秒）',
@@ -92,4 +100,8 @@ export const zh: Record<PluginsSettingsLocaleKey, string> = {
   webSearchBaseUrlHint: '留空则使用提供方默认地址。',
   webSearchMaxUses: '单次请求最多搜索次数',
   webSearchMaxUsesHint: '一次请求在必须作答前最多可以搜索多少次。',
+  workspaceCheckpointTitle: '工作区检查点',
+  workspaceCheckpointDescription: '保存工作区状态，让对话编辑可以安全恢复文件。',
+  workspaceCheckpointEnabled: '启用对话检查点',
+  workspaceCheckpointEnabledHint: '启用后会在每轮结束保存工作区快照，并开启编辑和恢复保护。',
 }

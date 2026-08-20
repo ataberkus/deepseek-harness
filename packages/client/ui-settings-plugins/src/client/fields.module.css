@@ -26,6 +26,35 @@
   color: var(--dsw-alias-label-primary);
 }
 
+.booleanLabel {
+  flex: 1;
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.5;
+  color: var(--dsw-alias-label-primary);
+  cursor: pointer;
+}
+
+.checkbox {
+  inline-size: 16px;
+  block-size: 16px;
+  margin: 0;
+  accent-color: var(--dsw-alias-brand-primary);
+}
+
+.checkbox:focus-visible {
+  outline: 2px solid var(--dsw-alias-brand-primary);
+  outline-offset: 2px;
+}
+
+.checkbox:disabled {
+  cursor: default;
+}
+
 .badges {
   display: inline-flex;
   align-items: center;

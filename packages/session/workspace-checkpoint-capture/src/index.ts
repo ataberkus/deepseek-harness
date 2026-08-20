@@ -78,8 +78,12 @@ function scheduleCapture(
   session: Session,
   job: () => Promise<void>,
 ): void {
+  const run = async (): Promise<void> => {
+    if (!ctx.workspaceCheckpoint.enabled) return
+    await job()
+  }
   const previous = tails.get(session) ?? Promise.resolve()
-  const next = previous.then(job, job)
+  const next = previous.then(run, run)
   tails.set(session, next)
   void next.catch((error: unknown) => {
     ctx.logger.warn(
@@ -108,7 +112,7 @@ function guardedStream(
   next: () => AsyncIterable<StreamChunk>,
 ): AsyncIterable<StreamChunk> {
   return (async function* (): AsyncIterable<StreamChunk> {
-    if (options.sessionId !== undefined) {
+    if (ctx.workspaceCheckpoint.enabled && options.sessionId !== undefined) {
       const session = ctx.sessions.get(options.sessionId)
       if (session !== undefined) await assertRecoveryCleared(ctx, session)
     }
@@ -122,6 +126,7 @@ export function apply(ctx: Context): void {
 
   ctx.on('session/created', (session) => {
     const cwd = session.header.cwd
+    if (!ctx.workspaceCheckpoint.enabled) return
     // Seeded sessions are resumed or forked logs. Their existing checkpoint
     // lineage owns boundary -1; capturing the current tree again would attach
     // a post-history tree to Checkpoint 0.
@@ -136,7 +141,7 @@ export function apply(ctx: Context): void {
   }, { global: true })
 
   ctx.on('session/event', (session, event) => {
-    if (event.type !== 'turn/end') return
+    if (event.type !== 'turn/end' || !ctx.workspaceCheckpoint.enabled) return
     void (async (): Promise<void> => {
       await ctx.sessions.flush(session)
       const cwd = session.header.cwd
@@ -165,7 +170,7 @@ export function apply(ctx: Context): void {
     exec: ToolDispatchExecution,
     next: () => Promise<ToolExecutionResult>,
   ): Promise<ToolExecutionResult> => {
-    if (exec.agent === undefined || exec.parent !== undefined) return next()
+    if (exec.agent === undefined || exec.parent !== undefined || !ctx.workspaceCheckpoint.enabled) return next()
     await assertRecoveryCleared(ctx, exec.agent.session)
     return next()
   })

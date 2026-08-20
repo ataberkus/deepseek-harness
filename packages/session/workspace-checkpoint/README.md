@@ -18,6 +18,7 @@ Checkpoint metadata is not a `SessionEvent` and never enters the system prompt o
 
 | Member | Semantics |
 |---|---|
+| `enabled` | Live feature flag. Providers default to `false`; when disabled, automatic capture and recovery admission are bypassed and Host edit/activation is refused. Existing metadata remains readable. |
 | `capture(request)` | Snapshot the session cwd. Capture is fail-soft: an unavailable record does not erase a completed turn. A caller holding the workspace lease may include it in the request for a multi-step operation. |
 | `inspect(id)` | Return one durable record, or throw `CHECKPOINT_NOT_FOUND`. |
 | `list(sessionId)` | Client-safe views in label order, with no blob internals. |

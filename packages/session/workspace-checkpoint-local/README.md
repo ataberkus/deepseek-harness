@@ -8,6 +8,7 @@ Local Service Provider for [`workspace-checkpoint`](../workspace-checkpoint/). I
 
 | Config | Required | Semantics |
 |---|---|---|
+| `enabled` | no | Enables automatic capture, recovery admission, and conversation edit/activation. Defaults to `false`; the live `workspace-checkpoint` settings namespace can override it from the Web Plugins dashboard. |
 | `objectRoot` | no | Object-store directory. Default `{dshHome}/workspace-checkpoints`. |
 | `dshHome` | no | Harness-home override used only when `objectRoot` is omitted. |
 | `maxTotalBytes` | yes | Capture that would grow the blob store past this cap persists an unavailable record and keeps prior checkpoints. |

@@ -88,6 +88,52 @@ export function ValueField(props: FieldProps & {
 }
 
 /**
+ * A staged boolean control. It uses a native checkbox so keyboard, screen-reader,
+ * and forced-colors behavior stay with the browser's accessible control model.
+ * @param props - the field's copy, staged boolean text, and edit actions.
+ * @returns the labelled checkbox.
+ */
+export function BooleanField(props: FieldProps) {
+  const checked = props.text.trim().toLowerCase() === 'true'
+  return (
+    <div className={css.field}>
+      <div className={css.head}>
+        <label className={css.booleanLabel} htmlFor={props.id}>
+          <input
+            id={props.id}
+            className={css.checkbox}
+            type="checkbox"
+            checked={checked}
+            disabled={props.disabled}
+            {...props.invalid ? { 'aria-invalid': true } : {}}
+            onChange={(event) => { props.onEdit(event.currentTarget.checked ? 'true' : 'false') }}
+          />
+          <span>{props.label}</span>
+        </label>
+        {props.overridden
+          ? (
+            <span className={css.badges}>
+              <span className={css.badge}>{props.overriddenLabel}</span>
+              <button
+                type="button"
+                className={css.reset}
+                disabled={props.disabled}
+                onClick={props.onReset}
+              >
+                {props.resetLabel}
+              </button>
+            </span>
+          )
+          : null}
+      </div>
+      <p className={props.invalid ? css.invalid : css.hint}>
+        {props.invalid ? props.invalidLabel : props.hint}
+      </p>
+    </div>
+  )
+}
+
+/**
  * A write-only credential control. The value never rides a response, so the
  * control reports only whether one is configured and starts blank; a blank
  * draft writes nothing, which keeps the stored key rather than clearing it.

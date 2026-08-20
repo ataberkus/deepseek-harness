@@ -4,11 +4,11 @@ English | [中文](README.zh.md)
 
 `@deepseek-ai/dsh-workspace-checkpoint-capture` is the consumer for the workspace-checkpoint capability.
 
-It captures Checkpoint 0 when a session with a cwd is created and captures one checkpoint after each settled `turn/end`.
+It captures Checkpoint 0 when a session with a cwd is created and captures one checkpoint after each settled `turn/end` while `ctx.workspaceCheckpoint.enabled` is true. The default-disabled provider therefore leaves existing sessions and workspaces untouched until the dashboard enables the feature.
 
 The consumer flushes session persistence before reading a turn boundary, selects the latest ready non-emergency checkpoint as the next parent, and keeps capture failures out of the session append path.
 
-It wraps `llm/stream` and top-level `tools/execute`; a workspace marked `recoveryRequired` receives no downstream model or tool dispatch until a restore consumer clears the flag.
+It wraps `llm/stream` and top-level `tools/execute`; a workspace marked `recoveryRequired` receives no downstream model or tool dispatch until a restore consumer clears the flag. When disabled, those admission guards are bypassed while stored recovery diagnostics remain available to the Host.
 
 ## Composition
 

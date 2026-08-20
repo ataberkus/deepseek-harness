@@ -30,6 +30,7 @@
   overflow: visible;
   flex: 0 0 auto;
   min-height: auto;
+  padding-bottom: var(--dsh-composer-height, 152px);
 }
 
 /* Message column: shared chat width (ConversationRoot --dsh-chat-content-width),

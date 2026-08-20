@@ -12,12 +12,16 @@ export type CheckpointOperation = NonNullable<Extract<MuxFrame, { type: 'session
 
 /** Complete control-plane state for one session's workspace checkpoints. */
 export interface CheckpointSnapshot {
+  /** Whether automatic capture, recovery admission, and edit affordances are enabled. */
+  readonly enabled: boolean
   /** Durable checkpoint rows, ordered by the Host's user-facing label index. */
   readonly checkpoints: readonly CheckpointView[]
   /** Last checkpoint applied to the workspace, when the provider records one. */
   readonly appliedCheckpointId?: CheckpointView['id']
   /** Current edit or activation operation, including its terminal phase. */
   readonly operation?: CheckpointOperation
+  /** Selected checkpoint from the source lineage for an edit child branch. */
+  readonly branchCheckpoint?: CheckpointView
   /** User-facing checkpoint ordinal for an edit child branch. */
   readonly branchLabelIndex?: number
   /** Whether the session has a known usable workspace-file checkpoint. */
@@ -27,7 +31,7 @@ export interface CheckpointSnapshot {
 }
 
 /** Empty checkpoint state before the first Host baseline arrives. */
-export const EMPTY_CHECKPOINT_SNAPSHOT: CheckpointSnapshot = { checkpoints: [] }
+export const EMPTY_CHECKPOINT_SNAPSHOT: CheckpointSnapshot = { enabled: false, checkpoints: [] }
 
 /**
  * Stable observable store for one session's complete checkpoint snapshot.
@@ -63,9 +67,11 @@ export class CheckpointSnapshotStore implements ObservableSnapshot<CheckpointSna
    */
   replace(frame: Extract<MuxFrame, { type: 'session/checkpoints' }>): void {
     this.snapshot = {
+      enabled: frame.enabled,
       checkpoints: frame.checkpoints,
       ...frame.appliedCheckpointId === undefined ? {} : { appliedCheckpointId: frame.appliedCheckpointId },
       ...frame.operation === undefined ? {} : { operation: frame.operation },
+      ...frame.branchCheckpoint === undefined ? {} : { branchCheckpoint: frame.branchCheckpoint },
       ...frame.branchLabelIndex === undefined ? {} : { branchLabelIndex: frame.branchLabelIndex },
       ...frame.workspaceResumable === undefined ? {} : { workspaceResumable: frame.workspaceResumable },
       ...frame.recoveryRequired === undefined ? {} : { recoveryRequired: frame.recoveryRequired },

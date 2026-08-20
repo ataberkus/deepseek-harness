@@ -123,7 +123,7 @@ interface Workspace {
 
 ## 消费方
 
-[dsh-host-apiproxy](../../packages/host/apiproxy) 是产品消费方：它经 `ctx.workspaceRegistry` 向 GUI 客户端提供工作区的 CRUD，并执行上文「先建会话再 attach」的流程。同一 Host 也消费 `ctx.workspaceCheckpoint`：`session.edit` 恢复所选文件树并发布子分支，`session.activate` 在选中会话时恢复最新可用检查点。[dsh-workspace-checkpoint-capture](../../packages/session/workspace-checkpoint-capture) 记录 Checkpoint 0 与已结算回合快照，并在需要恢复时阻止模型和顶层工具工作。[dsh-agent-instructions](../../packages/context/agent-instructions) 尽管名字如此，却**不是**消费方：它在 agent 自己的 cwd 下发现 AGENTS.md 风格的指令文件，从不触碰 `ctx.workspaceRegistry`——两者共用的这个词指的是用户的工作目录，而非本注册表的实体。
+[dsh-host-apiproxy](../../packages/host/apiproxy) 是产品消费方：它经 `ctx.workspaceRegistry` 向 GUI 客户端提供工作区的 CRUD，并执行上文「先建会话再 attach」的流程。同一 Host 也消费 `ctx.workspaceCheckpoint`：`session.edit` 恢复所选文件树并发布子分支，`session.activate` 在选中会话时恢复最新可用检查点；提供方实时设置关闭时，两个操作都会以 `checkpoint-disabled` 拒绝。[dsh-workspace-checkpoint-capture](../../packages/session/workspace-checkpoint-capture) 记录 Checkpoint 0 与已结算回合快照，并在需要恢复时阻止模型和顶层工具工作；关闭时则跳过这些动作。[dsh-agent-instructions](../../packages/context/agent-instructions) 尽管名字如此，却**不是**消费方：它在 agent 自己的 cwd 下发现 AGENTS.md 风格的指令文件，从不触碰 `ctx.workspaceRegistry`——两者共用的这个词指的是用户的工作目录，而非本注册表的实体。
 
 <!-- BEGIN GENERATED cordis-surface (gen-cordis-catalog.ts) — do not edit between markers -->
 

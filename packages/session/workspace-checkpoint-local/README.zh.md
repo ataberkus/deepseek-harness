@@ -8,6 +8,7 @@
 
 | 配置 | 必填 | 语义 |
 |---|---|---|
+| `enabled` | 否 | 启用自动捕获、恢复准入和对话编辑/激活。默认 `false`；Web 插件面板可通过实时的 `workspace-checkpoint` 设置命名空间覆盖它。 |
 | `objectRoot` | 否 | 对象库目录。默认 `{dshHome}/workspace-checkpoints`。 |
 | `dshHome` | 否 | 仅在省略 `objectRoot` 时使用的 Harness home 覆盖。 |
 | `maxTotalBytes` | 是 | 若写入会让 blob 库超过该上限，则持久化 unavailable 记录并保留既有检查点。 |

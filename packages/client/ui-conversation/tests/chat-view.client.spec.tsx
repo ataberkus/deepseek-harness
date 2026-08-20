@@ -382,11 +382,11 @@ describe('ChatView', () => {
     const h = makeHarness({
       nodes: [message, assistant(3, 'done', 1)],
       turnTimings: new Map([[1, { startTime: 1_000, endTime: 4_000 }]]),
-      turnEnds: new Map([[1, 5]]),
       running: true,
       checkpoints: {
+        enabled: true,
         checkpoints: [{
-          id: 'cp1', sessionId: SID, boundarySeq: 1, labelIndex: 1, role: 'turn',
+          id: 'cp1', sessionId: SID, boundarySeq: -1, labelIndex: 1, role: 'turn',
           status: { kind: 'ready' }, restoreEligible: true, fileCount: 1, createdAt: 0,
         }],
         workspaceResumable: true,
@@ -406,6 +406,153 @@ describe('ChatView', () => {
 
     act(() => { h.set({ running: false }) })
     expect(view.getByRole('button', { name: '编辑并重新运行' })).toBeTruthy()
+  })
+
+  it('edits a session-located initial user message', () => {
+    const h = makeHarness({
+      nodes: [user(2, 'before')],
+      checkpoints: {
+        enabled: true,
+        checkpoints: [{
+          id: 'initial', sessionId: SID, boundarySeq: -1, labelIndex: 0, role: 'initial',
+          status: { kind: 'ready' }, restoreEligible: true, fileCount: 1, createdAt: 0,
+        }],
+      } as unknown as NonNullable<ConversationSnapshot['checkpoints']>,
+    })
+    const beginEdit = vi.fn()
+    h.props.inputActions.beginEdit = beginEdit
+
+    const view = render(<h.ChatView {...h.props} />)
+    fireEvent.click(view.getByRole('button', { name: '编辑并重新运行' }))
+
+    expect(beginEdit).toHaveBeenCalledWith(expect.objectContaining({
+      messageSeq: 2,
+      checkpointId: 'initial',
+      originalText: 'before',
+    }))
+  })
+
+  it('edits while checkpoint capture is in flight', () => {
+    const h = makeHarness({
+      nodes: [user(2, 'before')],
+      checkpoints: {
+        enabled: true,
+        checkpoints: [{
+          id: 'cp1', sessionId: SID, boundarySeq: -1, labelIndex: 1, role: 'turn',
+          status: { kind: 'ready' }, restoreEligible: true, fileCount: 1, createdAt: 0,
+        }],
+        operation: {
+          sourceSessionId: SID,
+          checkpointId: 'cp1',
+          phase: 'capturing-emergency',
+          fileCount: 1,
+        },
+      } as unknown as NonNullable<ConversationSnapshot['checkpoints']>,
+    })
+    const beginEdit = vi.fn()
+    h.props.inputActions.beginEdit = beginEdit
+
+    const view = render(<h.ChatView {...h.props} />)
+    fireEvent.click(view.getByRole('button', { name: '编辑并重新运行' }))
+
+    expect(beginEdit).toHaveBeenCalledWith(expect.objectContaining({ checkpointId: 'cp1' }))
+  })
+
+  it('chooses the nearest preceding checkpoint for the second user message', () => {
+    const h = makeHarness({
+      nodes: [user(2, 'first'), user(8, 'second')],
+      checkpoints: {
+        enabled: true,
+        checkpoints: [{
+          id: 'initial', sessionId: SID, boundarySeq: -1, labelIndex: 0, role: 'initial',
+          status: { kind: 'ready' }, restoreEligible: true, fileCount: 1, createdAt: 0,
+        }, {
+          id: 'later', sessionId: SID, boundarySeq: 5, labelIndex: 1, role: 'turn',
+          status: { kind: 'ready' }, restoreEligible: true, fileCount: 1, createdAt: 1,
+        }],
+      } as unknown as NonNullable<ConversationSnapshot['checkpoints']>,
+    })
+    const beginEdit = vi.fn()
+    h.props.inputActions.beginEdit = beginEdit
+
+    const view = render(<h.ChatView {...h.props} />)
+    const editButtons = view.getAllByRole('button', { name: '编辑并重新运行' })
+    const secondEditButton = editButtons.at(1)
+    if (secondEditButton === undefined) throw new Error('second edit button is missing')
+    fireEvent.click(secondEditButton)
+
+    expect(beginEdit).toHaveBeenCalledWith(expect.objectContaining({
+      messageSeq: 8,
+      checkpointId: 'later',
+      originalText: 'second',
+    }))
+  })
+
+  it('hides message editing when no checkpoint precedes the user message', () => {
+    const h = makeHarness({
+      nodes: [user(8, 'late')],
+      checkpoints: {
+        enabled: true,
+        checkpoints: [{
+          id: 'too-late', sessionId: SID, boundarySeq: 8, labelIndex: 1, role: 'turn',
+          status: { kind: 'ready' }, restoreEligible: true, fileCount: 1, createdAt: 0,
+        }],
+      } as unknown as NonNullable<ConversationSnapshot['checkpoints']>,
+    })
+    h.props.inputActions.beginEdit = vi.fn()
+
+    const view = render(<h.ChatView {...h.props} />)
+
+    expect(view.queryByRole('button', { name: '编辑并重新运行' })).toBeNull()
+  })
+
+  it('hides message editing while checkpoints are disabled', () => {
+    const message = { ...user(2, 'before'), turn: 1 } as UserMessageNode & { readonly turn: number }
+    const h = makeHarness({
+      nodes: [message, assistant(3, 'done', 1)],
+      turnTimings: new Map([[1, { startTime: 1_000, endTime: 4_000 }]]),
+      turnEnds: new Map([[1, 5]]),
+      checkpoints: {
+        enabled: false,
+        checkpoints: [{
+          id: 'cp-disabled', sessionId: SID, boundarySeq: 1, labelIndex: 1, role: 'turn',
+          status: { kind: 'ready' }, restoreEligible: true, fileCount: 1, createdAt: 0,
+        }],
+        workspaceResumable: true,
+      } as unknown as NonNullable<ConversationSnapshot['checkpoints']>,
+    })
+    h.props.inputActions.beginEdit = vi.fn()
+
+    const view = render(<h.ChatView {...h.props} />)
+
+    expect(view.queryByRole('button', { name: '编辑并重新运行' })).toBeNull()
+  })
+
+  it('uses the selected lineage checkpoint for a replacement turn', () => {
+    const message = { ...user(4, 'replacement'), turn: 2 } as UserMessageNode & { readonly turn: number }
+    const h = makeHarness({
+      nodes: [message, assistant(5, 'done', 2)],
+      turnTimings: new Map([[2, { startTime: 1_000, endTime: 4_000 }]]),
+      turnEnds: new Map([[2, 6]]),
+      checkpoints: {
+        enabled: true,
+        checkpoints: [{
+          id: 'initial', sessionId: SID, boundarySeq: -1, labelIndex: 0, role: 'initial',
+          status: { kind: 'ready' }, restoreEligible: true, fileCount: 1, createdAt: 0,
+        }],
+        branchCheckpoint: {
+          id: 'lineage', sessionId: 'source', boundarySeq: 3, labelIndex: 1, role: 'turn',
+          status: { kind: 'ready' }, restoreEligible: true, fileCount: 1, createdAt: 1,
+        },
+        branchLabelIndex: 1,
+        workspaceResumable: true,
+      } as unknown as NonNullable<ConversationSnapshot['checkpoints']>,
+    })
+    const beginEdit = vi.fn()
+    h.props.inputActions.beginEdit = beginEdit
+    const view = render(<h.ChatView {...h.props} />)
+    fireEvent.click(view.getByRole('button', { name: '编辑并重新运行' }))
+    expect(beginEdit).toHaveBeenCalledWith(expect.objectContaining({ checkpointId: 'lineage' }))
   })
 
   it('hands a windowless tool result to the Tool seat with an empty tool name', () => {

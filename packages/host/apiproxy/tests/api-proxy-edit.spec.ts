@@ -40,7 +40,7 @@ function messageText(event: { type: string; data: unknown }): string | undefined
   return data.content?.find(block => block.type === 'text')?.text
 }
 
-async function composed(): Promise<{
+async function composed(enabled = true): Promise<{
   ctx: Context
   checkpoint: WorkspaceCheckpoint
   capture: ReturnType<typeof vi.fn>
@@ -112,6 +112,7 @@ async function composed(): Promise<{
     return record
   })
   const checkpoint = {
+    enabled,
     capture,
     inspect: vi.fn(async (id: ReturnType<typeof CheckpointId>) => {
       const record = records.get(String(id))
@@ -163,6 +164,27 @@ function addTurn(session: ReturnType<Context['sessions']['create']>, turn: numbe
 }
 
 describe('session.edit and session.activate', () => {
+  it('rejects edit and activation before touching a session when checkpoints are disabled', async () => {
+    const { ctx } = await composed(false)
+    try {
+      const api = createApiProxy(ctx, {
+        defaultModelSelection: () => ({ provider: 'provider', model: 'model' }),
+        cwd: process.cwd(),
+      })
+      const edit = await api.sessions.edit(request({
+        sessionId: sid('disabled-session'),
+        messageSeq: 1,
+        checkpointId: CheckpointId('cp-disabled'),
+        text: 'edited',
+      }))
+      const activate = await api.sessions.activate(request({ sessionId: sid('disabled-session') }))
+      expect(edit.result).toMatchObject({ ok: false, error: { code: 'checkpoint-disabled' } })
+      expect(activate.result).toMatchObject({ ok: false, error: { code: 'checkpoint-disabled' } })
+    } finally {
+      await ctx.fiber.dispose()
+    }
+  })
+
   it('edits a later user message from the preceding checkpoint and hides descendants in the child', async () => {
     const cwd = await mkdtemp(join(tmpdir(), 'dsh-edit-'))
     const { ctx, checkpoint, capture } = await composed()

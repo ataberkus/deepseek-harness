@@ -1,5 +1,6 @@
 - id: workspace-checkpoint
   config:
+    enabled: true
     maxTotalBytes: 1073741824
     excludeGlobs:
       - '**/.git/**'

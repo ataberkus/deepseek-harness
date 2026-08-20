@@ -41,7 +41,7 @@
   - img
 - button "Branch into a new conversation":
   - img
-- text: 7/25 {{clock}} Ran for {{duration}} TTFT {{duration}} {{throughput}} tok/s Read the restored workspace state and reply with EDIT_CHECKPOINT_OK. {{clock}}
+- text: 7/25 {{clock}} Ran for {{duration}} TTFT {{duration}} {{throughput}} tok/s Read the restored workspace state again and reply with EDIT_CHECKPOINT_OK. {{clock}}
 - button "Copy":
   - img
 - button "Edit and rerun":

@@ -279,7 +279,7 @@ export function PendingSteeringBubble({ content, renderMessageImages, t }: {
 
 /** User and admitted-steering keyed Chat renderer. */
 export const UserMessageNodeView = memo(function UserMessageNodeView({
-  node, renderMessageImages, editMessage, t,
+  node, renderMessageImages, editMessage, editCheckpointFor, t,
 }: ChatNodeViewProps<'user' | 'steering'>) {
   const data = node.data
   const parts = contentParts(data.content)
@@ -295,7 +295,9 @@ export const UserMessageNodeView = memo(function UserMessageNodeView({
           text={text}
           time={data.time}
           clock="start"
-          onEdit={canEdit ? () => { editMessage?.(data.seq, parts.text) } : undefined}
+          onEdit={canEdit && editCheckpointFor?.(data.seq) === true
+            ? () => { editMessage(data.seq, parts.text) }
+            : undefined}
           className={css.actions}
           t={t}
         />

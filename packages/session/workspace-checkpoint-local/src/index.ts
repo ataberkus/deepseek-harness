@@ -6,9 +6,12 @@
 
 import { Context, Service } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
+import { installSettingsSection } from '@deepseek-ai/dsh-settings'
 import { resolve } from 'node:path'
 import {
   CheckpointId,
+  WORKSPACE_CHECKPOINT_SETTINGS_NAMESPACE,
+  WORKSPACE_CHECKPOINT_SETTINGS_SCHEMA,
   WorkspaceCheckpoint,
   WorkspaceCheckpointError,
   workspaceCheckpointDomainSpec,
@@ -20,6 +23,7 @@ import type {
   CheckpointView,
   RestoreRequest,
   RestoreResult,
+  WorkspaceCheckpointSettings,
   WorkspaceLease,
 } from '@deepseek-ai/dsh-workspace-checkpoint'
 import { SessionId } from '@deepseek-ai/dsh-session/types'
@@ -48,6 +52,7 @@ export { restoreInternals } from './restore.ts'
 export class LocalWorkspaceCheckpoint extends WorkspaceCheckpoint {
   static inject = ['storageDomain']
   static Config = z.object({
+    enabled: z.boolean().default(false),
     objectRoot: z.string(),
     dshHome: z.string(),
     maxTotalBytes: z.number().required(),
@@ -58,6 +63,7 @@ export class LocalWorkspaceCheckpoint extends WorkspaceCheckpoint {
 
   private readonly config: Config
   private readonly objectRoot: string
+  private enabledSource: () => WorkspaceCheckpointSettings
   private domain?: Domain<typeof workspaceCheckpointDomainSpec>
   private readonly leases = new WorkspaceLeaseTable()
   private readonly recovery = new Map<string, string>()
@@ -71,6 +77,17 @@ export class LocalWorkspaceCheckpoint extends WorkspaceCheckpoint {
     super(ctx)
     this.config = config
     this.objectRoot = resolveObjectRoot(config)
+    const entry: WorkspaceCheckpointSettings = { enabled: config.enabled ?? false }
+    this.enabledSource = () => entry
+    installSettingsSection(ctx, WORKSPACE_CHECKPOINT_SETTINGS_NAMESPACE, WORKSPACE_CHECKPOINT_SETTINGS_SCHEMA, entry, {
+      setSource: (current) => { this.enabledSource = current },
+      onChange: () => {},
+    })
+  }
+
+  /** Whether automatic workspace capture and recovery admission are enabled. */
+  override get enabled(): boolean {
+    return this.enabledSource().enabled
   }
 
   /** Open the workspace_checkpoint domain and close it with this fiber. */
@@ -104,7 +121,7 @@ export class LocalWorkspaceCheckpoint extends WorkspaceCheckpoint {
         captureRetryDelayMs: this.config.captureRetryDelayMs,
         domain: this.requireDomain(),
         workspaceKey: key,
-        emitChanged: sessionId => this.ctx.emit('workspace-checkpoint/changed', sessionId),
+        emitChanged: (sessionId) => { this.ctx.emit('workspace-checkpoint/changed', sessionId) },
       })
       if (request.lease !== undefined) {
         if (request.lease.workspaceKey !== key) {
@@ -148,7 +165,7 @@ export class LocalWorkspaceCheckpoint extends WorkspaceCheckpoint {
         excludeGlobs: this.config.excludeGlobs,
         markRecoveryRequired: (workspaceKey, reason) => this.markRecoveryRequired(workspaceKey, reason),
         clearRecoveryRequired: workspaceKey => this.clearRecoveryRequired(workspaceKey),
-        emitChanged: sessionId => this.ctx.emit('workspace-checkpoint/changed', sessionId),
+        emitChanged: (sessionId) => { this.ctx.emit('workspace-checkpoint/changed', sessionId) },
       })
       if (request.lease !== undefined) {
         if (request.lease.workspaceKey !== key) {

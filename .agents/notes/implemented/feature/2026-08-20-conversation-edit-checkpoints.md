@@ -16,7 +16,7 @@ Editing a settled user message needs to rerun the conversation from the files th
 
 The edit operation passes its held workspace lease into the child's initial checkpoint capture. The local provider treats a matching capture lease as reentrant for that operation, so the transaction retains exclusivity without waiting for its own lease to release.
 
-The `session/checkpoints` projection carries checkpoint rows, operation phases, applied and recovery state, the selected branch label, and workspace resumability. The Web client retains this baseline before Session creation, renders `Edit and rerun` for eligible direct user messages even while the source is running, and reports an unrestorable workspace without hiding readable conversation history.
+Workspace checkpoints are an explicit opt-in: the shipped Web composition and provider schema default `enabled` to `false`, while the live `workspace-checkpoint` settings namespace and Plugins dashboard boolean can turn it on without restart. The `session/checkpoints` projection carries that enabled flag alongside checkpoint rows, operation phases, applied and recovery state, the selected source-lineage checkpoint, the selected branch label, and workspace resumability. The Web client retains this baseline before Session creation, renders `Edit and rerun` for eligible direct user messages only while enabled (even while the source is running), keeps the affordance on replacement messages for repeated edits, and reports an unrestorable workspace without hiding readable conversation history.
 
 ## Alternatives considered
 

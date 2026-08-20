@@ -489,6 +489,7 @@ describe('events frame schemas', () => {
       {
         type: 'session/checkpoints',
         sessionId: 's',
+        enabled: true,
         checkpoints: [{
           id: 'cp1',
           sessionId: 's',
@@ -501,6 +502,17 @@ describe('events frame schemas', () => {
           createdAt: 5,
         }],
         appliedCheckpointId: 'cp1',
+        branchCheckpoint: {
+          id: 'cp-parent',
+          sessionId: 'parent',
+          boundarySeq: 1,
+          labelIndex: 0,
+          role: 'initial',
+          status: { kind: 'ready' },
+          restoreEligible: true,
+          fileCount: 2,
+          createdAt: 4,
+        },
         operation: {
           sourceSessionId: 's',
           childSessionId: 'child',

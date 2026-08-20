@@ -83,6 +83,7 @@ import type { SettingsDescriptor, SettingsNamespace, SettingsPathOp } from '@dee
 import { credentialRef } from '@deepseek-ai/dsh-credentials'
 import {
   CheckpointId,
+  WORKSPACE_CHECKPOINT_SETTINGS_NAMESPACE,
   WorkspaceCheckpointError,
 } from '@deepseek-ai/dsh-workspace-checkpoint'
 import type {
@@ -1243,8 +1244,9 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
   ): Promise<Extract<MuxFrame, { type: 'session/checkpoints' }> | undefined> {
     const service = checkpointService()
     if (service === undefined) return undefined
+    const enabled = service.enabled
     const checkpoints = [...await service.list(sessionId)]
-    const index = await service.sessionIndex?.(sessionId)
+    const index = service.sessionIndex?.(sessionId)
     const session = ctx.sessions.get(sessionId)
     const recoveryRequired = session?.header.cwd === undefined
       ? undefined
@@ -1253,11 +1255,23 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
       ? undefined
       : CheckpointId(index.appliedCheckpointId)
     const operation = checkpointOperations.get(sessionId)
+    let branchCheckpoint: CheckpointView | undefined
     let branchLabelIndex: number | undefined
     let branchCheckpointUsable = false
     if (index?.edit !== undefined) {
       try {
         const selected = await service.inspect(CheckpointId(index.edit.selectedCheckpointId))
+        branchCheckpoint = {
+          id: selected.id,
+          sessionId: selected.sessionId,
+          boundarySeq: selected.boundarySeq,
+          labelIndex: selected.labelIndex,
+          role: selected.role,
+          status: selected.status,
+          restoreEligible: selected.restoreEligible,
+          fileCount: selected.fileCount,
+          createdAt: selected.createdAt,
+        }
         branchLabelIndex = selected.labelIndex
         branchCheckpointUsable = selected.status.kind === 'ready' && selected.restoreEligible
       } catch (error: unknown) {
@@ -1267,7 +1281,7 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
       }
     }
     const hasCheckpointState = index !== undefined || checkpoints.length > 0 || branchLabelIndex !== undefined
-    const workspaceResumable = !hasCheckpointState
+    const workspaceResumable = !enabled || !hasCheckpointState
       ? undefined
       : recoveryRequired === undefined && (
         branchCheckpointUsable
@@ -1279,9 +1293,11 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
     return {
       type: 'session/checkpoints',
       sessionId,
+      enabled,
       checkpoints,
       ...appliedCheckpointId === undefined ? {} : { appliedCheckpointId },
       ...operation === undefined ? {} : { operation },
+      ...branchCheckpoint === undefined ? {} : { branchCheckpoint },
       ...branchLabelIndex === undefined ? {} : { branchLabelIndex },
       ...workspaceResumable === undefined ? {} : { workspaceResumable },
       ...recoveryRequired === undefined ? {} : { recoveryRequired },
@@ -1289,11 +1305,21 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
   }
 
   /** Push a checkpoint projection, containing failures so a diagnostic cannot break the mux. */
+  const checkpointBroadcastTails = new Map<SessionId, Promise<void>>()
   function broadcastCheckpointSnapshot(sessionId: SessionId): void {
-    void checkpointSnapshot(sessionId).then((snapshot) => {
-      if (snapshot !== undefined) broadcast(snapshot)
-    }).catch((error: unknown) => {
-      ctx.logger.warn(`checkpoint snapshot failed for session "${sessionId}": ${String(error)}`)
+    const run = async (): Promise<void> => {
+      try {
+        const snapshot = await checkpointSnapshot(sessionId)
+        if (snapshot !== undefined) broadcast(snapshot)
+      } catch (error: unknown) {
+        ctx.logger.warn(`checkpoint snapshot failed for session "${sessionId}": ${String(error)}`)
+      }
+    }
+    const previous = checkpointBroadcastTails.get(sessionId) ?? Promise.resolve()
+    const next = previous.then(run, run)
+    checkpointBroadcastTails.set(sessionId, next)
+    void next.then(() => {
+      if (checkpointBroadcastTails.get(sessionId) === next) checkpointBroadcastTails.delete(sessionId)
     })
   }
 
@@ -1321,6 +1347,14 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
 
   ctx.on('workspace-checkpoint/changed', (sessionId) => {
     broadcastCheckpointSnapshot(sessionId)
+  }, { global: true })
+
+  // A live dashboard toggle changes admission and all derived list affordances,
+  // so attached sessions receive a fresh complete snapshot rather than keeping
+  // the previous enabled value until reconnect.
+  ctx.on('settings/updated', (ns) => {
+    if (ns !== WORKSPACE_CHECKPOINT_SETTINGS_NAMESPACE) return
+    for (const session of ctx.sessions.list()) broadcastCheckpointSnapshot(session.id)
   }, { global: true })
 
   // Projection change feed → session/projection push frames. The carrier
@@ -2635,6 +2669,13 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
             details: {},
           })
         }
+        if (!service.enabled) {
+          return err(request, {
+            code: 'checkpoint-disabled',
+            message: 'session editing is disabled: enable workspace checkpoints in Plugin settings',
+            details: { sessionId },
+          })
+        }
         if (text.trim().length === 0) {
           return editRefusal(request, sessionId, messageSeq, 'edited message must not be blank')
         }
@@ -2927,6 +2968,13 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
             details: {},
           })
         }
+        if (!service.enabled) {
+          return err(request, {
+            code: 'checkpoint-disabled',
+            message: 'session activation is disabled: enable workspace checkpoints in Plugin settings',
+            details: { sessionId },
+          })
+        }
         const agent = ctx.agents.get(sessionId)
         if (agent !== undefined && (agent.status !== 'idle' || agent.inbox.hasPending)) {
           return err(request, {
@@ -2972,7 +3020,7 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
         const checkpointId = selected.id
         let index: Awaited<ReturnType<WorkspaceCheckpoint['sessionIndex']>>
         try {
-          index = await service.sessionIndex?.(sessionId)
+          index = service.sessionIndex?.(sessionId)
         } catch (error: unknown) {
           return err(request, {
             code: 'internal',

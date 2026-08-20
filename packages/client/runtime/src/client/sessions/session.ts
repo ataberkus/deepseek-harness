@@ -165,7 +165,7 @@ export class Session implements SessionFace {
       this.conversation.flush()
       this.snapshotCache = this.buildSnapshot()
     })
-    this.checkpoints.subscribe(() => this.notifier.markDirty())
+    this.checkpoints.subscribe(() => { this.notifier.markDirty() })
     this.snapshotCache = this.buildSnapshot()
   }
 
@@ -529,7 +529,6 @@ export class Session implements SessionFace {
         // stale mirror clears here — race-free against onConnected/resync
         // timing (clearing there could wipe a baseline that already landed).
         if (this.queueMirror.reset()) this.notifier.markDirty()
-        this.checkpoints.reset()
         return
       }
       case 'approval/requested': {

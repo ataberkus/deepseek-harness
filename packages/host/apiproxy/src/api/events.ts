@@ -108,6 +108,8 @@ export type MuxFrame =
     type: 'session/checkpoints'
     sessionId: SessionId
     checkpoints: CheckpointView[]
+    /** Whether automatic checkpoint capture and recovery admission are enabled. */
+    enabled: boolean
     appliedCheckpointId?: CheckpointId
     operation?: {
       sourceSessionId: SessionId
@@ -117,6 +119,8 @@ export type MuxFrame =
       fileCount: number
       message?: string
     }
+    /** Selected checkpoint from the source lineage for an edit child branch. */
+    branchCheckpoint?: CheckpointView
     /** User-facing checkpoint ordinal for an edit child branch. */
     branchLabelIndex?: number
     /** Whether the session has a known usable workspace-file checkpoint. */

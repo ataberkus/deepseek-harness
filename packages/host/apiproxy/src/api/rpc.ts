@@ -92,6 +92,7 @@ export interface RpcErrorDetailsMap {
   'edit-not-editable': { sessionId: SessionId; messageSeq: number }
   'checkpoint-unavailable': { sessionId: SessionId; checkpointId: CheckpointId }
   'checkpoint-recovery-required': { sessionId: SessionId; reason: string }
+  'checkpoint-disabled': { sessionId: SessionId }
   'subagent-parent-unavailable': { parentSessionId: SessionId }
   'subagent-not-found': { parentSessionId: SessionId; childSessionId: SessionId }
   'subagent-catalog-diagnostic': {

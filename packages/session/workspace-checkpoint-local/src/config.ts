@@ -9,6 +9,8 @@ import z from '@deepseek-ai/schemastery'
 
 /** Deployment-varying local provider settings. */
 export interface Config {
+  /** Whether automatic workspace capture and recovery admission are enabled. Defaults to false. */
+  enabled?: boolean
   /** Object-store root. When omitted, `{dshHome}/workspace-checkpoints`. */
   objectRoot?: string
   /** Harness-home override used when `objectRoot` is omitted. */
@@ -25,6 +27,7 @@ export interface Config {
 
 /** Loader schema. `objectRoot` and `dshHome` are optional; every other field is required. */
 export const Config: z<Config> = z.object({
+  enabled: z.boolean().default(false),
   objectRoot: z.string(),
   dshHome: z.string(),
   maxTotalBytes: z.number().required(),

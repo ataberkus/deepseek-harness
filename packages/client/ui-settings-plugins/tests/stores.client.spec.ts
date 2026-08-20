@@ -5,7 +5,7 @@
 
 import { describe, expect, it, vi } from 'vitest'
 import { stubSettingsScope, type StubSettingsScope } from '@deepseek-ai/dsh-client-test-runtime'
-import { CardForm, numberField, textField } from '../src/client/card-form.ts'
+import { CardForm, booleanField, numberField, textField } from '../src/client/card-form.ts'
 import { AgentLoopCardController, type AgentLoopSettings } from '../src/client/agent-loop-card-controller.ts'
 import { BashCardController, type BashSettings } from '../src/client/bash-card-controller.ts'
 import {
@@ -50,6 +50,25 @@ describe('CardForm', () => {
     })
     return { host, subject }
   }
+
+  it('writes a staged boolean as a JSON boolean', async () => {
+    const host = stubSettingsScope<Record<string, unknown>>()
+    const subject = new CardForm(host.scope, [booleanField('enabled')])
+    host.publish({
+      status: 'ready',
+      writable: true,
+      value: { enabled: false },
+      base: { enabled: false },
+      user: {},
+    })
+    acceptWrites(host)
+
+    subject.actions().edit('enabled', 'true')
+    await subject.save()
+
+    expect(host.set).toHaveBeenCalledWith('enabled', true)
+    expect(subject.field('enabled')).toEqual({ text: 'true', overridden: true, invalid: false })
+  })
 
   it('shows the effective value and stays clean until something is staged', () => {
     const { subject } = form()

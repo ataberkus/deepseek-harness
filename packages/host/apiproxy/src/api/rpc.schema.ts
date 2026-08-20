@@ -68,6 +68,7 @@ export const rpcErrorSchema: z.ZodType<RpcError> = z.discriminatedUnion('code', 
   z.object({ code: z.literal('edit-not-editable'), message: z.string(), details: z.object({ sessionId: z.string(), messageSeq: z.number().int().nonnegative() }) }),
   z.object({ code: z.literal('checkpoint-unavailable'), message: z.string(), details: z.object({ sessionId: z.string(), checkpointId: z.string().min(1) }) }),
   z.object({ code: z.literal('checkpoint-recovery-required'), message: z.string(), details: z.object({ sessionId: z.string(), reason: z.string().min(1) }) }),
+  z.object({ code: z.literal('checkpoint-disabled'), message: z.string(), details: z.object({ sessionId: z.string() }) }),
   z.object({ code: z.literal('subagent-parent-unavailable'), message: z.string(), details: z.object({ parentSessionId: z.string() }) }),
   z.object({ code: z.literal('subagent-not-found'), message: z.string(), details: z.object({ parentSessionId: z.string(), childSessionId: z.string() }) }),
   z.object({ code: z.literal('subagent-catalog-diagnostic'), message: z.string(), details: z.object({

@@ -6,7 +6,7 @@
 
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { SecretField, ValueField } from '../src/client/fields.tsx'
+import { BooleanField, SecretField, ValueField } from '../src/client/fields.tsx'
 
 afterEach(cleanup)
 
@@ -83,6 +83,35 @@ describe('ValueField', () => {
 
     expect(screen.getByLabelText('Command timeout')).toHaveProperty('disabled', true)
     expect(screen.getByRole('button', { name: 'Reset to default' })).toHaveProperty('disabled', true)
+  })
+})
+
+describe('BooleanField', () => {
+  const booleanFrame = {
+    ...frame,
+    id: 'enabled',
+    label: 'Enable checkpoints',
+    hint: 'Save workspace snapshots.',
+    invalidLabel: 'Choose true or false.',
+  }
+
+  it('stages native checkbox values as boolean literals', () => {
+    const onEdit = vi.fn()
+    render(<BooleanField {...booleanFrame} text="false" onEdit={onEdit} onReset={vi.fn()} />)
+    const checkbox = screen.getByRole('checkbox', { name: 'Enable checkpoints' })
+
+    fireEvent.click(checkbox)
+
+    expect(onEdit).toHaveBeenCalledWith('true')
+  })
+
+  it('renders the staged value and reset affordance', () => {
+    const onReset = vi.fn()
+    render(<BooleanField {...booleanFrame} overridden text="true" onEdit={vi.fn()} onReset={onReset} />)
+
+    expect(screen.getByRole('checkbox', { name: 'Enable checkpoints' })).toHaveProperty('checked', true)
+    fireEvent.click(screen.getByRole('button', { name: 'Reset to default' }))
+    expect(onReset).toHaveBeenCalledOnce()
   })
 })
 

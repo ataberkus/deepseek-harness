@@ -18,6 +18,9 @@
       "path": "../../../vendor/schemastery"
     },
     {
+      "path": "../../settings/settings"
+    },
+    {
       "path": "../workspace-checkpoint"
     },
     {

@@ -737,7 +737,6 @@ export class SessionManager {
       // Rows past the host's durable baseline rode state a restart lost; drop
       // them so last-wins cannot pin a phantom value over recomputed truth.
       this.projectionStores.get(frame.sessionId)?.truncate(frame.lastSeq)
-      this.checkpointStores.get(frame.sessionId)?.reset()
       // Same re-baseline reasoning as the queue below: this generation sends a
       // task baseline only when the set is non-empty, so a mirror kept from the
       // previous generation would survive as a phantom list.
@@ -1051,24 +1050,25 @@ export class SessionManager {
       const title = projectionStore?.get('title')
       const projectionValues = projectionStore?.values()
       const checkpointSnapshot = this.checkpointStores.get(summary.sessionId)?.getSnapshot()
-      const ownCheckpointLabel = checkpointSnapshot === undefined
+      const enabledCheckpointSnapshot = checkpointSnapshot?.enabled === true ? checkpointSnapshot : undefined
+      const ownCheckpointLabel = enabledCheckpointSnapshot === undefined
         ? undefined
-        : [...checkpointSnapshot.checkpoints]
+        : [...enabledCheckpointSnapshot.checkpoints]
           .filter(checkpoint => checkpoint.role !== 'emergency')
           .at(-1)?.labelIndex
-      const branchLabelIndex = checkpointSnapshot?.branchLabelIndex
+      const branchLabelIndex = enabledCheckpointSnapshot?.branchLabelIndex
         ?? ownCheckpointLabel
-        ?? (checkpointSnapshot?.operation === undefined
+        ?? (enabledCheckpointSnapshot?.operation === undefined
           ? undefined
-          : this.checkpointStores.get(checkpointSnapshot.operation.sourceSessionId)
+          : this.checkpointStores.get(enabledCheckpointSnapshot.operation.sourceSessionId)
             ?.getSnapshot().checkpoints.find(
-              checkpoint => checkpoint.id === checkpointSnapshot.operation?.checkpointId,
+              checkpoint => checkpoint.id === enabledCheckpointSnapshot.operation?.checkpointId,
             )?.labelIndex)
-      const workspaceResumable = checkpointSnapshot?.workspaceResumable
-        ?? (checkpointSnapshot === undefined || checkpointSnapshot.checkpoints.length === 0
+      const workspaceResumable = enabledCheckpointSnapshot?.workspaceResumable
+        ?? (enabledCheckpointSnapshot === undefined || enabledCheckpointSnapshot.checkpoints.length === 0
           ? undefined
-          : checkpointSnapshot.recoveryRequired === undefined
-            && checkpointSnapshot.checkpoints.some(checkpoint =>
+          : enabledCheckpointSnapshot.recoveryRequired === undefined
+            && enabledCheckpointSnapshot.checkpoints.some(checkpoint =>
               checkpoint.role !== 'emergency'
               && checkpoint.status.kind === 'ready'
               && checkpoint.restoreEligible))

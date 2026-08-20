@@ -6,6 +6,8 @@
  */
 
 import { Context, Service } from '@deepseek-ai/cordis'
+import z from '@deepseek-ai/schemastery'
+import { settingsNamespace } from '@deepseek-ai/dsh-settings'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type {
   CaptureRequest,
@@ -18,6 +20,20 @@ import type {
   WorkspaceLease,
 } from './types.ts'
 import type { StoredSessionCheckpointIndex } from './spec.ts'
+
+/** Settings namespace used by the local provider and Web Plugins card. */
+export const WORKSPACE_CHECKPOINT_SETTINGS_NAMESPACE = settingsNamespace('workspace-checkpoint')
+
+/** User-owned settings for workspace conversation checkpoints. */
+export interface WorkspaceCheckpointSettings {
+  /** Capture workspace checkpoints and enforce workspace recovery admission. */
+  enabled: boolean
+}
+
+/** Settings schema; fresh compositions and absent user values are disabled. */
+export const WORKSPACE_CHECKPOINT_SETTINGS_SCHEMA: z<WorkspaceCheckpointSettings> = z.object({
+  enabled: z.boolean().default(false),
+})
 
 export { WorkspaceCheckpointError } from './error.ts'
 export type { WorkspaceCheckpointErrorCode } from './error.ts'
@@ -67,6 +83,14 @@ declare module '@deepseek-ai/cordis' {
  * `ctx.workspaceCheckpoint`.
  */
 export abstract class WorkspaceCheckpoint extends Service {
+  /**
+   * Whether automatic workspace checkpoint capture and recovery admission are enabled.
+   * Providers that do not expose the setting remain safely disabled.
+   */
+  get enabled(): boolean {
+    return false
+  }
+
   /**
    * @param ctx - Cordis context that receives `ctx.workspaceCheckpoint`.
    */

@@ -28,6 +28,7 @@ const RECOVERY_EXPECTED = join(SNAPSHOT_DIR, 'recovery.expected.md')
 const SOURCE_ID = 'conversation-edit-source-web-e2e'
 const ORIGINAL_TEXT = 'Use the read tool twice in one assistant message: read a.txt and b.txt. Then reply with the single word DONE and stop.'
 const REPLACEMENT_TEXT = 'Read the restored workspace state and reply with EDIT_CHECKPOINT_OK.'
+const SECOND_REPLACEMENT_TEXT = 'Read the restored workspace state again and reply with EDIT_CHECKPOINT_OK.'
 const RECOVERY_REASON = 'browser checkpoint recovery fixture'
 
 describe.skipIf(MODE === 'record')('web e2e: conversation edit checkpoints', () => {
@@ -42,7 +43,7 @@ describe.skipIf(MODE === 'record')('web e2e: conversation edit checkpoints', () 
     scaffold = await launchWebScaffold({
       extraOverlayPath: CHECKPOINT_OVERLAY,
       replayFixture: REPLAY_FIXTURE,
-      replayChildFixtures: [REPLAY_CHILD_FIXTURE],
+      replayChildFixtures: [REPLAY_CHILD_FIXTURE, REPLAY_CHILD_FIXTURE],
       paceMs: 12,
     })
     // Seed into the Host workspace path. A subdirectory cwd leaves the
@@ -176,6 +177,40 @@ describe.skipIf(MODE === 'record')('web e2e: conversation edit checkpoints', () 
     await expect.poll(() => page.getByText(REPLACEMENT_TEXT, { exact: true }).count(), { timeout: 15_000 })
       .toBeGreaterThan(0)
     await expect.poll(() => page.getByText('EDIT_CHILD_OK', { exact: true }).count(), { timeout: 15_000 })
+      .toBeGreaterThan(0)
+
+    // A replacement turn must retain the same edit affordance so a user can
+    // revise the child repeatedly, not only the original source message.
+    const secondEditButton = page.getByRole('button', { name: 'Edit and rerun' }).last()
+    await secondEditButton.waitFor({ timeout: 15_000 })
+    await secondEditButton.click()
+    const secondInput = page.getByRole('textbox', { name: 'Message the agent' })
+    expect(await secondInput.inputValue()).toBe(REPLACEMENT_TEXT)
+    const secondEditRequest = page.waitForRequest(request =>
+      request.method() === 'POST' && new URL(request.url()).pathname === '/api/session.edit',
+    { timeout: 10_000 })
+    await secondInput.fill(SECOND_REPLACEMENT_TEXT)
+    await page.getByRole('button', { name: 'Send message' }).click()
+    const secondRequest = await secondEditRequest
+    const secondResponse = await secondRequest.response()
+    if (secondResponse === null) {
+      throw new Error(`second session.edit request ended without a response: ${secondRequest.failure()?.errorText ?? 'unknown failure'}`)
+    }
+    const secondReceipt = await secondResponse.json() as {
+      result:
+        | { ok: true; value: { sessionId: string } }
+        | { ok: false; error: { code: string; message: string } }
+    }
+    expect(secondReceipt.result.ok, JSON.stringify(secondReceipt)).toBe(true)
+    if (!secondReceipt.result.ok) return
+    const grandchildId = SessionId(secondReceipt.result.value.sessionId)
+    await expect.poll(
+      () => scaffold.ctx.agents.get(grandchildId)?.session.events.some(event => event.type === 'turn/end') ?? false,
+      { timeout: 30_000 },
+    ).toBe(true)
+    await expect.poll(() => page.getByText(SECOND_REPLACEMENT_TEXT, { exact: true }).count(), { timeout: 15_000 })
+      .toBeGreaterThan(0)
+    await expect.poll(() => page.getByRole('button', { name: 'Edit and rerun' }).count(), { timeout: 15_000 })
       .toBeGreaterThan(0)
 
     await scaffold.ctx.workspaceCheckpoint.markRecoveryRequired(sessionCwd, RECOVERY_REASON)

@@ -3195,6 +3195,8 @@ Requires: `storageDomain`
 ```ts config-catalog
 /** Deployment-varying local provider settings. */
 export interface Config {
+  /** Whether automatic workspace capture and recovery admission are enabled. Defaults to false. */
+  enabled?: boolean
   /** Object-store root. When omitted, `{dshHome}/workspace-checkpoints`. */
   objectRoot?: string
   /** Harness-home override used when `objectRoot` is omitted. */

@@ -22,6 +22,7 @@ interface Harness {
 async function boot(options: {
   readonly parent: string
   readonly maxTotalBytes?: number
+  readonly enabled?: boolean
   readonly persistRoots?: { readonly storageRoot: string; readonly objectRoot: string }
 } = { parent: '' }): Promise<Harness> {
   const parent = options.parent === ''
@@ -34,6 +35,7 @@ async function boot(options: {
   await mkdir(objectRoot, { recursive: true })
   const ctx = new Context()
   const config: Config = {
+    ...options.enabled === undefined ? {} : { enabled: options.enabled },
     objectRoot,
     maxTotalBytes: options.maxTotalBytes ?? 1024 * 1024,
     excludeGlobs: [],
@@ -61,6 +63,16 @@ function blobNames(names: readonly string[]): string[] {
 
 describe('LocalWorkspaceCheckpoint capture', () => {
   const dispose: Array<() => Promise<void>> = []
+
+  it('defaults disabled and honors the composition flag', async () => {
+    const disabled = await boot()
+    dispose.push(() => disabled.dispose())
+    expect(disabled.ctx.workspaceCheckpoint.enabled).toBe(false)
+
+    const enabled = await boot({ parent: '', enabled: true })
+    dispose.push(() => enabled.dispose())
+    expect(enabled.ctx.workspaceCheckpoint.enabled).toBe(true)
+  })
 
   afterEach(async () => {
     await Promise.all(dispose.splice(0).map(fn => fn()))
