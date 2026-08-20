@@ -494,7 +494,7 @@ describe('login and logout commands', () => {
       .toEqual({ kind: 'error', text: OAUTH_LOGOUT_UNSUPPORTED })
   })
 
-  it('emits commands/open-url with the authorize URL and still writes stderr', async () => {
+  it('forwards commands/open-url without opening a second host browser and still writes stderr', async () => {
     await isolateDshHome()
     const provider = catalog.catalogProvider(OPENAI_CODEX_PROVIDER)
     if (provider?.auth.oauth === undefined) throw new Error('expected openai-codex oauth')
@@ -528,11 +528,54 @@ describe('login and logout commands', () => {
     await ctx.plugin(CommandRuntime)
     await ctx.plugin(LlmPiAi, {})
     const opened: string[] = []
+    spawn.mockClear()
     ctx.on('commands/open-url', (authUrl) => { opened.push(authUrl) })
     const write = vi.spyOn(process.stderr, 'write').mockReturnValue(true)
     const result = await ctx.commands.execute(fakeAgent(), '/login openai-codex', [], AbortSignal.timeout(5_000))
     expect(result?.result).toMatchObject({ kind: 'success' })
     expect(opened).toEqual([url])
+    expect(write).toHaveBeenCalledWith(authUrlFallbackMessage(url))
+    expect(spawn).not.toHaveBeenCalled()
+  })
+
+  it('opens the host browser when no browser subscriber is present', async () => {
+    await isolateDshHome()
+    const provider = catalog.catalogProvider(OPENAI_CODEX_PROVIDER)
+    if (provider?.auth.oauth === undefined) throw new Error('expected openai-codex oauth')
+    const url = 'https://auth.openai.com/oauth/authorize?response_type=code&client_id=app_test'
+    const child = new EventEmitter() as EventEmitter & { unref: () => void }
+    child.unref = vi.fn()
+    spawn.mockClear()
+    spawn.mockImplementation(() => {
+      queueMicrotask(() => child.emit('spawn'))
+      return child
+    })
+    vi.spyOn(provider.auth.oauth, 'login').mockImplementation(async (interaction) => {
+      await interaction.prompt({
+        type: 'select',
+        message: 'Select OpenAI Codex login method:',
+        options: [
+          { id: 'browser', label: 'Browser' },
+          { id: 'device_code', label: 'Device' },
+        ],
+      })
+      interaction.notify({ type: 'auth_url', url })
+      return {
+        type: 'oauth',
+        access: 'access-token',
+        refresh: 'refresh-token',
+        expires: Date.now() + 60_000,
+      }
+    })
+    const ctx = new Context()
+    contexts.push(ctx)
+    await ctx.plugin(LlmRuntime)
+    await ctx.plugin(CommandRuntime)
+    await ctx.plugin(LlmPiAi, {})
+    const write = vi.spyOn(process.stderr, 'write').mockReturnValue(true)
+    const result = await ctx.commands.execute(fakeAgent(), '/login openai-codex', [], AbortSignal.timeout(5_000))
+    expect(result?.result).toMatchObject({ kind: 'success' })
+    expect(spawn).toHaveBeenCalledTimes(1)
     expect(write).toHaveBeenCalledWith(authUrlFallbackMessage(url))
   })
 

@@ -295,10 +295,21 @@ export function registerOAuthCommands(ctx: Context, deps: OAuthCommandDeps): voi
         }
         loginInFlight = true
         try {
+          // Web subscribers open the gesture-owned tab; CLI has no subscriber and uses the host opener.
+          let browserEventDelivered = false
           await loginHostedOAuth(provider, deps.store, createBrowserOAuthInteraction({
             signal,
+            openUrl: async (url) => {
+              if (browserEventDelivered) return
+              await openUrl(url)
+            },
             writeAuthUrl: (url) => {
-              commandCtx.emit('commands/open-url', url)
+              const listeners = commandCtx.events.dispatch(
+                'emit',
+                ['commands/open-url', url],
+              ) as Array<(authUrl: string) => unknown>
+              browserEventDelivered = listeners.length > 0
+              for (const listener of listeners) listener(url)
               process.stderr.write(authUrlFallbackMessage(url))
             },
           }))
