@@ -22,7 +22,7 @@ Gemini 路由注入和内置模型解析已经通过单元测试，但 OAuth 登
 
 组合 Web 回归测试通过真实回环回调完成模拟的 `/login google-gemini-cli` 流程，验证 Host 模型可见，并观察已打开的选择器在 `llm/adapters-updated` 后刷新。浏览器插件回归测试保持尚未打开的模型目录惰性。
 
-诊断和夹具不包含访问令牌、request body 或账户身份。在经过可工作的上游对照确认所需 wire 变化之前，完整 Cursor 协议重写仍不属于本文决策。
+诊断和夹具不包含访问令牌、request body 或账户身份。定向 Run framing 与 liveness 由 [Cursor AgentService wire 兼容性](2026-08-20-cursor-agentservice-wire-compatibility.md)负责；完整 conversation-state blob 与更广泛的非官方服务变化仍不属于本文决策。
 
 ## Alternatives considered
 
@@ -32,7 +32,7 @@ Gemini 路由注入和内置模型解析已经通过单元测试，但 OAuth 登
 
 **只修改模型选择器 UI。** 否决：无效模型状态由提供方发现和流式处理产生，Host 调用方也需要类型化失败。
 
-**立即移植当前社区 Cursor 客户端。** 延后：在当前运行时对候选 framing 的探测仍得到只有 heartbeat 的响应；更大的非官方协议重写需要已验证可工作的对照实现。
+**立即移植当前社区 Cursor 客户端。** 否决作为完整提供方重写。定向 Run framing 与 liveness 变更记录在 [Cursor AgentService wire 兼容性](2026-08-20-cursor-agentservice-wire-compatibility.md)中；完整 conversation-state 处理仍需要单独验证的设计。
 
 **修改 Gemini Settings 展示或增加登录按钮。** 否决：现有命令式 OAuth 展示是有意设计，组合回归测试可以覆盖路由刷新，不需要新增登录入口。
 
@@ -42,8 +42,8 @@ Gemini 路由注入和内置模型解析已经通过单元测试，但 OAuth 登
 
 只有 heartbeat 的 Cursor 响应会以明确且不可重试的提供方 code 结束，而不是消耗通用空响应的重试预算。一个有意不产生块的提供方仍会让轮次失败，因为空的 assistant 消息没有可持久化价值，也无法与已观察到的后端缺陷区分。
 
-Gemini 测试可以确立组合约定，但不能修正用户 GUI 所使用的不同 Harness home、进程或 Web 产物修订。Cursor 传输仍是非官方协议；如果 Cursor 改变服务，仍需另行作出协议决策。
+Gemini 测试可以确立组合约定，但不能修正用户 GUI 所使用的不同 Harness home、进程或 Web 产物修订。Cursor 传输仍是非官方协议；定向 Run 兼容性由 [Cursor AgentService wire 兼容性](2026-08-20-cursor-agentservice-wire-compatibility.md)负责，更广泛的服务变化可能需要再次作出协议决策。
 
 ## Testing
 
-`apps/web/tests/oauth-model-directory.e2e.ts` 覆盖模拟 Google token 交换、Cloud Code Assist 项目发现、真实回环回调、Host `llm.models`、拓扑失效通知转发以及已打开选择器刷新。`packages/client/ui-model-selection/tests/browser-plugin.client.spec.ts` 覆盖尚未打开目录的惰性行为。`packages/llm/llm-pi-ai/tests/cursor.spec.ts` 覆盖成功空响应、网络失败回退、拒绝列举后的重试、只有 heartbeat 的流以及既有 Cursor 夹具。`packages/llm/llm-pi-ai/tests/convert.spec.ts` 保留通用 `EMPTY_RESPONSE` 并钉住 `CURSOR_EMPTY_STREAM`。Host API 模型测试与 RPC schema 测试覆盖可选类型化失败 code 的传播。聚焦 OAuth、Cursor、转换、Host、构建、Web、Markdown 和 Agent Note 检查是本决策的验证面。
+`apps/web/tests/oauth-model-directory.e2e.ts` 覆盖模拟 Google token 交换、Cloud Code Assist 项目发现、真实回环回调、Host `llm.models`、拓扑失效通知转发以及已打开选择器刷新。`packages/client/ui-model-selection/tests/browser-plugin.client.spec.ts` 覆盖尚未打开目录的惰性行为。`packages/llm/llm-pi-ai/tests/cursor.spec.ts` 覆盖成功空响应、网络失败回退、拒绝列举后的重试、AgentService 包络与开放流帧、交互响应、只有 heartbeat 的流以及既有 Cursor 夹具。`packages/llm/llm-pi-ai/tests/convert.spec.ts` 保留通用 `EMPTY_RESPONSE` 并钉住 `CURSOR_EMPTY_STREAM`。Host API 模型测试与 RPC schema 测试覆盖可选类型化失败 code 的传播。聚焦 OAuth、Cursor、转换、Host、构建、Web、Markdown 和 Agent Note 检查是本决策的验证面。

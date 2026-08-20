@@ -46,6 +46,8 @@ export interface ConnectRequest {
   unary?: boolean
   /** Abort the request. */
   signal?: AbortSignal
+  /** Called once a streaming request can accept additional client frames. */
+  onOpen?: (send: (payload: Uint8Array) => void) => void
 }
 
 /**
@@ -106,7 +108,8 @@ export async function connectUnary(request: ConnectRequest): Promise<Uint8Array>
 }
 
 /**
- * Server-streaming Connect RPC: one request frame, then protobuf frames.
+ * Bidirectional Connect RPC: one request frame, optional client frames, then
+ * protobuf response frames. The request stays open until the server finishes.
  * @param request - origin, path, token, protobuf body.
  * @yields protobuf payloads, excluding end-stream trailers.
  * @returns an async iterable of protobuf payloads.
@@ -171,8 +174,7 @@ async function* defaultHttp2Request(request: ConnectRequest): AsyncIterable<Uint
     })
     const queue: Uint8Array[] = []
     let pending: ((result: IteratorResult<Uint8Array>) => void) | undefined
-    let done = false
-    let failure: Error | undefined
+    const state = { done: false, failure: undefined as Error | undefined }
     const emit = (chunk?: Uint8Array): void => {
       if (pending !== undefined) {
         const settle = pending
@@ -184,8 +186,8 @@ async function* defaultHttp2Request(request: ConnectRequest): AsyncIterable<Uint
       if (chunk !== undefined) queue.push(chunk)
     }
     const fail = (error: Error): void => {
-      failure ??= error
-      done = true
+      state.failure ??= error
+      state.done = true
       emit()
     }
     stream.on('response', (headers: http2.IncomingHttpHeaders) => {
@@ -201,18 +203,30 @@ async function* defaultHttp2Request(request: ConnectRequest): AsyncIterable<Uint
       }
     })
     stream.on('data', (chunk: Buffer) => {
-      if (failure === undefined) emit(new Uint8Array(chunk))
+      if (state.failure === undefined) emit(new Uint8Array(chunk))
     })
     stream.on('error', (error: Error) => { fail(error) })
     stream.on('end', () => {
-      done = true
+      state.done = true
       emit()
     })
     request.signal?.addEventListener('abort', () => {
       fail(new Error('Cursor AgentService request aborted'))
       stream.close()
     }, { once: true })
-    stream.end(request.unary === true ? request.body : frameConnectMessage(request.body))
+    const send = (payload: Uint8Array): void => {
+      if (request.unary === true || state.done || state.failure !== undefined) return
+      try {
+        stream.write(frameConnectMessage(payload))
+      } catch (error) {
+        fail(error instanceof Error ? error : new Error(String(error)))
+      }
+    }
+    if (request.unary === true) stream.end(request.body)
+    else {
+      stream.write(frameConnectMessage(request.body))
+      request.onOpen?.(send)
+    }
     while (true) {
       if (queue.length > 0) {
         const next = queue.shift()
@@ -220,8 +234,8 @@ async function* defaultHttp2Request(request: ConnectRequest): AsyncIterable<Uint
         if (next !== undefined) yield next
         continue
       }
-      if (done) {
-        if (failure !== undefined) throw failure
+      if (state.done) {
+        if (state.failure !== undefined) throw state.failure
         return
       }
       const chunk = await new Promise<Uint8Array | undefined>((resolve) => {

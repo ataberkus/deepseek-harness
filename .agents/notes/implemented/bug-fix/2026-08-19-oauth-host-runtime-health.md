@@ -22,7 +22,7 @@ This note extends the runtime-health behavior of [Cursor OAuth hosting](../featu
 
 The composed Web regression completes a mocked `/login google-gemini-cli` flow through the real loopback callback, verifies Host model visibility, and observes the already-open picker after `llm/adapters-updated`. The browser-plugin regression keeps unopened model directories lazy.
 
-Diagnostics and fixtures do not contain access tokens, request bodies, or account identity. A full Cursor protocol rewrite remains outside this decision until a working upstream comparison confirms the required wire changes.
+Diagnostics and fixtures do not contain access tokens, request bodies, or account identity. Targeted Run framing and liveness are owned by [Cursor AgentService wire compatibility](2026-08-20-cursor-agentservice-wire-compatibility.md); full conversation-state blobs and broader unofficial service changes remain outside this decision.
 
 ## Alternatives considered
 
@@ -32,7 +32,7 @@ Diagnostics and fixtures do not contain access tokens, request bodies, or accoun
 
 **Change only the model-picker UI.** Rejected because the invalid model state is created by provider discovery and streaming, and Host callers also need the typed failure.
 
-**Port a current community Cursor client immediately.** Deferred because candidate framing still produced heartbeat-only responses in the active runtime; a larger unofficial protocol rewrite needs a verified working comparison.
+**Port a current community Cursor client immediately.** Rejected as a complete provider rewrite. The targeted Run framing and liveness changes are recorded in [Cursor AgentService wire compatibility](2026-08-20-cursor-agentservice-wire-compatibility.md); full conversation-state handling still needs a separately verified design.
 
 **Change Gemini Settings presentation or add a sign-in button.** Rejected because the existing command-based OAuth presentation is intentional and the composed regression covers the route refresh without adding another sign-in surface.
 
@@ -42,8 +42,8 @@ A transient successful empty Cursor response hides fallback models until a later
 
 A heartbeat-only Cursor response ends with an actionable non-retryable provider code instead of consuming the generic empty-response retry budget. A provider that intentionally emits no blocks still fails the turn, because an empty assistant message has no durable value and is indistinguishable from the observed backend defect.
 
-The Gemini test establishes the composed contract but cannot reconcile a user GUI running a different Harness home, process, or Web artifact revision. The Cursor transport remains unofficial and may require a separate protocol decision if Cursor changes its service.
+The Gemini test establishes the composed contract but cannot reconcile a user GUI running a different Harness home, process, or Web artifact revision. The Cursor transport remains unofficial; targeted Run compatibility is owned by [Cursor AgentService wire compatibility](2026-08-20-cursor-agentservice-wire-compatibility.md), and broader service changes may require another protocol decision.
 
 ## Testing
 
-`apps/web/tests/oauth-model-directory.e2e.ts` covers mocked Google token exchange, Cloud Code Assist project discovery, the real loopback callback, Host `llm.models`, forwarded topology invalidation, and refresh of an open picker. `packages/client/ui-model-selection/tests/browser-plugin.client.spec.ts` covers unopened-directory laziness. `packages/llm/llm-pi-ai/tests/cursor.spec.ts` covers successful-empty discovery, transport fallback, retry after a rejected listing, heartbeat-only streams, and existing Cursor fixtures. `packages/llm/llm-pi-ai/tests/convert.spec.ts` preserves generic `EMPTY_RESPONSE` and pins `CURSOR_EMPTY_STREAM`. Host API model and RPC schema tests cover optional typed failure-code propagation. Focused OAuth, Cursor, conversion, Host, build, Web, Markdown, and Agent Note gates are the verification surfaces for this decision.
+`apps/web/tests/oauth-model-directory.e2e.ts` covers mocked Google token exchange, Cloud Code Assist project discovery, the real loopback callback, Host `llm.models`, forwarded topology invalidation, and refresh of an open picker. `packages/client/ui-model-selection/tests/browser-plugin.client.spec.ts` covers unopened-directory laziness. `packages/llm/llm-pi-ai/tests/cursor.spec.ts` covers successful-empty discovery, transport fallback, retry after a rejected listing, AgentService envelope and open-stream frames, interaction responses, heartbeat-only streams, and existing Cursor fixtures. `packages/llm/llm-pi-ai/tests/convert.spec.ts` preserves generic `EMPTY_RESPONSE` and pins `CURSOR_EMPTY_STREAM`. Host API model and RPC schema tests cover optional typed failure-code propagation. Focused OAuth, Cursor, conversion, Host, build, Web, Markdown, and Agent Note gates are the verification surfaces for this decision.

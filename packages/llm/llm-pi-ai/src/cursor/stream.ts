@@ -22,18 +22,25 @@ import type {
   ToolCall,
   Usage,
 } from '@earendil-works/pi-ai'
-import { CURSOR_BASE_URL, CURSOR_RUN_PATH } from './constants.ts'
+import {
+  CURSOR_BASE_URL,
+  CURSOR_CLIENT_HEARTBEAT_INTERVAL_MS,
+  CURSOR_RUN_PATH,
+} from './constants.ts'
 import { connectStream } from './connect.ts'
 import {
   decodeFields,
   fieldMapBytes,
   fieldRepeated,
   fieldString,
+  fieldVarint,
 } from './protobuf.ts'
 import {
   collectContextImages,
   contextEndsWithToolResult,
-  encodeAgentRunRequest,
+  encodeAgentRunClientMessage,
+  encodeCursorClientHeartbeat,
+  encodeCursorInteractionResponse,
   flattenContextText,
   latestTurnText,
   streamMaxMode,
@@ -104,7 +111,7 @@ async function runCursorStream(
     if (flatten) userText = flattenContextText(context)
     else userText = latestTurnText(context)
     const images = collectContextImages(context, !flatten)
-    const body = encodeAgentRunRequest({
+    const body = encodeAgentRunClientMessage({
       conversationId: session.conversationId,
       ...includeCheckpoint ? { checkpoint: session.checkpoint } : {},
       userText,
@@ -114,7 +121,7 @@ async function runCursorStream(
       modelName: model.name,
       ...context.tools === undefined ? {} : { tools: context.tools },
       maxMode: streamMaxMode(options),
-      thinking: model.reasoning === true && options?.reasoning !== undefined,
+      thinking: model.reasoning && options?.reasoning !== undefined,
       ...options?.reasoning === undefined ? {} : { thinkingEffort: options.reasoning },
     })
     stream.push({ type: 'start', partial: pushPartial() })
@@ -123,76 +130,99 @@ async function runCursorStream(
     const toolCalls: ToolCall[] = []
     const partialArgs = new Map<string, string>()
     let turnEnded = false
-    for await (const payload of connectStream({
-      baseUrl: model.baseUrl || CURSOR_BASE_URL,
-      path: CURSOR_RUN_PATH,
-      accessToken,
-      body,
-      ...options?.signal === undefined ? {} : { signal: options.signal },
-    })) {
-      if (options?.signal?.aborted) {
-        fail(stream, aborted(partial), 'aborted')
-        return
-      }
-      const message = decodeFields(payload)
-      const checkpoint = fieldRepeated(message, 3)[0]
-      if (checkpoint !== undefined) session.checkpoint = checkpoint
-      const update = fieldRepeated(message, 1)[0]
-      if (update === undefined) continue
-      for (const field of decodeFields(update)) {
-        switch (field.field) {
-          case 1: {
-            const delta = fieldString(decodeFields(field.bytes), 1)
-            if (delta.length === 0) break
-            textIndex ??= openText(stream, partial, pushPartial)
-            const block = partial.content[textIndex]
-            /* v8 ignore next -- openText always pushes a text block at this index. */
-            if (block?.type === 'text') block.text += delta
-            stream.push({ type: 'text_delta', contentIndex: textIndex, delta, partial: pushPartial() })
-            break
+    let sendToCursor: ((payload: Uint8Array) => void) | undefined
+    const heartbeat = setInterval(() => {
+      sendToCursor?.(encodeCursorClientHeartbeat())
+    }, CURSOR_CLIENT_HEARTBEAT_INTERVAL_MS)
+    try {
+      for await (const payload of connectStream({
+        baseUrl: model.baseUrl || CURSOR_BASE_URL,
+        path: CURSOR_RUN_PATH,
+        accessToken,
+        body,
+        onOpen: (send) => { sendToCursor = send },
+        ...options?.signal === undefined ? {} : { signal: options.signal },
+      })) {
+        if (options?.signal?.aborted) {
+          fail(stream, aborted(partial), 'aborted')
+          return
+        }
+        const message = decodeFields(payload)
+        const checkpoint = fieldRepeated(message, 3)[0]
+        if (checkpoint !== undefined) session.checkpoint = checkpoint
+        const interactionQuery = fieldRepeated(message, 7)[0]
+        if (interactionQuery !== undefined) {
+          const query = decodeFields(interactionQuery)
+          const queryId = fieldVarint(query, 1)
+          const queryField = query.find(field => field.field >= 2 && field.wire === 2)?.field
+          const queryIdNumber = queryId !== undefined && queryId <= BigInt(Number.MAX_SAFE_INTEGER)
+            ? Number(queryId)
+            : undefined
+          if (queryIdNumber !== undefined && queryField !== undefined) {
+            const response = encodeCursorInteractionResponse(queryIdNumber, queryField)
+            if (response !== undefined) sendToCursor?.(response)
           }
-          case 4: {
-            const delta = fieldString(decodeFields(field.bytes), 1)
-            if (delta.length === 0) break
-            thinkingIndex ??= openThinking(stream, partial, pushPartial)
-            const block = partial.content[thinkingIndex]
-            /* v8 ignore next -- openThinking always pushes a thinking block at this index. */
-            if (block?.type === 'thinking') block.thinking += delta
-            stream.push({ type: 'thinking_delta', contentIndex: thinkingIndex, delta, partial: pushPartial() })
-            break
-          }
-          case 2:
-          case 3:
-          case 7: {
-            const parsed = parseMcpToolUpdate(field.bytes, partialArgs)
-            if (parsed === undefined) break
-            const existing = toolCalls.find(call => call.id === parsed.id)
-            if (existing !== undefined) {
-              if (Object.keys(parsed.arguments).length > 0) {
-                existing.arguments = parsed.arguments
-              }
+        }
+        const update = fieldRepeated(message, 1)[0]
+        if (update === undefined) continue
+        for (const field of decodeFields(update)) {
+          switch (field.field) {
+            case 1: {
+              const delta = fieldString(decodeFields(field.bytes), 1)
+              if (delta.length === 0) break
+              textIndex ??= openText(stream, partial, pushPartial)
+              const block = partial.content[textIndex]
+              /* v8 ignore next -- openText always pushes a text block at this index. */
+              if (block?.type === 'text') block.text += delta
+              stream.push({ type: 'text_delta', contentIndex: textIndex, delta, partial: pushPartial() })
               break
             }
-            closeOpenBlocks(stream, partial, textIndex, thinkingIndex, pushPartial)
-            textIndex = undefined
-            thinkingIndex = undefined
-            const contentIndex = partial.content.length
-            partial.content.push(parsed)
-            toolCalls.push(parsed)
-            stream.push({ type: 'toolcall_start', contentIndex, partial: pushPartial() })
-            const delta = JSON.stringify(parsed.arguments)
-            stream.push({ type: 'toolcall_delta', contentIndex, delta, partial: pushPartial() })
-            stream.push({ type: 'toolcall_end', contentIndex, toolCall: parsed, partial: pushPartial() })
-            break
+            case 4: {
+              const delta = fieldString(decodeFields(field.bytes), 1)
+              if (delta.length === 0) break
+              thinkingIndex ??= openThinking(stream, partial, pushPartial)
+              const block = partial.content[thinkingIndex]
+              /* v8 ignore next -- openThinking always pushes a thinking block at this index. */
+              if (block?.type === 'thinking') block.thinking += delta
+              stream.push({ type: 'thinking_delta', contentIndex: thinkingIndex, delta, partial: pushPartial() })
+              break
+            }
+            case 2:
+            case 3:
+            case 7: {
+              const parsed = parseMcpToolUpdate(field.bytes, partialArgs)
+              if (parsed === undefined) break
+              const existing = toolCalls.find(call => call.id === parsed.id)
+              if (existing !== undefined) {
+                if (Object.keys(parsed.arguments).length > 0) {
+                  existing.arguments = parsed.arguments
+                }
+                break
+              }
+              closeOpenBlocks(stream, partial, textIndex, thinkingIndex, pushPartial)
+              textIndex = undefined
+              thinkingIndex = undefined
+              const contentIndex = partial.content.length
+              partial.content.push(parsed)
+              toolCalls.push(parsed)
+              stream.push({ type: 'toolcall_start', contentIndex, partial: pushPartial() })
+              const delta = JSON.stringify(parsed.arguments)
+              stream.push({ type: 'toolcall_delta', contentIndex, delta, partial: pushPartial() })
+              stream.push({ type: 'toolcall_end', contentIndex, toolCall: parsed, partial: pushPartial() })
+              break
+            }
+            case 14:
+              turnEnded = true
+              break
+            default:
+              break
           }
-          case 14:
-            turnEnded = true
-            break
-          default:
-            break
         }
+        if (turnEnded) break
       }
-      if (turnEnded) break
+    } finally {
+      clearInterval(heartbeat)
+      sendToCursor = undefined
     }
     closeOpenBlocks(stream, partial, textIndex, thinkingIndex, pushPartial)
     if (options?.signal?.aborted) {

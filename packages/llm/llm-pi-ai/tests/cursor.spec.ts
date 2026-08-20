@@ -3,7 +3,12 @@ import { EventEmitter } from 'node:events'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Api, Context as PiContext, Model, Tool } from '@earendil-works/pi-ai'
 import { getSupportedThinkingLevels } from '@earendil-works/pi-ai'
-import { CURSOR_API, CURSOR_PROVIDER } from '../src/cursor/constants.ts'
+import {
+  CURSOR_API,
+  CURSOR_CLIENT_HEARTBEAT_INTERVAL_MS,
+  CURSOR_CLIENT_VERSION,
+  CURSOR_PROVIDER,
+} from '../src/cursor/constants.ts'
 import {
   connectStream,
   connectUnary,
@@ -48,7 +53,10 @@ import {
 import {
   contextEndsWithToolResult,
   collectContextImages,
+  encodeAgentRunClientMessage,
   encodeAgentRunRequest,
+  encodeCursorClientHeartbeat,
+  encodeCursorInteractionResponse,
   encodeMcpArgMap,
   flattenContextText,
   latestTurnText,
@@ -100,6 +108,10 @@ function jsonBytes(value: unknown): Uint8Array {
 
 function interactionUpdate(field: number, payload: Uint8Array): Uint8Array {
   return encodeMessage(1, payload.byteLength === 0 ? encodeEmptyMessage(field) : encodeMessage(field, payload))
+}
+
+function runRequestPayload(body: Uint8Array | undefined): Uint8Array {
+  return fieldRepeated(decodeFields(body ?? new Uint8Array()), 1)[0] ?? new Uint8Array()
 }
 
 async function collect(stream: AsyncIterable<{ type: string }>): Promise<string[]> {
@@ -466,6 +478,7 @@ describe('cursor connect', () => {
       'content-type': 'application/proto',
       'connect-protocol-version': '1',
       te: 'trailers',
+      'x-cursor-client-version': CURSOR_CLIENT_VERSION,
     })
     expect(sentBody).toEqual(requestBody)
   })
@@ -474,13 +487,14 @@ describe('cursor connect', () => {
     const payload = encodeString(1, 'response')
     const requestBody = encodeString(1, 'request')
     const stream = new EventEmitter() as EventEmitter & {
-      end: (body: Uint8Array) => void
+      write: (body: Uint8Array) => void
       close: () => void
     }
-    let sentBody: Uint8Array | undefined
+    const sentBodies: Uint8Array[] = []
     let sentHeaders: Record<string, unknown> | undefined
-    stream.end = (body) => {
-      sentBody = body
+    stream.write = (body) => {
+      sentBodies.push(body)
+      if (sentBodies.length !== 1) return
       queueMicrotask(() => {
         stream.emit('response', { ':status': 200 })
         stream.emit('data', Buffer.from(frameConnectMessage(payload)))
@@ -501,15 +515,18 @@ describe('cursor connect', () => {
       path: '/agent.v1.AgentService/Run',
       accessToken: 't',
       body: requestBody,
+      onOpen: (send) => { send(encodeCursorClientHeartbeat()) },
     })) received.push(chunk)
     expect(received).toEqual([payload])
+    expect(sentBodies).toHaveLength(2)
     expect(sentHeaders).toMatchObject({
       ':path': '/agent.v1.AgentService/Run',
       'content-type': 'application/connect+proto',
       'connect-protocol-version': '1',
       te: 'trailers',
+      'x-cursor-client-version': CURSOR_CLIENT_VERSION,
     })
-    expect(sentBody).toEqual(frameConnectMessage(requestBody))
+    expect(sentBodies[0]).toEqual(frameConnectMessage(requestBody))
   })
 
   it('rejects non-success HTTP/2 responses before decoding their body', async () => {
@@ -535,6 +552,94 @@ describe('cursor connect', () => {
       accessToken: 't',
       body: new Uint8Array(),
     })).rejects.toThrow('HTTP 415')
+  })
+
+  it('rejects nonzero gRPC trailers and tolerates successful trailer metadata', async () => {
+    const stream = new EventEmitter() as EventEmitter & {
+      end: (body: Uint8Array) => void
+      close: () => void
+    }
+    stream.end = () => {
+      queueMicrotask(() => {
+        stream.emit('response', {})
+        stream.emit('trailers', {})
+        stream.emit('trailers', { 'grpc-status': '0' })
+        stream.emit('trailers', { 'grpc-status': '8' })
+        stream.emit('end')
+      })
+    }
+    stream.close = () => undefined
+    cursorConnectInternals.connect = () => ({
+      request: () => stream,
+      close: () => undefined,
+    }) as unknown as ReturnType<typeof cursorConnectInternals.connect>
+    await expect(connectUnary({
+      baseUrl: 'https://api2.cursor.sh',
+      path: '/x',
+      accessToken: 't',
+      body: new Uint8Array(),
+    })).rejects.toThrow('gRPC status 8')
+  })
+
+  it('reports a client-frame write failure on an open stream', async () => {
+    const stream = new EventEmitter() as EventEmitter & {
+      write: (body: Uint8Array) => void
+      close: () => void
+    }
+    let writes = 0
+    stream.write = () => {
+      writes++
+      if (writes > 1) throw new Error('client write failed')
+      stream.emit('response', { ':status': 200 })
+    }
+    stream.close = () => undefined
+    cursorConnectInternals.connect = () => ({
+      request: () => stream,
+      close: () => undefined,
+    }) as unknown as ReturnType<typeof cursorConnectInternals.connect>
+    await expect((async () => {
+      for await (const _ of connectStream({
+        baseUrl: 'https://api2.cursor.sh',
+        path: '/agent.v1.AgentService/Run',
+        accessToken: 't',
+        body: new Uint8Array(),
+        onOpen: (send) => {
+          send(encodeCursorClientHeartbeat())
+          send(encodeCursorClientHeartbeat())
+        },
+      })) {
+        // The write failure ends the stream before a response payload exists.
+      }
+    })()).rejects.toThrow('client write failed')
+  })
+
+  it('normalizes non-Error client-frame write failures', async () => {
+    const stream = new EventEmitter() as EventEmitter & {
+      write: (body: Uint8Array) => void
+      close: () => void
+    }
+    let writes = 0
+    stream.write = () => {
+      writes++
+      if (writes > 1) throw 'client write failed'
+      stream.emit('response', { ':status': 200 })
+    }
+    stream.close = () => undefined
+    cursorConnectInternals.connect = () => ({
+      request: () => stream,
+      close: () => undefined,
+    }) as unknown as ReturnType<typeof cursorConnectInternals.connect>
+    await expect((async () => {
+      for await (const _ of connectStream({
+        baseUrl: 'https://api2.cursor.sh',
+        path: '/agent.v1.AgentService/Run',
+        accessToken: 't',
+        body: new Uint8Array(),
+        onOpen: (send) => { send(encodeCursorClientHeartbeat()) },
+      })) {
+        // The write failure ends the stream before a response payload exists.
+      }
+    })()).rejects.toThrow('client write failed')
   })
 
   it('propagates HTTP/2 stream errors and abort', async () => {
@@ -824,6 +929,8 @@ describe('cursor request encoding', () => {
     const details = fieldRepeated(decodeFields(withEffort), 3)[0]
     const thinking = details === undefined ? undefined : fieldRepeated(decodeFields(details), 2)[0]
     expect(thinking === undefined ? '' : fieldString(decodeFields(thinking), 1)).toBe('xhigh')
+    expect(details === undefined ? '' : fieldString(decodeFields(details), 1)).toBe('cursor-grok-4.6-xhigh')
+    expect(details === undefined ? '' : fieldString(decodeFields(details), 3)).toBe('grok-4.6')
     const defaultThinking = encodeAgentRunRequest({
       conversationId: 'c',
       userText: 'hi',
@@ -852,6 +959,33 @@ describe('cursor request encoding', () => {
       thinking: false,
       thinkingEffort: 'low',
     }).byteLength).toBeGreaterThan(0)
+  })
+
+  it('wraps Run messages and answers supported interaction queries', () => {
+    const body = encodeAgentRunClientMessage({
+      conversationId: 'c',
+      userText: 'hi',
+      modelId: 'composer-1.5',
+    })
+    const outer = decodeFields(body)
+    const inner = fieldRepeated(outer, 1)[0]
+    expect(inner).toBeDefined()
+    expect(fieldString(decodeFields(inner ?? new Uint8Array()), 5)).toBe('c')
+
+    const heartbeat = decodeFields(encodeCursorClientHeartbeat())
+    expect(heartbeat).toHaveLength(1)
+    expect(heartbeat[0]).toMatchObject({ field: 7, wire: 2 })
+
+    const approved = encodeCursorInteractionResponse(42, 9)
+    const response = fieldRepeated(decodeFields(approved ?? new Uint8Array()), 6)[0]
+    expect(fieldVarint(decodeFields(response ?? new Uint8Array()), 1)).toBe(42n)
+    expect(fieldRepeated(decodeFields(response ?? new Uint8Array()), 9)).toHaveLength(1)
+    expect(encodeCursorInteractionResponse(-1, 9)).toBeUndefined()
+    expect(encodeCursorInteractionResponse(Number.MAX_SAFE_INTEGER + 1, 9)).toBeUndefined()
+    expect(encodeCursorInteractionResponse(42, 3)).toBeDefined()
+    expect(encodeCursorInteractionResponse(42, 4)).toBeDefined()
+    expect(encodeCursorInteractionResponse(42, 7)).toBeDefined()
+    expect(encodeCursorInteractionResponse(42, 8)).toBeUndefined()
   })
 
   it('encodes selected images and omits image placeholders from flattened text', () => {
@@ -1040,7 +1174,7 @@ describe('cursor streamSimple', () => {
       { messages: [{ role: 'user', content: 'hi', timestamp: 0 }] },
       { headers: { authorization: 'Bearer tok' }, reasoning: 'low' },
     ))
-    const details = fieldRepeated(decodeFields(captured ?? new Uint8Array()), 3)[0]
+    const details = fieldRepeated(decodeFields(runRequestPayload(captured)), 3)[0]
     const thinking = details === undefined ? undefined : fieldRepeated(decodeFields(details), 2)[0]
     expect(thinking === undefined ? '' : fieldString(decodeFields(thinking), 1)).toBe('low')
 
@@ -1050,7 +1184,7 @@ describe('cursor streamSimple', () => {
       { messages: [{ role: 'user', content: 'hi', timestamp: 0 }] },
       { headers: { authorization: 'Bearer tok' } },
     ))
-    const offDetails = fieldRepeated(decodeFields(captured ?? new Uint8Array()), 3)[0]
+    const offDetails = fieldRepeated(decodeFields(runRequestPayload(captured)), 3)[0]
     const offThinking = offDetails === undefined ? undefined : fieldRepeated(decodeFields(offDetails), 2)[0]
     expect(offThinking).toBeUndefined()
   })
@@ -1093,6 +1227,59 @@ describe('cursor streamSimple', () => {
     expect(types).toContain('text_delta')
     expect(types).toContain('toolcall_end')
     expect(types.at(-1)).toBe('done')
+  })
+
+  it('answers a Cursor interaction query over the open Run stream', async () => {
+    const sent: Uint8Array[] = []
+    cursorConnectInternals.request = async function* (request) {
+      request.onOpen?.((payload) => { sent.push(payload) })
+      const query = concat(encodeVarint(8), encodeVarint(7), encodeEmptyMessage(9))
+      const vmQuery = concat(encodeVarint(8), encodeVarint(8), encodeEmptyMessage(8))
+      const oversizedQuery = concat(
+        encodeVarint(8),
+        encodeVarint(BigInt(Number.MAX_SAFE_INTEGER) + 1n),
+        encodeEmptyMessage(9),
+      )
+      const missingQuery = concat(encodeVarint(8), encodeVarint(9))
+      yield frameConnectMessage(encodeMessage(7, query))
+      yield frameConnectMessage(encodeMessage(7, vmQuery))
+      yield frameConnectMessage(encodeMessage(7, oversizedQuery))
+      yield frameConnectMessage(encodeMessage(7, missingQuery))
+      yield frameConnectMessage(interactionUpdate(14, new Uint8Array()))
+    }
+    await collect(streamCursor(MODEL, {
+      messages: [{ role: 'user', content: 'hi', timestamp: 0 }],
+    }, { headers: { authorization: 'Bearer tok' } }))
+    const response = fieldRepeated(decodeFields(sent[0] ?? new Uint8Array()), 6)[0]
+    expect(fieldVarint(decodeFields(response ?? new Uint8Array()), 1)).toBe(7n)
+    expect(fieldRepeated(decodeFields(response ?? new Uint8Array()), 9)).toHaveLength(1)
+  })
+
+  it('sends client heartbeats while a Run remains open', async () => {
+    vi.useFakeTimers()
+    try {
+      const sent: Uint8Array[] = []
+      let release: (() => void) | undefined
+      const opened = new Promise<void>((resolve) => {
+        cursorConnectInternals.request = async function* (request) {
+          request.onOpen?.((payload) => { sent.push(payload) })
+          resolve()
+          await new Promise<void>((finish) => { release = finish })
+          yield frameConnectMessage(interactionUpdate(14, new Uint8Array()))
+        }
+      })
+      const completion = collect(streamCursor(MODEL, {
+        messages: [{ role: 'user', content: 'hi', timestamp: 0 }],
+      }, { headers: { authorization: 'Bearer tok' } }))
+      await opened
+      await vi.advanceTimersByTimeAsync(CURSOR_CLIENT_HEARTBEAT_INTERVAL_MS)
+      expect(sent).toHaveLength(1)
+      expect(fieldRepeated(decodeFields(sent[0] ?? new Uint8Array()), 7)).toHaveLength(1)
+      release?.()
+      await completion
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('classifies a heartbeat-only Run as a provider-specific empty stream', async () => {
@@ -1147,8 +1334,8 @@ describe('cursor streamSimple', () => {
         { role: 'user', content: 'two', timestamp: 0 },
       ],
     }, { headers: { authorization: 'Bearer tok' }, sessionId: 's2' }))
-    expect(fieldRepeated(decodeFields(captured ?? new Uint8Array()), 1)[0]).toEqual(Uint8Array.of(1, 2))
-    const action = fieldRepeated(decodeFields(captured ?? new Uint8Array()), 2)[0]
+    expect(fieldRepeated(decodeFields(runRequestPayload(captured)), 1)[0]).toEqual(Uint8Array.of(1, 2))
+    const action = fieldRepeated(decodeFields(runRequestPayload(captured)), 2)[0]
     const user = action === undefined ? undefined : fieldRepeated(decodeFields(action), 1)[0]
     expect(user === undefined ? '' : fieldString(decodeFields(user), 1)).toBe('two')
   })
@@ -1167,7 +1354,7 @@ describe('cursor streamSimple', () => {
         timestamp: 0,
       }],
     }, { apiKey: 'tok', sessionId: 'img-turn' }))
-    const action = fieldRepeated(decodeFields(captured ?? new Uint8Array()), 2)[0]
+    const action = fieldRepeated(decodeFields(runRequestPayload(captured)), 2)[0]
     const userMessage = fieldRepeated(decodeFields(action ?? new Uint8Array()), 1)[0]
     const selected = fieldRepeated(decodeFields(userMessage ?? new Uint8Array()), 3)[0]
     const image = decodeFields(fieldRepeated(decodeFields(selected ?? new Uint8Array()), 1)[0] ?? new Uint8Array())
@@ -1291,7 +1478,7 @@ describe('cursor streamSimple', () => {
         },
       ],
     }, { headers: { authorization: 'Bearer tok' }, sessionId: 'tools' }))
-    expect(fieldRepeated(decodeFields(captured ?? new Uint8Array()), 1)[0]).toBeUndefined()
+    expect(fieldRepeated(decodeFields(runRequestPayload(captured)), 1)[0]).toBeUndefined()
   })
 
   it('recovers non-JSON MCP arg bytes and skips an MCP tool with no name', async () => {

@@ -17,6 +17,7 @@ import {
   encodeMapBytes,
   encodeMessage,
   encodeProtobufValue,
+  encodeVarint,
   encodeString,
 } from './protobuf.ts'
 
@@ -69,14 +70,16 @@ export interface AgentRunEncodeInput {
  * @returns protobuf payload (not Connect-framed).
  */
 export function encodeAgentRunRequest(input: AgentRunEncodeInput): Uint8Array {
+  const wireModelId = cursorWireModelId(input.modelId, input.thinking, input.thinkingEffort)
   const modelDetails = concat(
-    encodeString(1, input.modelId),
+    encodeString(1, wireModelId),
     encodeThinkingDetails(input.thinking === true, input.thinkingEffort),
+    encodeString(3, input.modelId),
     encodeString(4, input.modelName ?? input.modelId),
     encodeBool(7, input.maxMode === true),
   )
   const requestedModel = concat(
-    encodeString(1, input.modelId),
+    encodeString(1, wireModelId),
     encodeBool(2, input.maxMode === true),
   )
   return concat(
@@ -88,6 +91,63 @@ export function encodeAgentRunRequest(input: AgentRunEncodeInput): Uint8Array {
     input.systemPrompt === undefined ? new Uint8Array() : encodeString(8, input.systemPrompt),
     encodeMessage(9, requestedModel),
   )
+}
+
+/**
+ * Wrap an AgentRunRequest in the current Cursor AgentClientMessage envelope.
+ * @param input - conversation, model, and tools for this turn.
+ * @returns a protobuf AgentClientMessage payload (not Connect-framed).
+ */
+export function encodeAgentRunClientMessage(input: AgentRunEncodeInput): Uint8Array {
+  return encodeMessage(1, encodeAgentRunRequest(input))
+}
+
+/**
+ * Encode a Cursor client heartbeat for an open Run stream.
+ * @returns a protobuf AgentClientMessage payload (not Connect-framed).
+ */
+export function encodeCursorClientHeartbeat(): Uint8Array {
+  return encodeEmptyMessage(7)
+}
+
+/**
+ * Encode the response for a Cursor interaction query. Web search and fetch
+ * permissions are approved; unsupported interactive operations are rejected so
+ * the server can finish the turn instead of waiting forever.
+ * @param queryId - server-assigned interaction id.
+ * @param queryField - InteractionQuery oneof field number.
+ * @returns a protobuf AgentClientMessage payload, or `undefined` when the
+ *   operation has no truthful response (Cursor VM setup).
+ */
+export function encodeCursorInteractionResponse(
+  queryId: number,
+  queryField: number,
+): Uint8Array | undefined {
+  if (!Number.isSafeInteger(queryId) || queryId < 0) return undefined
+  const result = interactionResult(queryField)
+  if (result === undefined) return undefined
+  const interactionResponse = concat(
+    encodeVarint((1 << 3) | 0),
+    encodeVarint(queryId),
+    encodeMessage(queryField, result),
+  )
+  return encodeMessage(6, interactionResponse)
+}
+
+function interactionResult(queryField: number): Uint8Array | undefined {
+  if (queryField === 2 || queryField === 5 || queryField === 6 || queryField === 9) {
+    return encodeEmptyMessage(1)
+  }
+  if (queryField === 3) {
+    return encodeMessage(1, encodeMessage(3, encodeString(1, 'Interactive questions are not supported by this client')))
+  }
+  if (queryField === 4) {
+    return encodeMessage(2, encodeString(1, 'Mode switches are not supported by this client'))
+  }
+  if (queryField === 7) {
+    return encodeMessage(1, encodeMessage(2, encodeString(1, 'Plan files are not supported by this client')))
+  }
+  return undefined
 }
 
 /**
@@ -187,6 +247,25 @@ export function encodeMcpArgMap(args: Readonly<Record<string, unknown>>): Uint8A
  */
 export function streamMaxMode(options: SimpleStreamOptions | undefined): boolean {
   return options?.reasoning === 'max' || options?.reasoning === 'xhigh'
+}
+
+/**
+ * Translate legacy bare Grok ids to the current Cursor AgentService ids.
+ * Cursor keeps Composer ids bare but namespaces hosted Grok SKUs under
+ * `cursor-grok`; effort-specific ids are selected when thinking is enabled.
+ * @param id - selected model id.
+ * @param thinking - whether the request enables thinking.
+ * @param effort - requested thinking effort.
+ * @returns the model id Cursor expects on the wire.
+ */
+function cursorWireModelId(id: string, thinking: boolean | undefined, effort: string | undefined): string {
+  const match = /^(?:cursor-)?grok-(4\.5|4\.6)(-fast)?$/i.exec(id)
+  if (match === null) return id
+  const base = `cursor-grok-${match[1]}`
+  const fast = match[2] ?? ''
+  if (!thinking) return `${base}${fast}`
+  const level = effort === undefined || effort === 'off' ? 'low' : effort
+  return `${base}-${level}${fast}`
 }
 
 /**

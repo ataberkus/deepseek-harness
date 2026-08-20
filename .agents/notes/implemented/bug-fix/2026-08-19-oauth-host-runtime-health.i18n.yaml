@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-08-19-oauth-host-runtime-health.md
-2026-08-19-oauth-host-runtime-health.md: 7427976bd7e96ef420f588562cb832a10e7249a0
-2026-08-19-oauth-host-runtime-health.zh.md: eb5613c23a60221067ede857f667b2d899dae8d0
+2026-08-19-oauth-host-runtime-health.md: 7e5ca277341645fa8ce33bcc6a192ab384674809
+2026-08-19-oauth-host-runtime-health.zh.md: 9b0a3c8e388d01669be9348d11751511c3b2064c

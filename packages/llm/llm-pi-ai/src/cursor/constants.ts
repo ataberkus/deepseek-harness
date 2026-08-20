@@ -41,8 +41,8 @@ export const CURSOR_MODELS_PATH = '/agent.v1.AgentService/GetUsableModels'
 /** `x-cursor-client-type` the unofficial CLI clients send. */
 export const CURSOR_CLIENT_TYPE = 'cli'
 
-/**
- * `x-cursor-client-version` the unofficial CLI clients send. Cursor may reject
- * an unrecognized spelling; this is the value community clients currently use.
- */
-export const CURSOR_CLIENT_VERSION = '1.0.0'
+/** `x-cursor-client-version` used by the current Cursor CLI wire protocol. */
+export const CURSOR_CLIENT_VERSION = 'cli-2026.07.23-e383d2b'
+
+/** Client heartbeat interval required while a Run stream remains open. */
+export const CURSOR_CLIENT_HEARTBEAT_INTERVAL_MS = 5_000
