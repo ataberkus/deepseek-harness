@@ -14,7 +14,7 @@ import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import { zh as commonZh } from '@deepseek-ai/dsh-client-locale/src/locales/zh.ts'
 import { createChatStore } from '../src/client/stores.ts'
 import { AssistantMarkdown, type AssistantMarkdownProps } from '../src/client/chat/AssistantMarkdown.tsx'
-import { StatsLine } from '../src/client/chat/StatsLine.tsx'
+import { StatsLine, type StatsLineProps } from '../src/client/chat/StatsLine.tsx'
 import { DetailsPanel } from '../src/client/skeleton/DetailsPanel.tsx'
 import { zh } from '../src/client/locales.ts'
 import { chatSnapshotFixture } from './chat-snapshot-fixture.client.ts'
@@ -37,6 +37,16 @@ afterEach(() => {
 })
 
 const SID = 's1' as SessionId
+const EMPTY_INPUT: StatsLineProps['input'] = {
+  draft: '', imageIds: [], draftRev: 0, phase: 'plain', occurrences: [], queue: [],
+}
+const EMPTY_INPUT_ACTIONS: StatsLineProps['inputActions'] = {
+  setDraft: () => {},
+  addImages: () => true,
+  removeImage: () => {},
+  pruneImages: () => {},
+  submit: () => {},
+}
 
 /** Minimal framework seat for direct DetailsPanel host tests. */
 const SessionProviderStub: SessionProviderComponent = ({ children }) => children(SID)
@@ -94,7 +104,9 @@ describe('render branch tails', () => {
       <StatsLine
         t={t}
         session={snap}
-        input={{ draft: '', imageIds: [], draftRev: 0, phase: 'plain', occurrences: [], queue: [] }}
+        input={EMPTY_INPUT}
+        useInput={selector => selector(EMPTY_INPUT)}
+        inputActions={EMPTY_INPUT_ACTIONS}
         sessionId={SID}
         useSession={bindSnapshotSelector(source) as unknown as UseSession<ConversationSnapshot>}
         useWorkspaces={select => select({

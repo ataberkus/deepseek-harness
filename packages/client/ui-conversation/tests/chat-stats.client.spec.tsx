@@ -40,6 +40,13 @@ const CHILD = 'child' as SessionId
 const EMPTY_INPUT: StatsLineProps['input'] = {
   draft: '', imageIds: [], draftRev: 0, phase: 'plain', occurrences: [], queue: [],
 }
+const EMPTY_INPUT_ACTIONS: StatsLineProps['inputActions'] = {
+  setDraft: () => {},
+  addImages: () => true,
+  removeImage: () => {},
+  pruneImages: () => {},
+  submit: () => {},
+}
 const EMPTY_WORKSPACES: WorkspaceListState = {
   items: [], archivedSessionIds: [], state: 'idle', phase: 'ready', error: null,
   baselinesReady: true, recentWorkspaceId: undefined,
@@ -214,6 +221,8 @@ describe('StatsLine', () => {
     return {
       session: source.getSnapshot(),
       input: EMPTY_INPUT,
+      useInput: selector => selector(EMPTY_INPUT),
+      inputActions: EMPTY_INPUT_ACTIONS,
       sessionId: SID,
       useSession: bindSnapshotSelector(source),
       useProjection: projections(values),

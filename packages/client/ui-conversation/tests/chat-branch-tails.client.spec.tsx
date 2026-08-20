@@ -43,6 +43,16 @@ afterEach(() => {
 // Mirrors the real lookup chain (conversation namespace, then common).
 const t: ChatNodeViewProps['t'] = makeTranslate(zh, commonZh)
 const renderMessageImages: AssistantMarkdownProps['renderMessageImages'] = () => null
+const EMPTY_INPUT: StatsLineProps['input'] = {
+  draft: '', imageIds: [], draftRev: 0, phase: 'plain', occurrences: [], queue: [],
+}
+const EMPTY_INPUT_ACTIONS: StatsLineProps['inputActions'] = {
+  setDraft: () => {},
+  addImages: () => true,
+  removeImage: () => {},
+  pruneImages: () => {},
+  submit: () => {},
+}
 const RETRY_ID = 'retry-fixture' as Extract<ConversationNode, { kind: 'model-retry' }>['retryId']
 
 interface MessageItemProps {
@@ -1034,7 +1044,9 @@ describe('small branch tails', () => {
       <StatsLine
         t={t}
         session={snap as unknown as ConversationSnapshot}
-        input={{ draft: '', imageIds: [], draftRev: 0, phase: 'plain', occurrences: [], queue: [] }}
+        input={EMPTY_INPUT}
+        useInput={selector => selector(EMPTY_INPUT)}
+        inputActions={EMPTY_INPUT_ACTIONS}
         sessionId={'stats' as SessionId}
         useSession={bindSnapshotSelector(source) as unknown as StatsLineProps['useSession']}
         useWorkspaces={select => select({

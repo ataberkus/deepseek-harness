@@ -611,7 +611,7 @@ describe('running and lock semantics', () => {
       })
     })
     fireEvent.change(h.textarea, { target: { value: '修改后的消息' } })
-    const send = h.view.getByRole('button', { name: '发送消息' })
+    const send = h.view.getByRole('button', { name: '发送消息' }) as HTMLButtonElement
     expect(send.disabled).toBe(false)
     fireEvent.click(send)
     expect(h.stop).not.toHaveBeenCalled()
