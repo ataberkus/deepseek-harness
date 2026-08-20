@@ -14,6 +14,8 @@ Workspace and Session hover cards copy the value their row clips: activating a W
 
 The Session row's Fork action forks at the source's last completed turn, increments the inherited persisted title on the client, and then opens the child; a trailing ASCII or fullwidth parenthesized number is incremented in the same style, while an unnumbered title gets ` (1)` appended. The source and child always appear as peer rows within a workspace group, with lineage retained only as session data. A fork or rename failure leaves the current selection unchanged; after a rename failure, the created child remains in the list.
 
+Edited child branches display their selected checkpoint ordinal as a stable `Checkpoint N` label. A session remains readable when its checkpoint tree is unavailable, but its row reports that workspace files cannot be restored; the active conversation also disables new input while recovery is required.
+
 Session rows render the runtime's live `pendingInteraction` classification: approvals report **Waiting for approval**, plan reviews report **Plan awaiting review**, and ordinary questions report **Waiting for answer**. Every pending interaction uses an amber warning dot that takes precedence over the running indicator; ordinary rows repeat the localized status in their hover card, and both ordinary and search-result rows carry the same text as a visually hidden label for assistive technology. Running uses the blue indicator and its hidden label; an idle row leaves the reserved status slot empty.
 
 Both target slots are declared by other plugins, so `apply` uses `slots.inject()` to register for each declaration lifetime and re-register after a declaring slot is restored.

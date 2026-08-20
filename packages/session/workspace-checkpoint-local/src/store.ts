@@ -34,13 +34,9 @@ export const captureInternals: {
 type CheckpointDomain = Domain<typeof workspaceCheckpointDomainSpec>
 
 /**
+ * Capture one filesystem manifest and persist its checkpoint metadata.
  * @param request - capture input.
- * @param objectRoot - blob store root.
- * @param maxTotalBytes - admission cap.
- * @param excludeGlobs - walker exclusions.
- * @param captureRetryCount - extra attempts after concurrent write.
- * @param captureRetryDelayMs - delay between retries.
- * @param domain - open workspace_checkpoint domain.
+ * @param options - blob-store, retry, domain, and event options.
  * @returns the stored record projected to {@link CheckpointRecord}.
  */
 export async function captureCheckpoint(
@@ -52,10 +48,11 @@ export async function captureCheckpoint(
     readonly captureRetryCount: number
     readonly captureRetryDelayMs: number
     readonly domain: CheckpointDomain
+    readonly workspaceKey?: string
     emitChanged?(sessionId: SessionId): void
   },
 ): Promise<CheckpointRecord> {
-  const workspaceKey = await canonicalizeCwd(request.cwd)
+  const workspaceKey = options.workspaceKey ?? await canonicalizeCwd(request.cwd)
   const manifest = await manifestOrUnavailable(workspaceKey, options)
   const checkpoints = options.domain.table('checkpoints')
   const sessions = options.domain.table('sessions')
@@ -74,9 +71,14 @@ export async function captureCheckpoint(
     status = { kind: 'unavailable', reason: 'unsafe-entry' }
     restoreEligible = false
   } else {
-    const admission = await admitBlobs(workspaceKey, manifest.entries, options.objectRoot, options.maxTotalBytes)
-    if (admission !== undefined) {
-      status = { kind: 'unavailable', reason: admission }
+    try {
+      const admission = await admitBlobs(workspaceKey, manifest.entries, options.objectRoot, options.maxTotalBytes)
+      if (admission !== undefined) {
+        status = { kind: 'unavailable', reason: admission }
+        restoreEligible = false
+      }
+    } catch (error: unknown) {
+      status = { kind: 'unavailable', reason: captureFailureReason(error) }
       restoreEligible = false
     }
   }
@@ -105,12 +107,14 @@ export async function captureCheckpoint(
       ? { emergencyCheckpointId: id }
       : index?.emergencyCheckpointId === undefined ? {} : { emergencyCheckpointId: index.emergencyCheckpointId },
     ...index?.recoveryRequired === undefined ? {} : { recoveryRequired: index.recoveryRequired },
+    ...index?.edit === undefined ? {} : { edit: index.edit },
   })
   options.emitChanged?.(sessionId)
   return toRecord(stored)
 }
 
 /**
+ * Load one stored checkpoint row.
  * @param id - checkpoint id.
  * @param domain - open domain.
  * @returns the stored row including manifest entries.
@@ -124,6 +128,7 @@ export function loadStoredCheckpoint(id: CheckpointId, domain: CheckpointDomain)
 }
 
 /**
+ * Read one stored checkpoint and project it to the public record.
  * @param id - checkpoint id.
  * @param domain - open domain.
  * @returns the stored record.
@@ -133,6 +138,7 @@ export function inspectCheckpoint(id: CheckpointId, domain: CheckpointDomain): C
 }
 
 /**
+ * Read one session's checkpoint index.
  * @param sessionId - owning session.
  * @param domain - open domain.
  * @returns the session index row, when present.
@@ -145,6 +151,7 @@ export function loadSessionIndex(
 }
 
 /**
+ * List a session's checkpoint records in label order.
  * @param sessionId - owning session.
  * @param domain - open domain.
  * @returns client-safe views in label order.
@@ -192,7 +199,7 @@ async function manifestOrUnavailable(
   if (isConcurrentWrite(lastError)) {
     return { cwd, hash: 'unavailable', entries: [], unavailableReason: 'concurrent-write' }
   }
-  throw lastError
+  return { cwd, hash: 'unavailable', entries: [], unavailableReason: captureFailureReason(lastError) }
 }
 
 async function admitBlobs(
@@ -222,6 +229,13 @@ function isConcurrentWrite(error: unknown): boolean {
   return error instanceof WorkspaceCheckpointError && error.code === 'CHECKPOINT_CONCURRENT_WRITE'
 }
 
+/** Keep capture failures fail-soft without persisting filesystem details. */
+function captureFailureReason(error: unknown): string {
+  return error instanceof WorkspaceCheckpointError
+    ? `capture-${error.code.toLowerCase()}`
+    : 'capture-failed'
+}
+
 function delay(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms))
 }
@@ -248,7 +262,9 @@ export function toRecord(stored: StoredCheckpointRecord): CheckpointRecord {
     id: CheckpointId(stored.id),
     sessionId: SessionId(stored.sessionId),
     workspaceKey: stored.workspaceKey,
-    ...stored.workspaceId === undefined ? {} : { workspaceId: stored.workspaceId as CheckpointRecord['workspaceId'] },
+    ...stored.workspaceId === undefined
+      ? {}
+      : { workspaceId: stored.workspaceId as Exclude<CheckpointRecord['workspaceId'], undefined> },
     boundarySeq: stored.boundarySeq,
     ...stored.parentCheckpointId === undefined ? {} : { parentCheckpointId: CheckpointId(stored.parentCheckpointId) },
     role: stored.role,

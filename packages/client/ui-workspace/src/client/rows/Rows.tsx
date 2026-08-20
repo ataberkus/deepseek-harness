@@ -437,6 +437,14 @@ export function SessionNodeItem({ node, currentId, now, onOpen, onRename, onFork
         </span>
       )}
       <span className={css.title}>{title}</span>
+      {row.checkpointLabelIndex !== undefined && (
+        <span className={css.meta}>{t('checkpoint.label', { n: row.checkpointLabelIndex })}</span>
+      )}
+      {row.workspaceResumable === false && (
+        <span className={clsx(css.meta, css.unavailable)} role="status">
+          {t('workspace.unrestorable')}
+        </span>
+      )}
       {/* A blank New Session row is a provisional placeholder: nothing has
           happened in it yet, so a "now" timestamp and the row verbs
           (rename/fork/archive) would all act on content that does not

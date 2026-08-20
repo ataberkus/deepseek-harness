@@ -107,6 +107,7 @@ export const SERVICE_PAGE: Record<string, string> = {
   userQuestions: 'user-questions.md',
   web: 'web.md',
   workflowEngine: 'workflow.md',
+  workspaceCheckpoint: 'workspace.md',
   workspaceRegistry: 'workspace.md',
 }
 
@@ -185,6 +186,7 @@ export const EVENT_SCOPE_PAGE: Record<string, string> = {
   'session-telemetry': 'session-telemetry.md',
   'tools': 'tools.md',
   'workflow': 'workflow.md',
+  'workspace-checkpoint': 'workspace.md',
 }
 
 /**
@@ -498,6 +500,15 @@ export const LINK_MAP: Readonly<Record<string, string>> = {
   ProjectionSnapshot: 'session-projection.md',
   ProjectionCheckpoint: 'session-projection.md',
   DirectoryPickerCapability: 'workspace.md',
+  CheckpointId: 'workspace.md',
+  CaptureRequest: 'workspace.md',
+  CheckpointEditLink: 'workspace.md',
+  CheckpointRecord: 'workspace.md',
+  CheckpointView: 'workspace.md',
+  RestoreRequest: 'workspace.md',
+  RestoreResult: 'workspace.md',
+  StoredSessionCheckpointIndex: 'workspace.md',
+  WorkspaceLease: 'workspace.md',
   TypertContribution: 'invariants.md',
   TypertFace: 'invariants.md',
   TypertPackageFilter: 'invariants.md',

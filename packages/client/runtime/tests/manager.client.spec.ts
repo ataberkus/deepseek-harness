@@ -261,6 +261,49 @@ describe('list lifecycle', () => {
     frame('subscribed-current', { type: 'session/subscribed', sessionId: S1, lastSeq: 2 })
     expect(manager.getListSnapshot().items[0]?.title).toBe('Durable')
   })
+
+  it('retains checkpoint snapshots before Session creation and clears them on resubscribe', () => {
+    const manager = new SessionManager(new FakeApiClient(), fakeRemote())
+    const checkpointFrame = {
+      type: 'session/checkpoints',
+      sessionId: S1,
+      checkpoints: [{
+        id: 'cp-1',
+        sessionId: S1,
+        boundarySeq: 4,
+        labelIndex: 1,
+        role: 'turn',
+        status: { kind: 'ready' },
+        restoreEligible: true,
+        fileCount: 2,
+        createdAt: 100,
+      }],
+      appliedCheckpointId: 'cp-1',
+      branchLabelIndex: 1,
+      workspaceResumable: true,
+      operation: {
+        sourceSessionId: S1,
+        checkpointId: 'cp-1',
+        phase: 'ready',
+        fileCount: 2,
+      },
+    }
+    manager.handleMuxEnvelope({ rpcId: 'checkpoint' as never, payload: checkpointFrame as never })
+    const session = manager.get(S1)
+    expect(session.getSnapshot().checkpoints).toMatchObject({
+      checkpoints: [{ id: 'cp-1', fileCount: 2 }],
+      appliedCheckpointId: 'cp-1',
+      branchLabelIndex: 1,
+      workspaceResumable: true,
+      operation: { phase: 'ready' },
+    })
+
+    manager.handleMuxEnvelope({
+      rpcId: 'subscribed' as never,
+      payload: { type: 'session/subscribed', sessionId: S1, lastSeq: 4 },
+    })
+    expect(session.getSnapshot().checkpoints).toEqual({ checkpoints: [] })
+  })
 })
 
 describe('search', () => {

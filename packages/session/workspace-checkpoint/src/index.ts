@@ -9,6 +9,7 @@ import { Context, Service } from '@deepseek-ai/cordis'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type {
   CaptureRequest,
+  CheckpointEditLink,
   CheckpointId,
   CheckpointRecord,
   CheckpointView,
@@ -16,6 +17,7 @@ import type {
   RestoreResult,
   WorkspaceLease,
 } from './types.ts'
+import type { StoredSessionCheckpointIndex } from './spec.ts'
 
 export { WorkspaceCheckpointError } from './error.ts'
 export type { WorkspaceCheckpointErrorCode } from './error.ts'
@@ -28,6 +30,7 @@ export type { StoredCheckpointRecord, StoredSessionCheckpointIndex } from './spe
 export { CheckpointId } from './types.ts'
 export type {
   CaptureRequest,
+  CheckpointEditLink,
   CheckpointManifest,
   CheckpointOperationPhase,
   CheckpointOperationView,
@@ -47,6 +50,15 @@ declare module '@deepseek-ai/cordis' {
   interface Context {
     workspaceCheckpoint: WorkspaceCheckpoint
   }
+
+  interface Events {
+    /**
+     * Durable checkpoint metadata or workspace association changed.
+     * @param sessionId - session whose index or records changed.
+     * @mode emit
+     */
+    'workspace-checkpoint/changed'(sessionId: SessionId): void
+  }
 }
 
 /**
@@ -64,7 +76,7 @@ export abstract class WorkspaceCheckpoint extends Service {
 
   /**
    * Capture the session cwd into a durable checkpoint record.
-   * @param request - session, cwd, boundary, role, and optional parent.
+   * @param request - session, cwd, boundary, role, optional parent, and lease.
    * @returns the stored record; `status.kind` may be `unavailable` on fail-soft capture.
    */
   abstract capture(request: CaptureRequest): Promise<CheckpointRecord>
@@ -84,11 +96,28 @@ export abstract class WorkspaceCheckpoint extends Service {
   abstract list(sessionId: SessionId): Promise<readonly CheckpointView[]>
 
   /**
+   * Read the durable session sidecar used by Host activation and projections.
+   * Providers without a metadata index may return `undefined`.
+   * @param _sessionId - owning session.
+   * @returns the index row, when present.
+   */
+  sessionIndex(_sessionId: SessionId): StoredSessionCheckpointIndex | undefined {
+    return undefined
+  }
+
+  /**
    * Make `request.cwd` match the checkpoint manifest, or roll back.
-   * @param request - checkpoint id, target cwd, optional abort signal.
+   * @param request - checkpoint id, target cwd, optional lease, and abort signal.
    * @returns the restored checkpoint id and restored file count.
    */
   abstract restore(request: RestoreRequest): Promise<RestoreResult>
+
+  /**
+   * Persist the source/child relationship for a successful conversation edit.
+   * @param link - selected, emergency, source, boundary, and child ids.
+   * @returns fulfillment after the sidecar is durable.
+   */
+  abstract recordEdit(link: CheckpointEditLink): Promise<void>
 
   /**
    * Acquire an exclusive in-process lease for one canonical workspace path.

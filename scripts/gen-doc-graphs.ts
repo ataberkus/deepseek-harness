@@ -231,6 +231,15 @@ const SERVICE_ROLES: ServiceRole[] = [
     note: 'Owns WorkspaceId-branded records over the domain facility; stable sessionIds accounts drive Host RPC and GUI projections.',
   },
   {
+    key: 'workspaceCheckpoint',
+    pkg: 'workspace-checkpoint',
+    title: 'Workspace-file checkpoint seam',
+    mode: 'seam',
+    implementations: ['workspace-checkpoint-local'],
+    consumers: ['workspace-checkpoint-capture', 'apiproxy'],
+    note: 'Captures content-addressed workspace snapshots at session boundaries; the local provider restores files transactionally, while the capture consumer and Host edit flow own admission and branching.',
+  },
+  {
     key: 'sessionQuery',
     pkg: 'session-query',
     title: 'Session reads, traces, filters, and search',

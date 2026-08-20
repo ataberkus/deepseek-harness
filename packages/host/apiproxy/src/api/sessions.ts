@@ -8,6 +8,7 @@ import type { MessageId } from '@deepseek-ai/dsh-llm/brand'
 import type { AttachmentIdType, ImageAttachmentLimits, ImageAttachmentRef, ImageMediaType } from '@deepseek-ai/dsh-attachment'
 import type { ContentBlock } from '@deepseek-ai/dsh-llm/types'
 import type { SessionEvent, SessionId } from '@deepseek-ai/dsh-session/types'
+import type { CheckpointId } from '@deepseek-ai/dsh-workspace-checkpoint/types'
 // The pure-type outlet: api/ is browser-importable, and the package root's
 // cordis Context merge (via dsh-agent) must not enter client aggregates.
 import type { SessionProjectionMap } from '@deepseek-ai/dsh-session-projection/types'
@@ -338,6 +339,30 @@ export interface SessionsApi {
    */
   fork(request: RpcRequest<{ sessionId: SessionId; atSeq?: number }>):
   Promise<RpcResponse<{ sessionId: SessionId }>>
+
+  /**
+   * Restores the workspace checkpoint immediately before one settled direct
+   * user message, publishes a child session from the inherited prefix, and
+   * queues the replacement message on that child. The source session remains
+   * append-only and addressable.
+   */
+  edit(request: RpcRequest<{
+    sessionId: SessionId
+    messageSeq: number
+    checkpointId: CheckpointId
+    text: string
+  }>): Promise<RpcResponse<{ sessionId: SessionId }>>
+
+  /**
+   * Restores the latest usable non-emergency checkpoint for an idle session.
+   * Conversation history remains available when its workspace checkpoint is
+   * unavailable.
+   */
+  activate(request: RpcRequest<{ sessionId: SessionId }>): Promise<RpcResponse<{
+    restored: boolean
+    checkpointId?: CheckpointId
+    unavailable?: boolean
+  }>>
 
   /**
    * Sends text and temporary image bytes to an ordinary session Agent after durable host admission.

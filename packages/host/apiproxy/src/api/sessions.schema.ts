@@ -8,6 +8,7 @@
 import { z } from 'zod'
 import type { SessionEvent, SessionId } from '@deepseek-ai/dsh-session/types'
 import type { MessageId } from '@deepseek-ai/dsh-llm/brand'
+import type { CheckpointId } from '@deepseek-ai/dsh-workspace-checkpoint/types'
 import type { RequestPayload, ResponseValue } from './rpc-map.ts'
 import type { Wire } from './rpc.schema.ts'
 import type {
@@ -28,6 +29,9 @@ export const sessionIdSchema = z.string().min(1) as unknown as z.ZodType<Session
 
 /** MessageId: one brand cast after non-empty string validation. */
 export const messageIdSchema = z.string().min(1) as unknown as z.ZodType<MessageId>
+
+/** CheckpointId: one brand cast after non-empty string validation. */
+export const checkpointIdSchema = z.string().min(1) as unknown as z.ZodType<CheckpointId>
 
 /**
  * WorkspaceId: the workspace domain's one brand cast. Hosted here rather
@@ -137,6 +141,31 @@ export const sessionForkRequestSchema = z.object({
 export const sessionForkValueSchema = z.object({
   sessionId: sessionIdSchema,
 }) satisfies z.ZodType<Wire<ResponseValue<'session.fork'>>>
+
+/** session.edit request payload. */
+export const sessionEditRequestSchema = z.object({
+  sessionId: sessionIdSchema,
+  messageSeq: z.number().int().nonnegative(),
+  checkpointId: checkpointIdSchema,
+  text: z.string().min(1).refine(text => text.trim().length > 0, { message: 'text must not be blank' }),
+}) satisfies z.ZodType<Wire<RequestPayload<'session.edit'>>>
+
+/** session.edit response value. */
+export const sessionEditValueSchema = z.object({
+  sessionId: sessionIdSchema,
+}) satisfies z.ZodType<Wire<ResponseValue<'session.edit'>>>
+
+/** session.activate request payload. */
+export const sessionActivateRequestSchema = z.object({
+  sessionId: sessionIdSchema,
+}) satisfies z.ZodType<Wire<RequestPayload<'session.activate'>>>
+
+/** session.activate response value. */
+export const sessionActivateValueSchema = z.object({
+  restored: z.boolean(),
+  checkpointId: checkpointIdSchema.optional(),
+  unavailable: z.boolean().optional(),
+}) satisfies z.ZodType<Wire<ResponseValue<'session.activate'>>>
 
 /** session.history request payload (beforeSeq/maxMessages page backwards from the window tail). */
 export const sessionHistoryRequestSchema = z.object({

@@ -8,27 +8,92 @@
 import type { Context } from '@deepseek-ai/cordis'
 import type { InvariantFailure, InvariantInstaller } from '@deepseek-ai/dsh-invariants'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
+import type { KvTable, Domain } from '@deepseek-ai/dsh-storage-domain'
 import { CheckpointId } from '@deepseek-ai/dsh-workspace-checkpoint'
+import type {
+  StoredCheckpointRecord, StoredSessionCheckpointIndex,
+} from '@deepseek-ai/dsh-workspace-checkpoint'
+import { workspaceCheckpointDomainSpec } from '@deepseek-ai/dsh-workspace-checkpoint'
 
 const PACKAGE_NAME = '@deepseek-ai/dsh-workspace-checkpoint-local'
+type CheckpointDomain = Domain<typeof workspaceCheckpointDomainSpec>
+type CheckpointTable = KvTable<CheckpointId, StoredCheckpointRecord>
+type SessionTable = KvTable<SessionId, StoredSessionCheckpointIndex>
 
 /** Cordis companion plugin name. */
 export const name = 'workspace-checkpoint-local-invariant'
 /** Service required before the companion can reserve package ownership. */
 export const inject = ['invariants']
 
+function validateRelations(
+  ctx: Context,
+  fail: InvariantFailure,
+  triggerSessionId: SessionId,
+): void {
+  const domain = ctx.storageDomain.get('workspace_checkpoint') as CheckpointDomain | undefined
+  if (domain === undefined) {
+    fail(`workspace-checkpoint/changed for '${triggerSessionId}' emitted while the domain is not open`)
+  }
+  const checkpoints = domain.table('checkpoints')
+  const sessions = domain.table('sessions')
+  for (const [checkpointId, checkpoint] of checkpoints.entries()) {
+    if (checkpoint.parentCheckpointId !== undefined
+      && checkpoints.get(CheckpointId(checkpoint.parentCheckpointId)) === undefined) {
+      fail(
+        `checkpoint '${String(checkpointId)}' references missing parent '${checkpoint.parentCheckpointId}'`,
+      )
+    }
+  }
+  for (const [sessionId, index] of sessions.entries()) {
+    validateSessionIndex(checkpoints, sessions, sessionId, index, fail)
+  }
+}
+
+function validateSessionIndex(
+  checkpoints: CheckpointTable,
+  sessions: SessionTable,
+  sessionId: SessionId,
+  index: StoredSessionCheckpointIndex,
+  fail: InvariantFailure,
+): void {
+  if (index.appliedCheckpointId !== undefined) {
+    const applied = checkpoints.get(CheckpointId(index.appliedCheckpointId))
+    const appliedIsReady = applied?.restoreEligible === true && applied.status.kind === 'ready'
+    if (!appliedIsReady && index.recoveryRequired === undefined) {
+      fail(
+        `session '${sessionId}' applies checkpoint '${index.appliedCheckpointId}' without recoveryRequired`,
+      )
+    }
+  }
+  if (index.emergencyCheckpointId !== undefined
+    && checkpoints.get(CheckpointId(index.emergencyCheckpointId)) === undefined) {
+    fail(
+      `session '${sessionId}' references missing emergency checkpoint '${index.emergencyCheckpointId}'`,
+    )
+  }
+  if (index.edit === undefined) return
+  if (checkpoints.get(CheckpointId(index.edit.selectedCheckpointId)) === undefined) {
+    fail(
+      `session '${sessionId}' edit references missing selected checkpoint '${index.edit.selectedCheckpointId}'`,
+    )
+  }
+  const emergency = checkpoints.get(CheckpointId(index.edit.emergencyCheckpointId))
+  if (emergency === undefined || emergency.role !== 'emergency') {
+    fail(
+      `session '${sessionId}' edit references invalid emergency checkpoint '${index.edit.emergencyCheckpointId}'`,
+    )
+  }
+  const child = sessions.get(index.edit.childSessionId as SessionId)
+  if (child === undefined || child.edit?.childSessionId !== index.edit.childSessionId) {
+    fail(
+      `session '${sessionId}' edit publishes child '${index.edit.childSessionId}' without a matching child index`,
+    )
+  }
+}
+
 const install: InvariantInstaller = Object.assign((ctx: Context, fail: InvariantFailure) => {
   ctx.on('workspace-checkpoint/changed', (sessionId: SessionId) => {
-    const domain = ctx.storageDomain.get('workspace_checkpoint')
-    if (domain === undefined) {
-      return fail(`workspace-checkpoint/changed for '${sessionId}' emitted while the domain is not open`)
-    }
-    const index = domain.table('sessions').get(sessionId) as { appliedCheckpointId?: string; recoveryRequired?: string } | undefined
-    if (index?.appliedCheckpointId === undefined) return
-    const record = domain.table('checkpoints').get(CheckpointId(index.appliedCheckpointId)) as { restoreEligible?: boolean } | undefined
-    if (record?.restoreEligible === true) return
-    if (index.recoveryRequired !== undefined) return
-    return fail(`applied checkpoint '${index.appliedCheckpointId}' is not restore-eligible and recoveryRequired is unset`)
+    validateRelations(ctx, fail, sessionId)
   }, { global: true })
 }, { inject: ['storageDomain'] })
 

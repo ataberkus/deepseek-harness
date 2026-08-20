@@ -2449,6 +2449,58 @@ function createFixtureWorld(options: FixtureOptions): FixtureWorld {
         }
         return ok(request, { sessionId: child.sessionId })
       },
+      edit: (request) => {
+        const { sessionId, messageSeq, text: editedText } = request.payload
+        const source = summaryOf(sessionId)
+        const log = logs.get(sessionId) ?? []
+        const targetIndex = log.findIndex(event => event.seq === messageSeq)
+        const target = targetIndex < 0 ? undefined : log[targetIndex]
+        const turnStartIndex = targetIndex < 0
+          ? -1
+          : log.findLastIndex((event, index) => index < targetIndex && event.type === 'turn/start')
+        if (
+          source === undefined
+          || target?.type !== 'user/message'
+          || target.data.source.kind !== 'user'
+          || turnStartIndex < 0
+          || editedText.trim().length === 0
+        ) {
+          return err(request, {
+            code: 'edit-not-editable',
+            message: `message ${String(messageSeq)} is not editable`,
+            details: { sessionId, messageSeq },
+          })
+        }
+        const child: SessionSummary = {
+          sessionId: sid(`fx-${nextSession++}`),
+          updatedAt: Date.now(),
+          running: false,
+          blank: false,
+          parentSessionId: sessionId,
+          ...source.cwd === undefined ? {} : { cwd: source.cwd },
+        }
+        logs.set(child.sessionId, log.slice(0, turnStartIndex))
+        sessions.push(child)
+        emitHost({
+          type: 'host/session-added',
+          sessionId: child.sessionId,
+          blank: false,
+          parentSessionId: sessionId,
+          ...source.cwd === undefined ? {} : { cwd: source.cwd },
+        })
+        const turn = log
+          .filter(event => event.type === 'turn/start')
+          .map(event => event.data.turn)
+          .reduce((max, value) => Math.max(max, value), 0) + 1
+        append(child.sessionId, { type: 'turn/start', data: { turn } })
+        append(child.sessionId, {
+          type: 'user/message',
+          surfaceOp: 'append',
+          data: userMessage(text(editedText), { kind: 'user', rpcId: request.rpcId }),
+        })
+        return ok(request, { sessionId: child.sessionId })
+      },
+      activate: request => ok(request, { restored: false }),
       history: async (request) => {
         const log = logs.get(request.payload.sessionId) ?? []
         // Snapshot at request time, deliver after the transit delay (mirrors a real host under latency).
@@ -3188,6 +3240,8 @@ export class FixtureApiClient extends AbstractApiClient {
       case 'session.selectModel': return this.api.sessions.selectModel(request)
       case 'session.rename': return this.api.sessions.rename(request)
       case 'session.fork': return this.api.sessions.fork(request)
+      case 'session.edit': return this.api.sessions.edit(request)
+      case 'session.activate': return this.api.sessions.activate(request)
       case 'session.prompt': return this.api.sessions.prompt(request)
       case 'session.attachment': return this.api.sessions.attachment(request)
       case 'session.updateQueue': return this.api.sessions.updateQueue(request)

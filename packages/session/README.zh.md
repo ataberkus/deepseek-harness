@@ -17,6 +17,16 @@
 
 [会话持久化决策](../../.agents/notes/implemented/architecture/2026-06-14-session-persistence.md)记录了持久化设计。
 
+## 工作区检查点
+
+工作区检查点记录会话创建时和每个已结算回合后的文件系统树；捕获消费者还会在恢复失败要求修复时阻止模型请求和顶层工具调用。
+
+| 包 | 职责 | ctx 键 |
+|---|---|---|
+| [`workspace-checkpoint/`](workspace-checkpoint/README.md) | 定义捕获、恢复、租约与保留策略服务 | `ctx.workspaceCheckpoint` |
+| [`workspace-checkpoint-local/`](workspace-checkpoint-local/README.md) | 在 Harness 主目录中保存清单和内容寻址对象 | 注册 `ctx.workspaceCheckpoint` |
+| [`workspace-checkpoint-capture/`](workspace-checkpoint-capture/README.md) | 捕获初始及已结算回合检查点，并安装恢复保护 | 包装 `ctx.llm` 和 `ctx.tools` |
+
 ## 投影
 
 向客户端载体提供从日志派生的当前逐会话状态。

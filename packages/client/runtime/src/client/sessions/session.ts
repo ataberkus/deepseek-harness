@@ -25,6 +25,8 @@ import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import type { SessionRemotes } from './remotes.ts'
 import { ProjectionValueStore } from './projection-store.ts'
 import type { ProjectionsBaseline } from './projection-store.ts'
+import { CheckpointSnapshotStore } from './checkpoint-store.ts'
+import type { CheckpointView } from './checkpoint-store.ts'
 import { resolvedClientTimeZone } from '../time-zone.ts'
 import { SessionQueueMirror } from './queue-mirror.ts'
 
@@ -52,6 +54,8 @@ export interface SessionOptions {
    * private store (bare object-layer construction).
    */
   projections?: ProjectionValueStore
+  /** Manager-owned workspace-checkpoint store to adopt; omitted for bare construction. */
+  checkpoints?: CheckpointSnapshotStore
   /** Runtime registries used by this Session-owned Conversation assembler. */
   conversation?: ConversationRuntime
 }
@@ -121,6 +125,8 @@ export class Session implements SessionFace {
    * construction gets a private store.
    */
   readonly projections: ProjectionValueStore
+  /** Complete Host checkpoint metadata and edit/activation progress. */
+  readonly checkpoints: CheckpointSnapshotStore
 
   private snapshotCache: ConversationSnapshot
   private readonly notifier: Notifier
@@ -146,6 +152,7 @@ export class Session implements SessionFace {
     private readonly options: SessionOptions = {},
   ) {
     this.projections = options.projections ?? new ProjectionValueStore()
+    this.checkpoints = options.checkpoints ?? new CheckpointSnapshotStore()
     this.address = options.address
     this.parentAvailable = options.parentAvailable ?? false
     this.conversation = options.conversation === undefined
@@ -158,6 +165,7 @@ export class Session implements SessionFace {
       this.conversation.flush()
       this.snapshotCache = this.buildSnapshot()
     })
+    this.checkpoints.subscribe(() => this.notifier.markDirty())
     this.snapshotCache = this.buildSnapshot()
   }
 
@@ -352,6 +360,37 @@ export class Session implements SessionFace {
     }
   }
 
+  /** Submit one Host-owned conversation edit and return its published child id. */
+  async edit(
+    messageSeq: number,
+    checkpointId: CheckpointView['id'],
+    text: string,
+  ): Promise<RpcResult<{ sessionId: SessionId }>> {
+    try {
+      return (await this.api.sessions.edit({
+        sessionId: this.sessionId,
+        messageSeq,
+        checkpointId,
+        text,
+      })).result
+    } catch (error) {
+      return transportError(error)
+    }
+  }
+
+  /** Ask Host to activate this session's latest usable workspace checkpoint. */
+  async activate(): Promise<RpcResult<{
+    restored: boolean
+    checkpointId?: CheckpointView['id']
+    unavailable?: boolean
+  }>> {
+    try {
+      return (await this.api.sessions.activate({ sessionId: this.sessionId })).result
+    } catch (error) {
+      return transportError(error)
+    }
+  }
+
   /**
    * Execute one slash-command line against this session's agent — pure
    * admission semantics (the host executor durably logs the lifecycle;
@@ -479,6 +518,10 @@ export class Session implements SessionFace {
         this.notifier.markDirty()
         return
       }
+      case 'session/checkpoints': {
+        this.checkpoints.replace(frame)
+        return
+      }
       case 'session/subscribed': {
         this.subscribedLastSeq = frame.lastSeq
         // New mux-generation baseline: the host pushes this session's queue
@@ -486,6 +529,7 @@ export class Session implements SessionFace {
         // stale mirror clears here — race-free against onConnected/resync
         // timing (clearing there could wipe a baseline that already landed).
         if (this.queueMirror.reset()) this.notifier.markDirty()
+        this.checkpoints.reset()
         return
       }
       case 'approval/requested': {
@@ -749,6 +793,7 @@ export class Session implements SessionFace {
       runningCalls: legacy.runningCalls,
       pending: this.pendingCache.value,
       queue: this.queueMirror.snapshot(),
+      checkpoints: this.checkpoints.getSnapshot(),
       running: this.running,
       subagent: this.address === undefined
         ? null

@@ -14,9 +14,12 @@
 // lifecycle updates replace only their own row without remounting it.
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import type { ConversationTimelineSnapshot } from '@deepseek-ai/dsh-client-runtime/client'
+import type {
+  CheckpointSnapshot, ConversationTimelineSnapshot,
+} from '@deepseek-ai/dsh-client-runtime/client'
 import { Button, IconChevronDownOutline14, Modal } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { ChatViewSlotProps, RenderMessageImages } from '../contract/slots.ts'
+import type { ChatNode } from '../contract/chat-nodes.ts'
 import { PendingSteeringBubble } from './MessageItem.tsx'
 import { ChatNodeSeat } from './ChatNodeSeat.tsx'
 import { formatRunDuration } from './message-chrome.ts'
@@ -115,6 +118,30 @@ function runningTurnStartTime(timeline: ConversationTimelineSnapshot): number | 
   return latest
 }
 
+/** Find the latest usable checkpoint before one settled user turn. */
+function checkpointBeforeUserMessage(
+  node: ChatNode<'user'>,
+  snapshot: CheckpointSnapshot | undefined,
+): CheckpointSnapshot['checkpoints'][number] | undefined {
+  if (snapshot === undefined) return undefined
+  const location = node.location
+  if (
+    (location.kind !== 'turn' && location.kind !== 'step')
+    || location.turn.start === undefined
+    || location.turn.end === undefined
+  ) return undefined
+  const turnStartSeq = location.turn.start.seq
+  if (snapshot.operation !== undefined
+    && snapshot.operation.phase !== 'ready'
+    && snapshot.operation.phase !== 'failed') return undefined
+  return [...snapshot.checkpoints]
+    .filter(checkpoint => checkpoint.role !== 'emergency'
+      && checkpoint.status.kind === 'ready'
+      && checkpoint.restoreEligible
+      && checkpoint.boundarySeq < turnStartSeq)
+    .sort((left, right) => right.boundarySeq - left.boundarySeq)[0]
+}
+
 /** Turn-level model activity label retained across first-token, tool, and streaming phases. */
 function TurnStatus({ startTime, t }: {
   /** The running turn's logged `turn/start` time; null falls back to mount
@@ -156,13 +183,14 @@ function TurnStatus({ startTime, t }: {
  * ordered business Node crosses the keyed renderer seat.
  */
 export function ChatView({
-  useSession, useSessions, useStore, renderSlot, sessionId, openFile, loadOlder, loadImage, inspectCall, chatScroll, forkAt,
+  useSession, useSessions, inputActions, useStore, renderSlot, sessionId, openFile, loadOlder, loadImage, inspectCall, chatScroll, forkAt,
   fileMentions, t,
 }: ChatViewSlotProps) {
   const order = useSession(s => s.chat.order)
   const nodeStore = useSession(s => s.chat.nodes)
   const timeline = useSession(s => s.chat.timeline)
   const inbox = useSession(s => s.queue)
+  const checkpointSnapshot = useSession(s => s.checkpoints)
   // Workspace root off the session list row: path summaries display relative to it.
   const cwd = useSessions(s => s.byId[sessionId]?.cwd)
   const running = useSession(s => s.running)
@@ -171,6 +199,21 @@ export function ChatView({
   const hasMore = useSession(s => s.hasMore)
   const loadingOlder = useSession(s => s.loadingOlder)
   const selectedCallId = useStore(s => s.selection?.callId)
+  const editMessage = useCallback((messageSeq: number, text: string): void => {
+    const node = nodeStore.values().find((candidate) => {
+      if (candidate.kind !== 'user') return false
+      return (candidate.data as { readonly seq: number }).seq === messageSeq
+    }) as ChatNode<'user'> | undefined
+    const checkpoint = node === undefined
+      ? undefined
+      : checkpointBeforeUserMessage(node, checkpointSnapshot)
+    if (checkpoint === undefined || inputActions.beginEdit === undefined) return
+    inputActions.beginEdit({
+      messageSeq,
+      checkpointId: checkpoint.id,
+      originalText: text,
+    })
+  }, [checkpointSnapshot, inputActions, nodeStore])
   const [fileOpenError, setFileOpenError] = useState<{ path: string; message: string } | null>(null)
   const [fileOpenBusy, setFileOpenBusy] = useState(false)
   // Close/retry must ignore a settlement that started before the latest
@@ -439,6 +482,7 @@ export function ChatView({
               openFile={requestOpenFile}
               inspectCall={inspectCall}
               forkAt={forkAt}
+              editMessage={editMessage}
               renderMessageImages={renderMessageImages}
               fileMentions={fileMentions}
               renderSlot={renderSlot}

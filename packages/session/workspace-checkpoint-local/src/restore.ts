@@ -15,7 +15,7 @@ import {
   writeFile,
 } from 'node:fs/promises'
 import { dirname } from 'node:path'
-import { WorkspaceCheckpointError } from '@deepseek-ai/dsh-workspace-checkpoint'
+import { CheckpointId, WorkspaceCheckpointError } from '@deepseek-ai/dsh-workspace-checkpoint'
 import type {
   RestoreRequest,
   RestoreResult,
@@ -43,15 +43,16 @@ type CheckpointDomain = Domain<typeof workspaceCheckpointDomainSpec>
 /** Test hooks for commit and rollback failures. */
 export const restoreInternals: {
   rename: typeof fsRename
-  rollback?: (journal: RestoreJournal) => Promise<void>
+  rollback: ((journal: RestoreJournal) => Promise<void>) | undefined
 } = {
   rename: fsRename,
+  rollback: undefined,
 }
 
 /**
  * Make `request.cwd` match the checkpoint, or roll back.
  * @param request - checkpoint id, target cwd, optional abort signal.
- * @param options - open domain, object root, and lease/recovery hooks.
+ * @param options - open domain, object root, capture exclusions, and lease/recovery hooks.
  * @returns the restored checkpoint id and file count.
  */
 export async function restoreCheckpoint(
@@ -59,6 +60,7 @@ export async function restoreCheckpoint(
   options: {
     readonly domain: CheckpointDomain
     readonly objectRoot: string
+    readonly excludeGlobs: readonly string[]
     markRecoveryRequired(workspaceKey: string, reason: string): Promise<void>
     clearRecoveryRequired(workspaceKey: string): Promise<void>
     emitChanged?(sessionId: SessionId): void
@@ -69,6 +71,7 @@ export async function restoreCheckpoint(
   }
   const cwd = await canonicalizeCwd(request.cwd)
   const stored = loadStoredCheckpoint(request.checkpointId, options.domain)
+  const checkpointId = CheckpointId(stored.id)
   if (stored.status.kind !== 'ready' || !stored.restoreEligible) {
     throw new WorkspaceCheckpointError('checkpoint is not restorable', 'CHECKPOINT_UNAVAILABLE')
   }
@@ -76,15 +79,15 @@ export async function restoreCheckpoint(
   let journal: RestoreJournal | undefined
   try {
     await verifyBlobs(stored, options.objectRoot)
-    const staging = stagingDir(options.objectRoot, stored.id)
+    const staging = stagingDir(options.objectRoot, checkpointId)
     await rm(staging, { recursive: true, force: true })
     await stageTree(stored, options.objectRoot, staging)
-    const backup = backupDir(options.objectRoot, stored.id)
+    const backup = backupDir(options.objectRoot, checkpointId)
     await rm(backup, { recursive: true, force: true })
-    const ops = await planOps(cwd, stored)
-    await backupCurrent(cwd, backup)
+    const ops = await planOps(cwd, stored, options.excludeGlobs)
+    await backupCurrent(cwd, backup, options.excludeGlobs)
     journal = {
-      checkpointId: stored.id,
+      checkpointId,
       cwd,
       backupDir: backup,
       stagingDir: staging,
@@ -92,6 +95,7 @@ export async function restoreCheckpoint(
     }
     await writeJournal(journalPath(options.objectRoot, cwd), journal)
     mutated = true
+    if (journal === undefined) throw new Error('restore journal was not created')
     await applyJournal(journal)
     await options.clearRecoveryRequired(cwd)
     await rm(staging, { recursive: true, force: true })
@@ -101,17 +105,19 @@ export async function restoreCheckpoint(
     const sessionId = SessionId(stored.sessionId)
     const index = sessions.get(sessionId)
     await sessions.put(sessionId, {
-      checkpointIds: index?.checkpointIds ?? [stored.id],
-      appliedCheckpointId: stored.id,
+      checkpointIds: index?.checkpointIds ?? [checkpointId],
+      appliedCheckpointId: checkpointId,
       ...index?.emergencyCheckpointId === undefined ? {} : { emergencyCheckpointId: index.emergencyCheckpointId },
       ...index?.recoveryRequired === undefined ? {} : { recoveryRequired: index.recoveryRequired },
+      ...index?.edit === undefined ? {} : { edit: index.edit },
     })
     options.emitChanged?.(sessionId)
-    return { checkpointId: stored.id, fileCount: stored.fileCount }
+    return { checkpointId, fileCount: stored.fileCount }
   } catch (error) {
     if (mutated && journal !== undefined) {
       try {
-        await (restoreInternals.rollback ?? rollbackJournal)(journal)
+        if (restoreInternals.rollback !== undefined) await restoreInternals.rollback(journal)
+        else await rollbackJournal(journal, options.excludeGlobs)
       } catch (rollbackError) {
         await options.markRecoveryRequired(cwd, `recovery required: ${String(rollbackError)}`)
         throw rollbackError
@@ -151,9 +157,13 @@ async function stageTree(stored: StoredCheckpointRecord, objectRoot: string, sta
   }
 }
 
-async function planOps(cwd: string, stored: StoredCheckpointRecord): Promise<JournalOp[]> {
+async function planOps(
+  cwd: string,
+  stored: StoredCheckpointRecord,
+  excludeGlobs: readonly string[],
+): Promise<JournalOp[]> {
   const wanted = new Set(stored.entries.map(entry => entry.relativePath))
-  const current = await buildManifest(cwd, { excludeGlobs: [] })
+  const current = await buildManifest(cwd, { excludeGlobs })
   const ops: JournalOp[] = []
   const extras = current.entries
     .map(entry => entry.relativePath)
@@ -170,8 +180,8 @@ async function planOps(cwd: string, stored: StoredCheckpointRecord): Promise<Jou
   return ops
 }
 
-async function backupCurrent(cwd: string, backup: string): Promise<void> {
-  const current = await buildManifest(cwd, { excludeGlobs: [] })
+async function backupCurrent(cwd: string, backup: string, excludeGlobs: readonly string[]): Promise<void> {
+  const current = await buildManifest(cwd, { excludeGlobs })
   await mkdir(backup, { recursive: true, mode: 0o700 })
   for (const entry of current.entries) {
     const source = fromManifestPath(cwd, entry.relativePath)
@@ -213,8 +223,8 @@ async function applyJournal(journal: RestoreJournal): Promise<void> {
   }
 }
 
-async function rollbackJournal(journal: RestoreJournal): Promise<void> {
-  const current = await buildManifest(journal.cwd, { excludeGlobs: [] })
+async function rollbackJournal(journal: RestoreJournal, excludeGlobs: readonly string[]): Promise<void> {
+  const current = await buildManifest(journal.cwd, { excludeGlobs })
   for (const entry of [...current.entries].sort((left, right) => right.relativePath.length - left.relativePath.length)) {
     await rm(fromManifestPath(journal.cwd, entry.relativePath), { recursive: true, force: true })
   }

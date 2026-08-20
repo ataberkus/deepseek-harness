@@ -1,0 +1,10 @@
+- id: workspace-checkpoint
+  config:
+    maxTotalBytes: 1073741824
+    excludeGlobs:
+      - '**/.git/**'
+      - '**/node_modules/**'
+      - '**/.dsh-home/**'
+      - '**/.dsh-storages/**'
+    captureRetryCount: 3
+    captureRetryDelayMs: 50

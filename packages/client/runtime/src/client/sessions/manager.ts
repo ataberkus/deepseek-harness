@@ -20,6 +20,7 @@ import type { PendingInteractionStatus } from './pending.ts'
 import type {} from '@deepseek-ai/dsh-session-title/client'
 import { Notifier } from './notifier.ts'
 import { ProjectionValueStore } from './projection-store.ts'
+import { CheckpointSnapshotStore } from './checkpoint-store.ts'
 import { Session } from './session.ts'
 import type { SessionRemotes } from './remotes.ts'
 
@@ -127,6 +128,8 @@ export class SessionManager {
    *  is instantiated (list rows read the 'title' key), and an instantiated Session adopts the
    *  same store so history-baseline seeding and frames converge on one row set. */
   private readonly projectionStores = new Map<SessionId, ProjectionValueStore>()
+  /** Complete workspace-checkpoint projections retained before Session instantiation. */
+  private readonly checkpointStores = new Map<SessionId, CheckpointSnapshotStore>()
   private summaries: SessionSummary[] = []
   private listState: 'idle' | 'loading' | 'error' = 'idle'
   /** Arrival phase; the pending → ready edge fires on the first successful pull (see SessionListPhase). */
@@ -318,6 +321,7 @@ export class SessionManager {
         this.recordMutation({ kind: 'engaged', sessionId: engaged.sessionId })
       },
       projections: this.projectionStore(sessionId),
+      checkpoints: this.checkpointStore(sessionId),
       ...this.conversation === undefined ? {} : { conversation: this.conversation },
     })
   }
@@ -336,6 +340,17 @@ export class SessionManager {
       // the manager's own batched rebuild channel.
       store.subscribeAny(() => { this.notifier.markDirty() })
       this.projectionStores.set(sessionId, store)
+    }
+    return store
+  }
+
+  /** Resident per-session checkpoint store (create-on-demand; outlives instantiation). */
+  private checkpointStore(sessionId: SessionId): CheckpointSnapshotStore {
+    let store = this.checkpointStores.get(sessionId)
+    if (store === undefined) {
+      store = new CheckpointSnapshotStore()
+      store.subscribe(() => { this.notifier.markDirty() })
+      this.checkpointStores.set(sessionId, store)
     }
     return store
   }
@@ -702,6 +717,12 @@ export class SessionManager {
       this.notifier.markDirty()
       return
     }
+    if (frame.type === 'session/checkpoints') {
+      // Complete snapshots replace the previous generation even when the
+      // Session object has not been opened yet.
+      this.checkpointStore(frame.sessionId).replace(frame)
+      return
+    }
     if (frame.type === 'session/jobs') {
       // Whole-set snapshot, so last-wins with no reconciliation. The Host omits
       // the baseline for an empty set, which is the same fact an emptying change
@@ -715,6 +736,7 @@ export class SessionManager {
       // Rows past the host's durable baseline rode state a restart lost; drop
       // them so last-wins cannot pin a phantom value over recomputed truth.
       this.projectionStores.get(frame.sessionId)?.truncate(frame.lastSeq)
+      this.checkpointStores.get(frame.sessionId)?.reset()
       // Same re-baseline reasoning as the queue below: this generation sends a
       // task baseline only when the set is non-empty, so a mirror kept from the
       // previous generation would survive as a phantom list.
@@ -834,7 +856,10 @@ export class SessionManager {
         // no relative order. Clearing here makes a detached Activation's rows
         // disappear whichever arrives first.
         this.jobsBySession.delete(frame.sessionId)
-        if (!durableSubagent) this.projectionStores.delete(frame.sessionId)
+        if (!durableSubagent) {
+          this.projectionStores.delete(frame.sessionId)
+          this.checkpointStores.delete(frame.sessionId)
+        }
         // A pull already in flight was requested before this removal and can
         // carry the pre-removal parentAvailable:true, which would resurrect
         // the writable editor this invalidation just closed. Replay false over
@@ -1024,9 +1049,33 @@ export class SessionManager {
       const projectionStore = this.projectionStores.get(summary.sessionId)
       const title = projectionStore?.get('title')
       const projectionValues = projectionStore?.values()
+      const checkpointSnapshot = this.checkpointStores.get(summary.sessionId)?.getSnapshot()
+      const ownCheckpointLabel = checkpointSnapshot === undefined
+        ? undefined
+        : [...checkpointSnapshot.checkpoints]
+          .filter(checkpoint => checkpoint.role !== 'emergency')
+          .at(-1)?.labelIndex
+      const branchLabelIndex = checkpointSnapshot?.branchLabelIndex
+        ?? ownCheckpointLabel
+        ?? (checkpointSnapshot?.operation === undefined
+          ? undefined
+          : this.checkpointStores.get(checkpointSnapshot.operation.sourceSessionId)
+            ?.getSnapshot().checkpoints.find(
+              checkpoint => checkpoint.id === checkpointSnapshot.operation?.checkpointId,
+            )?.labelIndex)
+      const workspaceResumable = checkpointSnapshot?.workspaceResumable
+        ?? (checkpointSnapshot === undefined || checkpointSnapshot.checkpoints.length === 0
+          ? undefined
+          : checkpointSnapshot.recoveryRequired === undefined
+            && checkpointSnapshot.checkpoints.some(checkpoint =>
+              checkpoint.role !== 'emergency'
+              && checkpoint.status.kind === 'ready'
+              && checkpoint.restoreEligible))
       return {
         ...summary,
         ...(typeof title === 'string' && title !== '' ? { title } : {}),
+        ...(branchLabelIndex === undefined ? {} : { checkpointLabelIndex: branchLabelIndex }),
+        ...(workspaceResumable === undefined ? {} : { workspaceResumable }),
         ...(projectionValues === undefined ? {} : { projectionValues }),
       }
     })
@@ -1046,6 +1095,8 @@ export class SessionManager {
         && prev.blank === entry.blank && prev.agentPreset === entry.agentPreset
         && prev.parentSessionId === entry.parentSessionId && prev.cwd === entry.cwd
         && prev.origin === entry.origin && prev.title === entry.title && prev.depth === entry.depth
+        && prev.checkpointLabelIndex === entry.checkpointLabelIndex
+        && prev.workspaceResumable === entry.workspaceResumable
         && prev.pendingInteraction === entry.pendingInteraction
         && prev.projectionValues === entry.projectionValues
         && prev.completed === entry.completed

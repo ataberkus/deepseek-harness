@@ -14,7 +14,7 @@ import type {
 } from '@deepseek-ai/dsh-client-ui-input-trigger/client'
 import type {
   DraftAttachmentId, EditRange, EditSelection, InputActions, InputEffect, InputNotice, InputState,
-  PasteComponent, QueuedMessage, SessionInput, SubmitAttempt,
+  ConversationEditDraft, PasteComponent, QueuedMessage, SessionInput, SubmitAttempt,
 } from './contract.ts'
 import type { InputSubmitMode } from '../contract/composer-submission.ts'
 import { InputMachine, projectClipboard } from './machine.ts'
@@ -50,6 +50,7 @@ export interface SessionInputDeps {
     imageIds: readonly DraftAttachmentId[],
     mode: InputSubmitMode,
     signal: AbortSignal,
+    edit?: ConversationEditDraft,
   ): Promise<SubmitOutcome>
   /** Command-plane image plumbing (the hub owns the conversation face and the copy). */
   commandImages: {
@@ -92,6 +93,8 @@ export class SessionInputShell implements SessionInput {
     removeImage: (id) => { this.removeImage(id) },
     pruneImages: (ids) => { this.pruneImages(ids) },
     submit: () => { this.submit('queue') },
+    beginEdit: (target) => { this.beginEdit(target) },
+    cancelEdit: () => { this.cancelEdit() },
   }
 
   // Real wall clock: the typing-run merge window must actually expire in
@@ -103,6 +106,7 @@ export class SessionInputShell implements SessionInput {
   /** One image-only send at a time: Enter during the Host round-trip is a no-op. */
   private imageSendInFlight = false
   private disposed = false
+  private editTarget: ConversationEditDraft | undefined
   /** Draft persistence mirror (chat store write; receives the clipboard projection, never display-only ranges). */
   private mirrorFn: ((text: string) => void) | undefined
 
@@ -121,6 +125,26 @@ export class SessionInputShell implements SessionInput {
    */
   setDraft(text: string, editRange?: EditRange): void {
     this.run(this.core.dispatch({ type: 'draft-changed', draft: text, ...(editRange !== undefined ? { editRange } : {}) }))
+  }
+
+  /**
+   * Enter edit mode and replace the current draft with the selected message.
+   * @param target - selected message and checkpoint used for the rerun.
+   */
+  beginEdit(target: ConversationEditDraft): void {
+    if (this.snapshot.phase === 'adjudicating' || this.snapshot.phase === 'submitting') return
+    this.editTarget = target.previousDraft === undefined
+      ? { ...target, previousDraft: this.snapshot.draft }
+      : target
+    this.setDraft(target.originalText)
+  }
+
+  /** Cancel edit mode and restore the draft that preceded it. */
+  cancelEdit(): void {
+    const target = this.editTarget
+    this.editTarget = undefined
+    if (target !== undefined) this.setDraft(target.previousDraft ?? '')
+    else this.publish()
   }
 
   /** Append ordered image ids unless an admission transaction is locked. */
@@ -211,7 +235,7 @@ export class SessionInputShell implements SessionInput {
       if (this.snapshot.phase === 'plain' && !this.imageSendInFlight) {
         const imageIds = [...this.imageIds]
         this.imageSendInFlight = true
-        void this.deps.defaultSink('', imageIds, mode, new AbortController().signal).then((outcome) => {
+        void this.invokeDefaultSink('', imageIds, mode, new AbortController().signal).then((outcome) => {
           this.imageSendInFlight = false
           if (this.disposed) return
           if (outcome.kind === 'success') this.commitSend(imageIds)
@@ -457,7 +481,11 @@ export class SessionInputShell implements SessionInput {
     const imageIds = [...this.imageIds]
     const occurrences = this.core.state.occurrences
     if (occurrences.length === 0) {
-      this.settleSubmit(attempt, this.deps.defaultSink(draft.trim(), imageIds, mode, attempt.signal), imageIds)
+      this.settleSubmit(
+        attempt,
+        this.invokeDefaultSink(draft.trim(), imageIds, mode, attempt.signal),
+        imageIds,
+      )
       return
     }
     const inputTriggers = this.deps.inputTriggers?.()
@@ -481,7 +509,11 @@ export class SessionInputShell implements SessionInput {
           cursor = part.offset + part.length
         }
         out += draft.slice(cursor)
-        this.settleSubmit(attempt, this.deps.defaultSink(out.trim(), imageIds, mode, attempt.signal), imageIds)
+        this.settleSubmit(
+          attempt,
+          this.invokeDefaultSink(out.trim(), imageIds, mode, attempt.signal),
+          imageIds,
+        )
       },
       (error: unknown) => {
         controller.abort()
@@ -490,6 +522,19 @@ export class SessionInputShell implements SessionInput {
         this.run(this.core.dispatch({ type: 'submit-settled', attempt, ok: false, message }))
       },
     )
+  }
+
+  /** Preserve the established sink call arity unless an edit is active. */
+  private invokeDefaultSink(
+    text: string,
+    imageIds: readonly DraftAttachmentId[],
+    mode: InputSubmitMode,
+    signal: AbortSignal,
+  ): Promise<SubmitOutcome> {
+    const edit = this.editTarget
+    return edit === undefined
+      ? this.deps.defaultSink(text, imageIds, mode, signal)
+      : this.deps.defaultSink(text, imageIds, mode, signal, edit)
   }
 
   /** Settle one admission attempt; successful sends consume only their captured images. */
@@ -505,6 +550,7 @@ export class SessionInputShell implements SessionInput {
           const submitted = new Set(imageIds)
           this.imageIds = this.imageIds.filter(id => !submitted.has(id))
         }
+        if (outcome.kind === 'success') this.editTarget = undefined
         this.run(this.core.dispatch({
           type: 'submit-settled',
           attempt,
@@ -590,7 +636,12 @@ export class SessionInputShell implements SessionInput {
 
   private compose(): InputState {
     const core = this.core.state
-    return { ...core, imageIds: this.imageIds, queue: this.deps.queue?.getSnapshot() ?? EMPTY_QUEUE }
+    return {
+      ...core,
+      imageIds: this.imageIds,
+      queue: this.deps.queue?.getSnapshot() ?? EMPTY_QUEUE,
+      ...this.editTarget === undefined ? {} : { edit: this.editTarget },
+    }
   }
 
   private publish(): void {

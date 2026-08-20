@@ -30,6 +30,10 @@ export interface SessionNode {
   /** Finished running while not selected and not yet opened (the green "done" reminder dot). */
   completed: boolean
   updatedAt: number
+  /** User-facing checkpoint ordinal for this branch, when checkpoint state is known. */
+  checkpointLabelIndex?: number
+  /** Whether this session has a known usable workspace-file checkpoint. */
+  workspaceResumable?: boolean
 }
 
 /** Session order selected by the Workspace browser. */
@@ -223,6 +227,8 @@ function sessionNode(
     runningSubagentCount: descendants.get(s.id)?.runningCount ?? 0,
     completed: s.completed === true,
     updatedAt: s.updatedAt,
+    ...(s.checkpointLabelIndex === undefined ? {} : { checkpointLabelIndex: s.checkpointLabelIndex }),
+    ...(s.workspaceResumable === undefined ? {} : { workspaceResumable: s.workspaceResumable }),
     ...(s.pendingInteraction === undefined ? {} : { pendingInteraction: s.pendingInteraction }),
   }
 }

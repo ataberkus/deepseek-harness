@@ -17,6 +17,16 @@ Durable session persistence, semantic checkpoint policy, and the shipped storage
 
 The [session-persistence decision](../../.agents/notes/implemented/architecture/2026-06-14-session-persistence.md) records the persistence design.
 
+## Workspace checkpoints
+
+Workspace checkpoints record the filesystem tree at session creation and after settled turns; the capture consumer also blocks model and top-level tool work while a restore failure requires recovery.
+
+| Package | Role | ctx key |
+|---|---|---|
+| [`workspace-checkpoint/`](workspace-checkpoint/README.md) | Defines the capture, restore, lease, and retention service | `ctx.workspaceCheckpoint` |
+| [`workspace-checkpoint-local/`](workspace-checkpoint-local/README.md) | Stores manifests and content-addressed blobs in the Harness home | registers `ctx.workspaceCheckpoint` |
+| [`workspace-checkpoint-capture/`](workspace-checkpoint-capture/README.md) | Captures initial and settled-turn checkpoints and installs the recovery guard | wraps `ctx.llm` and `ctx.tools` |
+
 ## Projection
 
 Serves current, log-derived per-session state to client carriers.

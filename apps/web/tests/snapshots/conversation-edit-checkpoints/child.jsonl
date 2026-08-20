@@ -1,0 +1,5 @@
+{"type":"session","version":0,"id":"conversation-edit-child-replay","createdAt":1785000000001,"seedLength":0}
+{"type":"assistant/chunk","seq":0,"time":1785000000002,"data":{"turn":1,"step":0,"chunk":{"type":"block-start","index":0,"blockType":"text"}}}
+{"type":"assistant/chunk","seq":1,"time":1785000000003,"data":{"turn":1,"step":0,"chunk":{"type":"text-delta","index":0,"text":"EDIT_CHILD_OK"}}}
+{"type":"assistant/chunk","seq":2,"time":1785000000004,"data":{"turn":1,"step":0,"chunk":{"type":"block-end","index":0,"block":{"type":"text","text":"EDIT_CHILD_OK"}}}}
+{"type":"assistant/chunk","seq":3,"time":1785000000005,"data":{"turn":1,"step":0,"chunk":{"type":"finish","reason":{"kind":"stop"}}}}

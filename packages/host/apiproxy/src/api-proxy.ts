@@ -4,9 +4,9 @@
  */
 
 import { randomUUID } from 'node:crypto'
-import { mkdir, stat } from 'node:fs/promises'
+import { mkdir, realpath, stat } from 'node:fs/promises'
 import { homedir } from 'node:os'
-import { dirname } from 'node:path'
+import { dirname, resolve } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
 import { installModelSelection } from '@deepseek-ai/dsh-agent'
 import type { Agent, ModelSelection, ModelSelectionRef, AgentOptions, AgentStatus } from '@deepseek-ai/dsh-agent'
@@ -16,7 +16,7 @@ import type { ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
 import { contentHasImage, createUserMessage, freezeMessage, HarnessError, ReasoningEffortId } from '@deepseek-ai/dsh-llm'
 import { errorChain } from '@deepseek-ai/dsh-llm'
 import type { ContentBlock, MessageSource } from '@deepseek-ai/dsh-llm'
-import { isAppendSurfaceEvent, isJsonValue } from '@deepseek-ai/dsh-session'
+import { foldSurface, isAppendSurfaceEvent, isJsonValue } from '@deepseek-ai/dsh-session'
 import type { JsonValue, Session, SessionEvent, SessionEventMap, SessionHeader, SessionId, UserMessage } from '@deepseek-ai/dsh-session'
 import type { SessionPersistence } from '@deepseek-ai/dsh-session-persistence'
 import { SessionQueryError, type SessionSearchCursor } from '@deepseek-ai/dsh-session-query'
@@ -81,6 +81,17 @@ import type {} from '@deepseek-ai/dsh-skill'
 import { SettingsConflictError, settingsNamespace } from '@deepseek-ai/dsh-settings'
 import type { SettingsDescriptor, SettingsNamespace, SettingsPathOp } from '@deepseek-ai/dsh-settings'
 import { credentialRef } from '@deepseek-ai/dsh-credentials'
+import {
+  CheckpointId,
+  WorkspaceCheckpointError,
+} from '@deepseek-ai/dsh-workspace-checkpoint'
+import type {
+  CheckpointOperationPhase,
+  CheckpointOperationView,
+  CheckpointRecord,
+  CheckpointView,
+  WorkspaceCheckpoint,
+} from '@deepseek-ai/dsh-workspace-checkpoint'
 // Value edge: the rename impl narrows the title service's validation failure; the import also resolves `ctx.get('sessionTitle')`.
 import { SessionTitleInvalidError } from '@deepseek-ai/dsh-session-title'
 import type { CallId } from '@deepseek-ai/dsh-llm/brand'
@@ -1077,6 +1088,10 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
   const pendingApprovals = new Map<RpcId, PendingApproval>()
   const muxQueues = new Set<FrameQueue<RpcRequest<MuxFrame>>>()
   const imageAdmissionChains = new WeakMap<Agent, Promise<void>>()
+  const checkpointOperations = new Map<SessionId, CheckpointOperationView>()
+
+  const checkpointService = (): WorkspaceCheckpoint | undefined =>
+    ctx.get('workspaceCheckpoint')
 
   /** Serialize image admission with model selection for one agent. */
   function serializeImageAdmission<T>(agent: Agent, operation: () => Promise<T>): Promise<T> {
@@ -1221,6 +1236,92 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
     const envelope = frame(payload)
     for (const queue of muxQueues) queue.push(envelope)
   }
+
+  /** Read one complete checkpoint projection for the mux baseline and change feed. */
+  async function checkpointSnapshot(
+    sessionId: SessionId,
+  ): Promise<Extract<MuxFrame, { type: 'session/checkpoints' }> | undefined> {
+    const service = checkpointService()
+    if (service === undefined) return undefined
+    const checkpoints = [...await service.list(sessionId)]
+    const index = await service.sessionIndex?.(sessionId)
+    const session = ctx.sessions.get(sessionId)
+    const recoveryRequired = session?.header.cwd === undefined
+      ? undefined
+      : await service.recoveryRequired(session.header.cwd)
+    const appliedCheckpointId = index?.appliedCheckpointId === undefined
+      ? undefined
+      : CheckpointId(index.appliedCheckpointId)
+    const operation = checkpointOperations.get(sessionId)
+    let branchLabelIndex: number | undefined
+    let branchCheckpointUsable = false
+    if (index?.edit !== undefined) {
+      try {
+        const selected = await service.inspect(CheckpointId(index.edit.selectedCheckpointId))
+        branchLabelIndex = selected.labelIndex
+        branchCheckpointUsable = selected.status.kind === 'ready' && selected.restoreEligible
+      } catch (error: unknown) {
+        ctx.logger.warn(
+          `checkpoint branch metadata unavailable for session "${sessionId}": ${String(error)}`,
+        )
+      }
+    }
+    const hasCheckpointState = index !== undefined || checkpoints.length > 0 || branchLabelIndex !== undefined
+    const workspaceResumable = !hasCheckpointState
+      ? undefined
+      : recoveryRequired === undefined && (
+        branchCheckpointUsable
+        || checkpoints.some(checkpoint =>
+          checkpoint.role !== 'emergency'
+          && checkpoint.status.kind === 'ready'
+          && checkpoint.restoreEligible)
+      )
+    return {
+      type: 'session/checkpoints',
+      sessionId,
+      checkpoints,
+      ...appliedCheckpointId === undefined ? {} : { appliedCheckpointId },
+      ...operation === undefined ? {} : { operation },
+      ...branchLabelIndex === undefined ? {} : { branchLabelIndex },
+      ...workspaceResumable === undefined ? {} : { workspaceResumable },
+      ...recoveryRequired === undefined ? {} : { recoveryRequired },
+    }
+  }
+
+  /** Push a checkpoint projection, containing failures so a diagnostic cannot break the mux. */
+  function broadcastCheckpointSnapshot(sessionId: SessionId): void {
+    void checkpointSnapshot(sessionId).then((snapshot) => {
+      if (snapshot !== undefined) broadcast(snapshot)
+    }).catch((error: unknown) => {
+      ctx.logger.warn(`checkpoint snapshot failed for session "${sessionId}": ${String(error)}`)
+    })
+  }
+
+  /** Queue one checkpoint baseline for a newly connected mux consumer. */
+  function queueCheckpointSnapshot(
+    queue: FrameQueue<RpcRequest<MuxFrame>>,
+    sessionId: SessionId,
+  ): void {
+    void checkpointSnapshot(sessionId).then((snapshot) => {
+      if (snapshot !== undefined) queue.push(frame(snapshot))
+    }).catch((error: unknown) => {
+      ctx.logger.warn(`checkpoint baseline failed for session "${sessionId}": ${String(error)}`)
+    })
+  }
+
+  /** Publish one immutable operation phase to the source session's subscribers. */
+  function publishCheckpointOperation(operation: CheckpointOperationView): void {
+    checkpointOperations.set(operation.sourceSessionId, operation)
+    broadcastCheckpointSnapshot(operation.sourceSessionId)
+    if (operation.childSessionId !== undefined) {
+      checkpointOperations.set(operation.childSessionId, operation)
+      broadcastCheckpointSnapshot(operation.childSessionId)
+    }
+  }
+
+  ctx.on('workspace-checkpoint/changed', (sessionId) => {
+    broadcastCheckpointSnapshot(sessionId)
+  }, { global: true })
 
   // Projection change feed → session/projection push frames. The carrier
   // mints the wire frame (the Service Definition package holds no wire vocabulary); the
@@ -1940,6 +2041,155 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
     return ok(request, namespaceView(descriptor))
   }
 
+  /** Resolve a filesystem path to the key used by checkpoint leases. */
+  async function checkpointWorkspaceKey(path: string): Promise<string> {
+    try {
+      return await realpath(path)
+    } catch {
+      return resolve(path)
+    }
+  }
+
+  /** Convert one checkpoint provider failure into the stable Host vocabulary. */
+  function checkpointFailure<T>(
+    request: RpcRequest<unknown>,
+    sessionId: SessionId,
+    checkpointId: CheckpointId,
+    error: unknown,
+  ): RpcResponse<T> {
+    if (error instanceof WorkspaceCheckpointError
+      && error.code === 'CHECKPOINT_RECOVERY_REQUIRED') {
+      return err(request, {
+        code: 'checkpoint-recovery-required',
+        message: error.message,
+        details: { sessionId, reason: error.message },
+      })
+    }
+    if (error instanceof WorkspaceCheckpointError && error.code === 'CHECKPOINT_LEASE_HELD') {
+      return err(request, {
+        code: 'agent-busy',
+        message: error.message,
+        details: { reason: 'workspace checkpoint operation is already in progress' },
+      })
+    }
+    return err(request, {
+      code: 'checkpoint-unavailable',
+      message: error instanceof Error ? error.message : String(error),
+      details: { sessionId, checkpointId },
+    })
+  }
+
+  /** Build the edit refusal used for malformed or unsettled source messages. */
+  function editRefusal<T>(
+    request: RpcRequest<unknown>,
+    sessionId: SessionId,
+    messageSeq: number,
+    message: string,
+  ): RpcResponse<T> {
+    return err(request, {
+      code: 'edit-not-editable',
+      message,
+      details: { sessionId, messageSeq },
+    })
+  }
+
+  /** Check whether a source log still owns an open turn or pending live input. */
+  function sourceIsSettled(source: SessionReadState, agent: Agent | undefined): boolean {
+    if (agent !== undefined && (agent.status !== 'idle' || agent.inbox.hasPending)) return false
+    let open = false
+    for (const event of source.events) {
+      if (event.type === 'turn/start') open = true
+      else if (event.type === 'turn/end') open = false
+    }
+    return !open
+  }
+
+  /** Find the completed turn boundary immediately before one direct prompt. */
+  function precedingBoundary(
+    source: SessionReadState,
+    messageIndex: number,
+  ): SessionEvent<'turn/end'> | undefined {
+    return source.events.slice(0, messageIndex)
+      .findLast((event): event is SessionEvent<'turn/end'> => event.type === 'turn/end')
+  }
+
+  /** Find the turn end that settled one direct prompt. */
+  function messageTurnEnd(
+    source: SessionReadState,
+    messageIndex: number,
+  ): SessionEvent<'turn/end'> | undefined {
+    for (let index = messageIndex + 1; index < source.events.length; index += 1) {
+      const event = source.events[index] as SessionEvent
+      if (event.type === 'turn/start') return undefined
+      if (event.type === 'turn/end') return event
+    }
+    return undefined
+  }
+
+  /** Accept a checkpoint from the addressed session or one of its ancestors. */
+  async function checkpointInSourceLineage(
+    source: SessionReadState,
+    checkpointSessionId: SessionId,
+  ): Promise<boolean> {
+    if (checkpointSessionId === source.id) return true
+    const seen = new Set<SessionId>([source.id])
+    let parent = source.header.parentSession
+    for (let depth = 0; parent !== undefined && depth < 128; depth += 1) {
+      if (parent === checkpointSessionId) return true
+      if (seen.has(parent)) return false
+      seen.add(parent)
+      try {
+        parent = (await readSessionState(parent)).header.parentSession
+      } catch {
+        // A missing ancestor cannot establish the requested lineage relation.
+        return false
+      }
+    }
+    return false
+  }
+
+  /** Restore one emergency checkpoint while retaining the edit lease. */
+  async function restoreEmergency(
+    service: WorkspaceCheckpoint,
+    emergency: CheckpointRecord,
+    cwd: string,
+    lease: Awaited<ReturnType<WorkspaceCheckpoint['acquireLease']>>,
+  ): Promise<void> {
+    await service.restore({ checkpointId: emergency.id, cwd, lease })
+  }
+
+  /** Queue the edited prompt onto a newly published child agent. */
+  function editedContent(message: UserMessage, text: string): ContentBlock[] | undefined {
+    const content: ContentBlock[] = []
+    let replacedText = false
+    for (const block of message.content) {
+      if (block.type === 'text') {
+        if (!replacedText) {
+          content.push({ type: 'text', text })
+          replacedText = true
+        }
+        continue
+      }
+      if (block.type !== 'image') return undefined
+      content.push(block)
+    }
+    if (!replacedText) content.unshift({ type: 'text', text })
+    return content
+  }
+
+  /** Queue the edited prompt while retaining supported attachment blocks. */
+  function queueEditedMessage(
+    agent: Agent,
+    content: ContentBlock[],
+    rpcId: RpcId,
+  ): void {
+    const message = createUserMessage({
+      content,
+      source: { kind: 'user', rpcId },
+    })
+    agent.followup(message)
+  }
+
   return {
     sessions: {
       // Attached sessions summarize from memory; persisted-but-unattached (cold)
@@ -2373,6 +2623,407 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
           }
         }
         return ok(request, { sessionId: childId })
+      },
+
+      async edit(request) {
+        const { sessionId, messageSeq, checkpointId, text } = request.payload
+        const service = checkpointService()
+        if (service === undefined) {
+          return err(request, {
+            code: 'internal',
+            message: 'session editing is unavailable: this deployment does not mount a workspace checkpoint provider',
+            details: {},
+          })
+        }
+        if (text.trim().length === 0) {
+          return editRefusal(request, sessionId, messageSeq, 'edited message must not be blank')
+        }
+
+        let source: SessionReadState
+        try {
+          source = await readSessionState(sessionId)
+        } catch (error: unknown) {
+          if (error instanceof SessionNotFound) {
+            return err(request, { code: 'session-not-found', message: error.message, details: { sessionId } })
+          }
+          return err(request, {
+            code: 'internal',
+            message: `edit source unavailable for session "${sessionId}": ${String(error)}`,
+            details: {},
+          })
+        }
+
+        const sourceAgent = ctx.agents.get(sessionId)
+        if (sourceAgent !== undefined && (sourceAgent.status !== 'idle' || sourceAgent.inbox.hasPending)) {
+          return err(request, {
+            code: 'agent-busy',
+            message: `session "${sessionId}" is not idle`,
+            details: { reason: 'session editing requires an idle source agent' },
+          })
+        }
+        if (!sourceIsSettled(source, sourceAgent)) {
+          return editRefusal(
+            request,
+            sessionId,
+            messageSeq,
+            `session "${sessionId}" is not idle at the edit boundary`,
+          )
+        }
+        const cwd = source.header.cwd
+        if (cwd === undefined) {
+          return editRefusal(request, sessionId, messageSeq, `session "${sessionId}" has no workspace cwd`)
+        }
+        let recoveryReason: string | undefined
+        try {
+          recoveryReason = await service.recoveryRequired(cwd)
+        } catch (error: unknown) {
+          return err(request, {
+            code: 'internal',
+            message: `edit recovery state unavailable for session "${sessionId}": ${String(error)}`,
+            details: {},
+          })
+        }
+        if (recoveryReason !== undefined) {
+          return err(request, {
+            code: 'checkpoint-recovery-required',
+            message: `workspace requires recovery: ${recoveryReason}`,
+            details: { sessionId, reason: recoveryReason },
+          })
+        }
+        const messageIndex = source.events.findIndex(event => event.seq === messageSeq)
+        const target = messageIndex < 0 ? undefined : source.events[messageIndex]
+        if (
+          target === undefined
+          || target.type !== 'user/message'
+          || !isAppendSurfaceEvent(target)
+          || target.data.source.kind !== 'user'
+          || !foldSurface(source.events).nodes.includes(messageSeq)
+        ) {
+          return editRefusal(
+            request,
+            sessionId,
+            messageSeq,
+            `message ${String(messageSeq)} is not a direct user message on the current surface`,
+          )
+        }
+        const replacementContent = editedContent(target.data, text)
+        if (replacementContent === undefined) {
+          return editRefusal(
+            request,
+            sessionId,
+            messageSeq,
+            `message ${String(messageSeq)} contains unsupported content blocks`,
+          )
+        }
+        const settledEnd = messageTurnEnd(source, messageIndex)
+        if (settledEnd === undefined) {
+          return editRefusal(
+            request,
+            sessionId,
+            messageSeq,
+            `message ${String(messageSeq)} belongs to an unsettled turn`,
+          )
+        }
+        const boundary = precedingBoundary(source, messageIndex)
+        const boundarySeq = boundary?.seq ?? -1
+        let selected: CheckpointRecord
+        try {
+          selected = await service.inspect(checkpointId)
+        } catch (error: unknown) {
+          return checkpointFailure(request, sessionId, checkpointId, error)
+        }
+        if (
+          !await checkpointInSourceLineage(source, selected.sessionId)
+          || selected.boundarySeq !== boundarySeq
+          || selected.role === 'emergency'
+          || selected.status.kind !== 'ready'
+          || !selected.restoreEligible
+        ) {
+          return checkpointFailure(
+            request,
+            sessionId,
+            checkpointId,
+            new WorkspaceCheckpointError(
+              `checkpoint "${checkpointId}" is not the usable boundary before message ${String(messageSeq)}`,
+              'CHECKPOINT_UNAVAILABLE',
+            ),
+          )
+        }
+        const workspaceKey = await checkpointWorkspaceKey(cwd)
+        if (await checkpointWorkspaceKey(selected.workspaceKey) !== workspaceKey) {
+          return checkpointFailure(
+            request,
+            sessionId,
+            checkpointId,
+            new WorkspaceCheckpointError(
+              `checkpoint "${checkpointId}" belongs to a different workspace`,
+              'CHECKPOINT_UNAVAILABLE',
+            ),
+          )
+        }
+        const turnStartIndex = source.events.findLastIndex(
+          (event, index) => index < messageIndex && event.type === 'turn/start',
+        )
+        if (turnStartIndex < 0 || (boundary !== undefined && turnStartIndex <= source.events.indexOf(boundary))) {
+          return editRefusal(
+            request,
+            sessionId,
+            messageSeq,
+            `message ${String(messageSeq)} has no editable turn boundary`,
+          )
+        }
+        const operation = (
+          phase: CheckpointOperationPhase,
+          fileCount: number,
+          childSessionId?: SessionId,
+          message?: string,
+        ): void => publishCheckpointOperation({
+          sourceSessionId: sessionId,
+          checkpointId,
+          phase,
+          fileCount,
+          ...childSessionId === undefined ? {} : { childSessionId },
+          ...message === undefined ? {} : { message },
+        })
+        operation('preparing', selected.fileCount)
+
+        let emergency: CheckpointRecord | undefined
+        let lease: Awaited<ReturnType<WorkspaceCheckpoint['acquireLease']>> | undefined
+        let publishedChildId: SessionId | undefined
+        try {
+          operation('capturing-emergency', 0)
+          emergency = await service.capture({
+            sessionId,
+            cwd,
+            boundarySeq: source.events.at(-1)?.seq ?? -1,
+            role: 'emergency',
+            turnOutcome: 'failed',
+          })
+          if (emergency.status.kind !== 'ready' || !emergency.restoreEligible) {
+            throw new WorkspaceCheckpointError(
+              `emergency checkpoint could not preserve the current workspace: ${
+                emergency.status.kind === 'unavailable' ? emergency.status.reason : 'not-restorable'
+              }`,
+              'CHECKPOINT_UNAVAILABLE',
+            )
+          }
+          operation('capturing-emergency', emergency.fileCount)
+          lease = await service.acquireLease(workspaceKey)
+          operation('restoring', selected.fileCount)
+          await service.restore({ checkpointId: selected.id, cwd, lease })
+          operation('creating-branch', selected.fileCount)
+
+          const childId = `session-${randomUUID()}` as SessionId
+          const forkComposition = await composeAgent(resolveSessionPreset(source))
+          try {
+            await ctx.agents.create({
+              sessionId: childId,
+              seed: source.events.slice(0, turnStartIndex),
+              meta: {
+                cwd,
+                parentSession: source.id,
+                seedLength: turnStartIndex,
+                ...forkComposition.agentPreset === undefined
+                  ? {}
+                  : { agentPreset: forkComposition.agentPreset },
+              },
+              agentOptions: agentOptions(),
+              setup: forkComposition.setup,
+            })
+            publishedChildId = childId
+            const child = ctx.agents.get(childId)
+            if (child === undefined) throw new Error(`child agent "${childId}" was not published`)
+            const workspace = await forkWorkspace(source)
+            if (workspace !== undefined) await workspace.attachSession(childId)
+            const childInitial = await service.capture({
+              sessionId: childId,
+              cwd,
+              boundarySeq: -1,
+              parentCheckpointId: selected.id,
+              role: 'initial',
+              turnOutcome: 'initial',
+              lease,
+            })
+            if (childInitial.status.kind !== 'ready' || !childInitial.restoreEligible) {
+              throw new WorkspaceCheckpointError(
+                `child checkpoint could not preserve the restored workspace: ${
+                  childInitial.status.kind === 'unavailable' ? childInitial.status.reason : 'not-restorable'
+                }`,
+                'CHECKPOINT_UNAVAILABLE',
+              )
+            }
+            await service.recordEdit({
+              sourceSessionId: sessionId,
+              sourceBoundarySeq: boundarySeq,
+              selectedCheckpointId: selected.id,
+              emergencyCheckpointId: emergency.id,
+              childSessionId: childId,
+            })
+            queueEditedMessage(child, replacementContent, request.rpcId)
+          } catch (error: unknown) {
+            try {
+              await restoreEmergency(service, emergency, cwd, lease)
+            } catch (rollbackError: unknown) {
+              await service.markRecoveryRequired(
+                workspaceKey,
+                `edit branch failed and emergency restore failed: ${String(rollbackError)}`,
+              )
+              throw new WorkspaceCheckpointError(
+                `edit branch failed; workspace recovery is required: ${String(rollbackError)}`,
+                'CHECKPOINT_RECOVERY_REQUIRED',
+              )
+            }
+            throw error
+          }
+          operation('ready', selected.fileCount, childId)
+          return ok(request, { sessionId: childId })
+        } catch (error: unknown) {
+          const message = error instanceof Error ? error.message : String(error)
+          operation(
+            'failed',
+            selected.fileCount,
+            publishedChildId,
+            message,
+          )
+          return checkpointFailure(request, sessionId, checkpointId, error)
+        } finally {
+          lease?.release()
+        }
+      },
+
+      async activate(request) {
+        const { sessionId } = request.payload
+        const service = checkpointService()
+        if (service === undefined) {
+          return err(request, {
+            code: 'internal',
+            message: 'session activation is unavailable: this deployment does not mount a workspace checkpoint provider',
+            details: {},
+          })
+        }
+        const agent = ctx.agents.get(sessionId)
+        if (agent !== undefined && (agent.status !== 'idle' || agent.inbox.hasPending)) {
+          return err(request, {
+            code: 'agent-busy',
+            message: `session "${sessionId}" is not idle`,
+            details: { reason: 'session activation requires an idle session' },
+          })
+        }
+        let source: SessionReadState
+        try {
+          source = await readSessionState(sessionId)
+        } catch (error: unknown) {
+          if (error instanceof SessionNotFound) {
+            return err(request, { code: 'session-not-found', message: error.message, details: { sessionId } })
+          }
+          return err(request, {
+            code: 'internal',
+            message: `activation source unavailable for session "${sessionId}": ${String(error)}`,
+            details: {},
+          })
+        }
+        const cwd = source.header.cwd
+        if (cwd === undefined) return ok(request, { restored: false, unavailable: true })
+        let checkpoints: readonly CheckpointView[]
+        try {
+          checkpoints = await service.list(sessionId)
+        } catch (error: unknown) {
+          return err(request, {
+            code: 'internal',
+            message: `activation checkpoints unavailable for session "${sessionId}": ${String(error)}`,
+            details: {},
+          })
+        }
+        const usable = [...checkpoints]
+          .filter(checkpoint => checkpoint.role !== 'emergency'
+            && checkpoint.status.kind === 'ready'
+            && checkpoint.restoreEligible)
+          .sort((left, right) => right.labelIndex - left.labelIndex)
+        const selected = usable[0]
+        if (selected === undefined) {
+          return ok(request, { restored: false, unavailable: checkpoints.length > 0 })
+        }
+        const checkpointId = selected.id
+        let index: Awaited<ReturnType<WorkspaceCheckpoint['sessionIndex']>>
+        try {
+          index = await service.sessionIndex?.(sessionId)
+        } catch (error: unknown) {
+          return err(request, {
+            code: 'internal',
+            message: `activation index unavailable for session "${sessionId}": ${String(error)}`,
+            details: {},
+          })
+        }
+        if (index?.appliedCheckpointId === String(checkpointId)) {
+          return ok(request, { restored: false })
+        }
+        const operation = (
+          phase: CheckpointOperationPhase,
+          fileCount: number,
+          message?: string,
+        ): void => publishCheckpointOperation({
+          sourceSessionId: sessionId,
+          checkpointId,
+          phase,
+          fileCount,
+          ...message === undefined ? {} : { message },
+        })
+        operation('preparing', selected.fileCount)
+        let emergency: CheckpointRecord | undefined
+        let lease: Awaited<ReturnType<WorkspaceCheckpoint['acquireLease']>> | undefined
+        try {
+          const record = await service.inspect(checkpointId)
+          const workspaceKey = await checkpointWorkspaceKey(cwd)
+          if (await checkpointWorkspaceKey(record.workspaceKey) !== workspaceKey) {
+            throw new WorkspaceCheckpointError(
+              `checkpoint "${checkpointId}" belongs to a different workspace`,
+              'CHECKPOINT_UNAVAILABLE',
+            )
+          }
+          operation('capturing-emergency', 0)
+          emergency = await service.capture({
+            sessionId,
+            cwd,
+            boundarySeq: source.events.at(-1)?.seq ?? -1,
+            role: 'emergency',
+            turnOutcome: 'failed',
+          })
+          if (emergency.status.kind !== 'ready' || !emergency.restoreEligible) {
+            throw new WorkspaceCheckpointError(
+              `emergency checkpoint could not preserve the current workspace: ${
+                emergency.status.kind === 'unavailable' ? emergency.status.reason : 'not-restorable'
+              }`,
+              'CHECKPOINT_UNAVAILABLE',
+            )
+          }
+          operation('capturing-emergency', emergency.fileCount)
+          lease = await service.acquireLease(workspaceKey)
+          operation('restoring', record.fileCount)
+          try {
+            const restored = await service.restore({ checkpointId, cwd, lease })
+            operation('ready', restored.fileCount)
+            return ok(request, { restored: true, checkpointId: restored.checkpointId })
+          } catch (error: unknown) {
+            try {
+              await restoreEmergency(service, emergency, cwd, lease)
+            } catch (rollbackError: unknown) {
+              await service.markRecoveryRequired(
+                workspaceKey,
+                `activation restore failed and emergency restore failed: ${String(rollbackError)}`,
+              )
+              throw new WorkspaceCheckpointError(
+                `activation failed; workspace recovery is required: ${String(rollbackError)}`,
+                'CHECKPOINT_RECOVERY_REQUIRED',
+              )
+            }
+            throw error
+          } finally {
+            lease.release()
+          }
+        } catch (error: unknown) {
+          operation('failed', selected.fileCount, error instanceof Error ? error.message : String(error))
+          return checkpointFailure(request, sessionId, checkpointId, error)
+        }
       },
 
       async prompt(request) {
@@ -3362,6 +4013,7 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
         muxQueues.add(queue)
         for (const session of ctx.sessions.list()) {
           subscribeSession(queue, session)
+          queueCheckpointSnapshot(queue, session.id)
         }
         for (const pending of pendingQuestions.values()) {
           queue.push({
@@ -3424,6 +4076,7 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
           }),
           ctx.on('session/created', (session: Session) => {
             subscribeSession(queue, session)
+            queueCheckpointSnapshot(queue, session.id)
             // The subscribe frame clears the client's task mirror, and a
             // session born after the stream opened missed the baseline loop.
             // Unowned tasks are visible to it from birth, so without this it

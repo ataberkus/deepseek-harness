@@ -55,6 +55,10 @@ export interface SessionSummary {
   parentId?: SessionId
   /** Coarse durable origin for navigation filtering; not a continuation capability. */
   origin?: 'subagent'
+  /** User-facing checkpoint ordinal for this branch, when checkpoint state is known. */
+  checkpointLabelIndex?: number
+  /** Whether this session has a known usable workspace-file checkpoint. */
+  workspaceResumable?: boolean
   running: boolean
   /** User interaction currently blocking this session (sidebar amber-dot state). */
   pendingInteraction?: PendingInteractionStatus
@@ -618,6 +622,15 @@ export class SessionRuntime implements ISessions {
      * cannot miss; kept so a future current writer cannot crash the notify. */
     if (record !== undefined) {
       void record.session.open()
+      if (record.session.getSnapshot().subagent === null) {
+        void record.session.activate().then((result) => {
+          if (!result.ok) {
+            console.warn(
+              `[web-runtime] workspace activation for "${current}" failed: ${result.error.message}`,
+            )
+          }
+        })
+      }
       void this.manager.refreshSubagents(current)
     }
   }
@@ -683,6 +696,8 @@ export class SessionRuntime implements ISessions {
         ...(entry.parentSessionId !== undefined ? { parentId: entry.parentSessionId } : {}),
         ...(entry.origin !== undefined ? { origin: entry.origin } : {}),
         ...(entry.agentPreset !== undefined ? { agentPreset: entry.agentPreset } : {}),
+        ...(entry.checkpointLabelIndex === undefined ? {} : { checkpointLabelIndex: entry.checkpointLabelIndex }),
+        ...(entry.workspaceResumable === undefined ? {} : { workspaceResumable: entry.workspaceResumable }),
       }
     }
     if (current !== undefined && currentAddress !== undefined) {

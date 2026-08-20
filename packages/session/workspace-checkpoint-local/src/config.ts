@@ -15,7 +15,7 @@ export interface Config {
   dshHome?: string
   /** Hard cap on stored blob bytes. Capture above this is fail-soft unavailable. */
   maxTotalBytes: number
-  /** Glob patterns matched against slash-separated relative paths. */
+  /** Glob patterns skipped by capture and restore planning. */
   excludeGlobs: string[]
   /** Extra `buildManifest` attempts after `CHECKPOINT_CONCURRENT_WRITE`. */
   captureRetryCount: number

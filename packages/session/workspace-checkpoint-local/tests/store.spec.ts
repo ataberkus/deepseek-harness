@@ -177,7 +177,7 @@ describe('LocalWorkspaceCheckpoint capture', () => {
     }
   })
 
-  it('propagates non-concurrent capture failures', async () => {
+  it('persists unavailable when a capture read fails', async () => {
     const harness = await boot()
     dispose.push(() => harness.dispose())
     const original = captureInternals.buildManifest
@@ -191,7 +191,10 @@ describe('LocalWorkspaceCheckpoint capture', () => {
         boundarySeq: -1,
         role: 'initial',
         turnOutcome: 'initial',
-      })).rejects.toThrow('boom')
+      })).resolves.toMatchObject({
+        status: { kind: 'unavailable', reason: 'capture-failed' },
+        restoreEligible: false,
+      })
     } finally {
       captureInternals.buildManifest = original
     }

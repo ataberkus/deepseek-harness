@@ -66,6 +66,24 @@ describe('workspace lease', () => {
     expect(started).toBe(true)
   })
 
+  it('captures under the operation lease without waiting for its own release', async () => {
+    const harness = await boot()
+    dispose.push(() => harness.dispose())
+    await writeFile(join(harness.cwd, 'a.txt'), 'x')
+    const key = await canonicalizeCwd(harness.cwd)
+    const held = await harness.ctx.workspaceCheckpoint.acquireLease(key)
+    const captured = await harness.ctx.workspaceCheckpoint.capture({
+      sessionId: SessionId('s1'),
+      cwd: harness.cwd,
+      boundarySeq: 0,
+      role: 'initial',
+      turnOutcome: 'initial',
+      lease: held,
+    })
+    expect(captured.status).toEqual({ kind: 'ready' })
+    held.release()
+  })
+
   it('rejects a second acquire while the lease is held', async () => {
     const harness = await boot()
     dispose.push(() => harness.dispose())

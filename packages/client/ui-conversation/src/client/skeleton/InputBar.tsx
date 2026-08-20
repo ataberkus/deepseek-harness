@@ -10,7 +10,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import type { ChangeEvent, KeyboardEvent, MouseEvent, ReactNode } from 'react'
 import clsx from 'clsx'
 import {
-  IconPlusOutline16, IconWarningOutline16, Toast, Tooltip,
+  IconCloseOutline16, IconPlusOutline16, IconWarningOutline16, Toast, Tooltip,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 // Type-only: the `plan` projection key merge (the TodoDock posture — the
 // composer reads a host-computed value; the domain owns the key).
@@ -49,6 +49,7 @@ export function InputBar({
   const lexicon = useLexicon(s => s)
   const commandMenuOpen = useMenuLauncher(source => source === 'command')
   const promptError = useSession(s => s.promptError) ?? null
+  const checkpointSnapshot = useSession(s => s.checkpoints)
   const running = useSession(s => s.running) ?? false
   const subagent = useSession(s => s.subagent) ?? null
   const removed = useSession(s => s.removed) ?? false
@@ -61,6 +62,8 @@ export function InputBar({
   // current; the bar renders the same DOM inert instead of a parallel tree.
   const live = input !== undefined && keyboard !== undefined && inputActions !== undefined
   const draft = input?.draft ?? ''
+  const editTarget = input?.edit
+  const workspaceUnavailable = checkpointSnapshot?.workspaceResumable === false
   const attachments = useMemo(
     () => input === undefined || draftImages === undefined ? [] : draftImages(input.imageIds),
     [draftImages, input?.imageIds],
@@ -125,7 +128,7 @@ export function InputBar({
   // inert no-workspace state, the machine faces absent (no session), or a
   // parent-offline continuable child. An owner block also disables input;
   // adjudicating and submitting render read-only so the draft stays visible.
-  const disabled = removed || inert || !live || blocked !== undefined || parentOffline
+  const disabled = removed || inert || !live || blocked !== undefined || parentOffline || workspaceUnavailable
   const locked = disabled
   // The model seat is the ONE control a block leaves live: every block this
   // contract has is cleared by choosing a model, so locking it too would leave
@@ -616,6 +619,25 @@ export function InputBar({
       {notice?.level === 'info' && (
         <div className={css.notice} role="status">
           {notice.text}
+        </div>
+      )}
+      {workspaceUnavailable && (
+        <div className={css.workspaceUnavailable} role="alert">
+          {t('workspace.unrestorable')}
+        </div>
+      )}
+      {editTarget !== undefined && (
+        <div className={css.editBanner} role="status">
+          <span>{t('message.edit.banner')}</span>
+          <button
+            type="button"
+            className={css.editCancel}
+            aria-label={t('message.edit.cancel')}
+            onClick={() => { inputActions?.cancelEdit?.() }}
+          >
+            <IconCloseOutline16 size={14} />
+            {t('message.edit.cancel')}
+          </button>
         </div>
       )}
       {/* Trigger clicks land on the card, not the textarea: the toolbar row's

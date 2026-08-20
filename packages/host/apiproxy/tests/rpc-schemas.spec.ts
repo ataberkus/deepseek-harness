@@ -13,6 +13,7 @@ import {
   sessionSearchRequestSchema, sessionSearchValueSchema, sessionSelectModelRequestSchema,
   sessionSelectModelValueSchema, sessionSummarySchema,
   sessionUpdateQueueRequestSchema, sessionUpdateQueueValueSchema,
+  sessionActivateRequestSchema, sessionActivateValueSchema, sessionEditRequestSchema, sessionEditValueSchema,
 } from '../src/api/sessions.schema.ts'
 import {
   hostCreateDirectoryRequestSchema, hostCreateDirectoryValueSchema,
@@ -77,6 +78,9 @@ describe('rpcErrorSchema', () => {
     expect(rpcErrorSchema.parse({ code: 'command-error', message: 'm', details: {} }).code).toBe('command-error')
     expect(rpcErrorSchema.parse({ code: 'unknown-command', message: 'm', details: {} }).code).toBe('unknown-command')
     expect(rpcErrorSchema.parse({ code: 'title-invalid', message: 'm', details: { sessionId: 's' } }).code).toBe('title-invalid')
+    expect(rpcErrorSchema.parse({ code: 'edit-not-editable', message: 'm', details: { sessionId: 's', messageSeq: 2 } }).code).toBe('edit-not-editable')
+    expect(rpcErrorSchema.parse({ code: 'checkpoint-unavailable', message: 'm', details: { sessionId: 's', checkpointId: 'cp1' } }).code).toBe('checkpoint-unavailable')
+    expect(rpcErrorSchema.parse({ code: 'checkpoint-recovery-required', message: 'm', details: { sessionId: 's', reason: 'rollback' } }).code).toBe('checkpoint-recovery-required')
     // The credentials producer still emits this code, so the branch has to stay.
     expect(rpcErrorSchema.parse({ code: 'credential-rejected', message: 'm', details: { ref: 'r' } }).code).toBe('credential-rejected')
     expect(rpcErrorSchema.parse({ code: 'internal', message: 'm', details: {} }).code).toBe('internal')
@@ -292,6 +296,21 @@ describe('sessions domain schemas', () => {
     })).toThrow()
     expect(sessionCancelValueSchema.parse({ accepted: true }).accepted).toBe(true)
     expect(sessionUpdateQueueValueSchema.parse({ accepted: true }).accepted).toBe(true)
+    expect(sessionEditRequestSchema.parse({
+      sessionId: 's1',
+      messageSeq: 4,
+      checkpointId: 'cp1',
+      text: '  edited  ',
+    }).text).toBe('  edited  ')
+    expect(() => sessionEditRequestSchema.parse({
+      sessionId: 's1', messageSeq: -1, checkpointId: 'cp1', text: 'edited',
+    })).toThrow()
+    expect(() => sessionEditRequestSchema.parse({
+      sessionId: 's1', messageSeq: 4, checkpointId: 'cp1', text: '  ',
+    })).toThrow()
+    expect(sessionEditValueSchema.parse({ sessionId: 'child' }).sessionId).toBe('child')
+    expect(sessionActivateRequestSchema.parse({ sessionId: 's1' }).sessionId).toBe('s1')
+    expect(sessionActivateValueSchema.parse({ restored: true, checkpointId: 'cp1' }).restored).toBe(true)
     expect(contentBlockSchema.parse({ type: 'text', text: 'x', extra: 1 })).toMatchObject({ extra: 1 })
   })
 })
@@ -467,6 +486,30 @@ describe('events frame schemas', () => {
         { id: 'bash-1', kind: 'bash', label: 'pnpm run build', status: 'running', startedAt: 5 },
         { id: 'pty-send-2', kind: 'pty-send', label: 'send keys', status: 'failed', detail: 'exit code: 3', startedAt: 5, finishedAt: 9 },
       ] },
+      {
+        type: 'session/checkpoints',
+        sessionId: 's',
+        checkpoints: [{
+          id: 'cp1',
+          sessionId: 's',
+          boundarySeq: 2,
+          labelIndex: 1,
+          role: 'turn',
+          status: { kind: 'ready' },
+          restoreEligible: true,
+          fileCount: 3,
+          createdAt: 5,
+        }],
+        appliedCheckpointId: 'cp1',
+        operation: {
+          sourceSessionId: 's',
+          childSessionId: 'child',
+          checkpointId: 'cp1',
+          phase: 'ready',
+          fileCount: 3,
+        },
+        recoveryRequired: 'rollback failed',
+      },
       { type: 'stream/error', error: { code: 'internal', message: 'm', details: {} } },
     ]
     for (const frame of frames) expect(muxFrameSchema.parse(frame)).toMatchObject({ type: frame.type })

@@ -5,7 +5,7 @@
  * conversation wiring layer alone sees the full SessionInput. InputMachine
  * (machine.ts) is package-private and never exported.
  */
-import type { ClientContext, SnapshotStore } from '@deepseek-ai/dsh-client-runtime/client'
+import type { CheckpointView, ClientContext, SnapshotStore } from '@deepseek-ai/dsh-client-runtime/client'
 import type { Branded } from '@deepseek-ai/dsh-brand'
 import type {
   ArbitrateKey, ArbitrateOutcome, CommandClaim, ConsumeTokenRequest, PickOutcome,
@@ -16,6 +16,18 @@ import type { InputSubmitMode } from '../contract/composer-submission.ts'
 
 /** Browser-runtime identity of one unsent image draft. */
 export type DraftAttachmentId = Branded<'DraftAttachmentId'>
+
+/** User-selected message and checkpoint retained while the composer is in edit mode. */
+export interface ConversationEditDraft {
+  /** Durable sequence of the direct user message being replaced. */
+  messageSeq: number
+  /** Usable workspace checkpoint immediately before that message's turn. */
+  checkpointId: CheckpointView['id']
+  /** Current message text copied into the composer. */
+  originalText: string
+  /** Draft text restored if the user cancels the edit; omitted on entry so the shell captures it. */
+  previousDraft?: string
+}
 
 /**
  * The scoped-event application verbs: the hub's bail listeners call these,
@@ -81,6 +93,10 @@ export interface InputActions {
   pruneImages(ids: readonly DraftAttachmentId[]): void
   /** Enter submission (adjudication / claim transaction / default sink inside). */
   submit(): void
+  /** Enter two-phase conversation edit mode and copy its text into the draft. */
+  beginEdit?(target: ConversationEditDraft): void
+  /** Cancel edit mode and restore the draft that was present before it began. */
+  cancelEdit?(): void
 }
 
 /** One surfaced notice (command results, adjudication failures). seq keys re-render of repeats. */
@@ -225,6 +241,8 @@ export interface InputState {
   readonly paste?: PasteAttemptState
   /** Read-only transient inbox projection (`session/queue`, including pending steering). */
   readonly queue: readonly QueuedMessage[]
+  /** Current two-phase edit target, when the composer is replacing a settled message. */
+  readonly edit?: ConversationEditDraft
 }
 
 /**

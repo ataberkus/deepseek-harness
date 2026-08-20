@@ -123,7 +123,7 @@ interface Workspace {
 
 ## 消费方
 
-[dsh-host-apiproxy](../../packages/host/apiproxy) 是产品消费方：它经 `ctx.workspaceRegistry` 向 GUI 客户端提供工作区的 CRUD，并执行上文「先建会话再 attach」的流程。[dsh-agent-instructions](../../packages/context/agent-instructions) 尽管名字如此，却**不是**消费方：它在 agent 自己的 cwd 下发现 AGENTS.md 风格的指令文件，从不触碰 `ctx.workspaceRegistry`——两者共用的这个词指的是用户的工作目录，而非本注册表的实体。
+[dsh-host-apiproxy](../../packages/host/apiproxy) 是产品消费方：它经 `ctx.workspaceRegistry` 向 GUI 客户端提供工作区的 CRUD，并执行上文「先建会话再 attach」的流程。同一 Host 也消费 `ctx.workspaceCheckpoint`：`session.edit` 恢复所选文件树并发布子分支，`session.activate` 在选中会话时恢复最新可用检查点。[dsh-workspace-checkpoint-capture](../../packages/session/workspace-checkpoint-capture) 记录 Checkpoint 0 与已结算回合快照，并在需要恢复时阻止模型和顶层工具工作。[dsh-agent-instructions](../../packages/context/agent-instructions) 尽管名字如此，却**不是**消费方：它在 agent 自己的 cwd 下发现 AGENTS.md 风格的指令文件，从不触碰 `ctx.workspaceRegistry`——两者共用的这个词指的是用户的工作目录，而非本注册表的实体。
 
 <!-- BEGIN GENERATED cordis-surface (gen-cordis-catalog.ts) — do not edit between markers -->
 
@@ -148,6 +148,95 @@ abstract capability(): DirectoryPickerCapability
 ```
 
 Source: [`packages/host/directory-picker/src/index.ts:131`](../../packages/host/directory-picker/src/index.ts)
+
+<a id="ctxworkspacecheckpoint--workspacecheckpoint-abstract-seam"></a>
+
+### `ctx.workspaceCheckpoint` — `WorkspaceCheckpoint` (abstract seam)
+
+Abstract workspace-checkpoint service. Subclass, implement the abstract methods, and load the subclass as a plugin — it registers as `ctx.workspaceCheckpoint`.
+
+```ts cordis-catalog
+/**
+ * Capture the session cwd into a durable checkpoint record.
+ * @param request - session, cwd, boundary, role, optional parent, and lease.
+ * @returns the stored record; `status.kind` may be `unavailable` on fail-soft capture.
+ */
+abstract capture(request: CaptureRequest): Promise<CheckpointRecord>
+
+/**
+ * Read one durable checkpoint.
+ * @param id - opaque checkpoint id.
+ * @returns the stored record.
+ */
+abstract inspect(id: CheckpointId): Promise<CheckpointRecord>
+
+/**
+ * List checkpoints for one session in label order.
+ * @param sessionId - owning session.
+ * @returns client-safe views with no blob internals.
+ */
+abstract list(sessionId: SessionId): Promise<readonly CheckpointView[]>
+
+/**
+ * Read the durable session sidecar used by Host activation and projections.
+ * Providers without a metadata index may return `undefined`.
+ * @param _sessionId - owning session.
+ * @returns the index row, when present.
+ */
+sessionIndex(_sessionId: SessionId): StoredSessionCheckpointIndex | undefined
+
+/**
+ * Make `request.cwd` match the checkpoint manifest, or roll back.
+ * @param request - checkpoint id, target cwd, optional lease, and abort signal.
+ * @returns the restored checkpoint id and restored file count.
+ */
+abstract restore(request: RestoreRequest): Promise<RestoreResult>
+
+/**
+ * Persist the source/child relationship for a successful conversation edit.
+ * @param link - selected, emergency, source, boundary, and child ids.
+ * @returns fulfillment after the sidecar is durable.
+ */
+abstract recordEdit(link: CheckpointEditLink): Promise<void>
+
+/**
+ * Acquire an exclusive in-process lease for one canonical workspace path.
+ * Throws `CHECKPOINT_LEASE_HELD` when another holder already owns it.
+ * @param workspaceKey - canonical workspace path.
+ * @returns a lease whose `release()` is idempotent.
+ */
+abstract acquireLease(workspaceKey: string): Promise<WorkspaceLease>
+
+/**
+ * Read the recovery-required diagnostic for a workspace, if any.
+ * @param workspaceKey - canonical workspace path.
+ * @returns the diagnostic string, or `undefined` when the workspace is writable.
+ */
+abstract recoveryRequired(workspaceKey: string): Promise<string | undefined>
+
+/**
+ * Mark a workspace as requiring recovery and block new model work.
+ * @param workspaceKey - canonical workspace path.
+ * @param reason - durable diagnostic presented to the user.
+ */
+abstract markRecoveryRequired(workspaceKey: string, reason: string): Promise<void>
+
+/**
+ * Clear the recovery-required diagnostic after a successful restore.
+ * @param workspaceKey - canonical workspace path.
+ */
+abstract clearRecoveryRequired(workspaceKey: string): Promise<void>
+
+/**
+ * Apply configured retention: evict unreferenced blobs without silently
+ * dropping an applied branch's required objects.
+ */
+abstract evict(): Promise<void>
+```
+
+Types: [SessionId](core.md)
+
+Source: [`packages/session/workspace-checkpoint/src/index.ts:69`](../../packages/session/workspace-checkpoint/src/index.ts)
 
 <a id="ctxworkspaceregistry--workspaceregistry"></a>
 
@@ -225,4 +314,27 @@ async resolveByPath(path: string): Promise<Workspace | undefined>
 Types: [SessionId](core.md)
 
 Source: [`packages/workspace/workspace/src/index.ts:92`](../../packages/workspace/workspace/src/index.ts)
+
+<a id="workspace-checkpoint-events"></a>
+
+### `workspace-checkpoint/*` events
+
+<a id="workspace-checkpointchanged--emit"></a>
+
+#### `workspace-checkpoint/changed` — emit
+
+Durable checkpoint metadata or workspace association changed.
+
+```ts cordis-catalog
+/**
+ * Durable checkpoint metadata or workspace association changed.
+ * @param sessionId - session whose index or records changed.
+ * @mode emit
+ */
+'workspace-checkpoint/changed'(sessionId: SessionId): void
+```
+
+Types: [SessionId](core.md)
+
+Source: [`packages/session/workspace-checkpoint/src/index.ts:60`](../../packages/session/workspace-checkpoint/src/index.ts)
 <!-- END GENERATED cordis-surface -->

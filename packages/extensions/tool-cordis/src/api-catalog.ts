@@ -2222,6 +2222,76 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     ],
   },
   {
+    key: 'workspaceCheckpoint',
+    summary: 'Abstract workspace-checkpoint service.',
+    description: 'Abstract workspace-checkpoint service. Subclass, implement the abstract methods, and load the subclass as a plugin — it registers as `ctx.workspaceCheckpoint`.',
+    methods: [
+      {
+        signature: 'abstract capture(request: CaptureRequest): Promise<CheckpointRecord>',
+        description: 'Capture the session cwd into a durable checkpoint record.',
+        parameters: [{ name: 'request', description: 'session, cwd, boundary, role, optional parent, and lease.' }],
+        returns: 'the stored record; `status.kind` may be `unavailable` on fail-soft capture.',
+      },
+      {
+        signature: 'abstract inspect(id: CheckpointId): Promise<CheckpointRecord>',
+        description: 'Read one durable checkpoint.',
+        parameters: [{ name: 'id', description: 'opaque checkpoint id.' }],
+        returns: 'the stored record.',
+      },
+      {
+        signature: 'abstract list(sessionId: SessionId): Promise<readonly CheckpointView[]>',
+        description: 'List checkpoints for one session in label order.',
+        parameters: [{ name: 'sessionId', description: 'owning session.' }],
+        returns: 'client-safe views with no blob internals.',
+      },
+      {
+        signature: 'sessionIndex(_sessionId: SessionId): StoredSessionCheckpointIndex | undefined',
+        description: 'Read the durable session sidecar used by Host activation and projections. Providers without a metadata index may return `undefined`.',
+        parameters: [{ name: '_sessionId', description: 'owning session.' }],
+        returns: 'the index row, when present.',
+      },
+      {
+        signature: 'abstract restore(request: RestoreRequest): Promise<RestoreResult>',
+        description: 'Make `request.cwd` match the checkpoint manifest, or roll back.',
+        parameters: [{ name: 'request', description: 'checkpoint id, target cwd, optional lease, and abort signal.' }],
+        returns: 'the restored checkpoint id and restored file count.',
+      },
+      {
+        signature: 'abstract recordEdit(link: CheckpointEditLink): Promise<void>',
+        description: 'Persist the source/child relationship for a successful conversation edit.',
+        parameters: [{ name: 'link', description: 'selected, emergency, source, boundary, and child ids.' }],
+        returns: 'fulfillment after the sidecar is durable.',
+      },
+      {
+        signature: 'abstract acquireLease(workspaceKey: string): Promise<WorkspaceLease>',
+        description: 'Acquire an exclusive in-process lease for one canonical workspace path. Throws `CHECKPOINT_LEASE_HELD` when another holder already owns it.',
+        parameters: [{ name: 'workspaceKey', description: 'canonical workspace path.' }],
+        returns: 'a lease whose `release()` is idempotent.',
+      },
+      {
+        signature: 'abstract recoveryRequired(workspaceKey: string): Promise<string | undefined>',
+        description: 'Read the recovery-required diagnostic for a workspace, if any.',
+        parameters: [{ name: 'workspaceKey', description: 'canonical workspace path.' }],
+        returns: 'the diagnostic string, or `undefined` when the workspace is writable.',
+      },
+      {
+        signature: 'abstract markRecoveryRequired(workspaceKey: string, reason: string): Promise<void>',
+        description: 'Mark a workspace as requiring recovery and block new model work.',
+        parameters: [{ name: 'workspaceKey', description: 'canonical workspace path.' }, { name: 'reason', description: 'durable diagnostic presented to the user.' }],
+      },
+      {
+        signature: 'abstract clearRecoveryRequired(workspaceKey: string): Promise<void>',
+        description: 'Clear the recovery-required diagnostic after a successful restore.',
+        parameters: [{ name: 'workspaceKey', description: 'canonical workspace path.' }],
+      },
+      {
+        signature: 'abstract evict(): Promise<void>',
+        description: 'Apply configured retention: evict unreferenced blobs without silently dropping an applied branch\'s required objects.',
+        parameters: [],
+      },
+    ],
+  },
+  {
     key: 'workspaceRegistry',
     summary: 'Durable workspace registry.',
     description: 'Durable workspace registry. Startup waits for `sessionPersistence`, builds one canonical-cwd header index, and completes the one-time history bootstrap before the service becomes active. The persistence dependency is mandatory so an unavailable peer can never be mistaken for an empty history and commit the initialized marker.',
@@ -2730,6 +2800,14 @@ export const EVENT_API: readonly EventApiEntry[] = [
     description: 'A workflow run started — the script\'s meta block validated, the body about to execute. Paired with Events[\'workflow/end\'].',
     parameters: [{ name: 'info', description: 'the run\'s identity snapshot (id + meta).' }],
   },
+  {
+    name: 'workspace-checkpoint/changed',
+    mode: 'emit',
+    signature: '\'workspace-checkpoint/changed\'(sessionId: SessionId): void',
+    summary: 'Durable checkpoint metadata or workspace association changed.',
+    description: 'Durable checkpoint metadata or workspace association changed.',
+    parameters: [{ name: 'sessionId', description: 'session whose index or records changed.' }],
+  },
 ]
 
 /** Shapes of every exported type the Service and Event signatures reference (transitively), sorted by name. */
@@ -2861,6 +2939,26 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'CancelOptions',
     declaration: 'export interface CancelOptions {\n    keepInbox?: boolean | undefined;\n}',
+  },
+  {
+    name: 'CaptureRequest',
+    declaration: 'export interface CaptureRequest {\n    readonly sessionId: SessionId;\n    readonly cwd: string;\n    readonly workspaceId?: WorkspaceId;\n    readonly boundarySeq: number;\n    readonly parentCheckpointId?: CheckpointId;\n    readonly role: CheckpointRole;\n    readonly turnOutcome: CheckpointTurnOutcome;\n    readonly lease?: WorkspaceLease;\n}',
+  },
+  {
+    name: 'CheckpointEditLink',
+    declaration: 'export interface CheckpointEditLink {\n    readonly sourceSessionId: SessionId;\n    readonly sourceBoundarySeq: number;\n    readonly selectedCheckpointId: CheckpointId;\n    readonly emergencyCheckpointId: CheckpointId;\n    readonly childSessionId: SessionId;\n}',
+  },
+  {
+    name: 'CheckpointId',
+    declaration: 'export type CheckpointId = Branded<\'CheckpointId\'>;',
+  },
+  {
+    name: 'CheckpointRole',
+    declaration: 'export type CheckpointRole = \'initial\' | \'turn\' | \'emergency\';',
+  },
+  {
+    name: 'CheckpointTurnOutcome',
+    declaration: 'export type CheckpointTurnOutcome = \'initial\' | \'completed\' | \'failed\' | \'cancelled\' | \'interrupted\';',
   },
   {
     name: 'ClientResponse',
@@ -3763,6 +3861,14 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface RestoredSessionOptions {\n    readonly seed: SessionEvent[];\n    readonly meta: SessionHeader;\n    readonly seedSource: \'persistence\';\n}',
   },
   {
+    name: 'RestoreRequest',
+    declaration: 'export interface RestoreRequest {\n    readonly checkpointId: CheckpointId;\n    readonly cwd: string;\n    readonly lease?: WorkspaceLease;\n    readonly signal?: AbortSignal;\n}',
+  },
+  {
+    name: 'RestoreResult',
+    declaration: 'export interface RestoreResult {\n    readonly checkpointId: CheckpointId;\n    readonly fileCount: number;\n}',
+  },
+  {
     name: 'ResumeAgentOptions',
     declaration: 'export interface ResumeAgentOptions {\n    readonly resumeSessionId: SessionId;\n    readonly agentOptions?: AgentOptions;\n    readonly signal?: AbortSignal;\n    readonly setup?: AgentSetup;\n}',
   },
@@ -4249,6 +4355,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'StoredImageAttachment',
     declaration: 'export interface StoredImageAttachment {\n    ref: ImageAttachmentRef;\n    data: Uint8Array;\n}',
+  },
+  {
+    name: 'StoredSessionCheckpointIndex',
+    declaration: 'export type StoredSessionCheckpointIndex = z.infer<typeof sessionCheckpointIndexSchema>;',
   },
   {
     name: 'StreamChunk',
@@ -4845,6 +4955,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'WorkflowStopReason',
     declaration: 'export type WorkflowStopReason = \'completed\' | \'cancelled\' | \'error\';',
+  },
+  {
+    name: 'WorkspaceLease',
+    declaration: 'export interface WorkspaceLease {\n    readonly workspaceKey: string;\n    release(): void;\n}',
   },
 ]
 

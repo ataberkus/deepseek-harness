@@ -13,6 +13,9 @@ import type { MessageId } from '@deepseek-ai/dsh-llm/brand'
 import type { CallId } from '@deepseek-ai/dsh-llm/brand'
 import type { JsonValue, SessionEvent, SessionId } from '@deepseek-ai/dsh-session/types'
 import type { ToolCallView, ToolResultView } from '@deepseek-ai/dsh-tools/presentation'
+import type {
+  CheckpointId, CheckpointOperationPhase, CheckpointView,
+} from '@deepseek-ai/dsh-workspace-checkpoint/types'
 import type { RpcError, RpcId, RpcRequest } from './rpc.ts'
 import type { JobView } from './jobs.ts'
 import type { WorkspaceView } from './workspace.ts'
@@ -96,6 +99,30 @@ export type MuxFrame =
    * express.
    */
   | { type: 'session/jobs'; sessionId: SessionId; jobs: JobView[] }
+  /**
+   * Complete checkpoint metadata and the current edit/activation operation.
+   * The snapshot is a control-plane projection; checkpoint blobs never cross
+   * the event stream.
+   */
+  | {
+    type: 'session/checkpoints'
+    sessionId: SessionId
+    checkpoints: CheckpointView[]
+    appliedCheckpointId?: CheckpointId
+    operation?: {
+      sourceSessionId: SessionId
+      childSessionId?: SessionId
+      checkpointId: CheckpointId
+      phase: CheckpointOperationPhase
+      fileCount: number
+      message?: string
+    }
+    /** User-facing checkpoint ordinal for an edit child branch. */
+    branchLabelIndex?: number
+    /** Whether the session has a known usable workspace-file checkpoint. */
+    workspaceResumable?: boolean
+    recoveryRequired?: string
+  }
   /**
    * One projection unit's finished value changed (session-projection RFC).
    * Live push state, never logged — replay recomputes on the host (the

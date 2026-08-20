@@ -10,6 +10,7 @@ type ZodIssue = zCore.core.$ZodIssue
 import type { Branded } from '@deepseek-ai/dsh-brand'
 import type { MessageId } from '@deepseek-ai/dsh-llm/brand'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
+import type { CheckpointId } from '@deepseek-ai/dsh-workspace-checkpoint/types'
 
 /**
  * Message correlation id: the initiator mints it on a request; a response
@@ -88,6 +89,9 @@ export interface RpcErrorDetailsMap {
   'oauth-logout-failed': { provider: string }
   'title-invalid': { sessionId: SessionId }
   'fork-unavailable': { sessionId: SessionId }
+  'edit-not-editable': { sessionId: SessionId; messageSeq: number }
+  'checkpoint-unavailable': { sessionId: SessionId; checkpointId: CheckpointId }
+  'checkpoint-recovery-required': { sessionId: SessionId; reason: string }
   'subagent-parent-unavailable': { parentSessionId: SessionId }
   'subagent-not-found': { parentSessionId: SessionId; childSessionId: SessionId }
   'subagent-catalog-diagnostic': {

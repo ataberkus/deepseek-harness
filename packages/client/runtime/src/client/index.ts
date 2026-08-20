@@ -96,6 +96,10 @@ export type {
 export type {
   ConversationPromptSnapshot, RequestInspectionSnapshot, RequestPromptChange, RequestView,
 } from './sessions/request-inspection.ts'
+export { CheckpointSnapshotStore, EMPTY_CHECKPOINT_SNAPSHOT } from './sessions/checkpoint-store.ts'
+export type {
+  CheckpointOperation, CheckpointSnapshot, CheckpointView,
+} from './sessions/checkpoint-store.ts'
 export { PendingWait } from './sessions/pending.ts'
 export type {
   PendingInteraction, PendingInteractionStatus, PendingKind, PendingPayloads,

@@ -102,6 +102,20 @@ export interface CheckpointView {
   readonly createdAt: number
 }
 
+/** Durable relation between an edit source, its restore checkpoints, and child. */
+export interface CheckpointEditLink {
+  /** Source session whose append-only transcript was edited. */
+  readonly sourceSessionId: SessionId
+  /** Source turn boundary immediately before the edited message. */
+  readonly sourceBoundarySeq: number
+  /** Checkpoint selected for the child branch. */
+  readonly selectedCheckpointId: CheckpointId
+  /** Emergency checkpoint retaining the pre-edit workspace. */
+  readonly emergencyCheckpointId: CheckpointId
+  /** Child session created from the inherited prefix. */
+  readonly childSessionId: SessionId
+}
+
 /** Live Host edit/activate progress published on `session/checkpoints`. */
 export type CheckpointOperationPhase =
   | 'preparing'
@@ -130,12 +144,22 @@ export interface CaptureRequest {
   readonly parentCheckpointId?: CheckpointId
   readonly role: CheckpointRole
   readonly turnOutcome: CheckpointTurnOutcome
+  /**
+   * Lease already held by a Host operation. Providers may use it to capture
+   * within the same multi-step edit transaction without waiting on itself.
+   */
+  readonly lease?: WorkspaceLease
 }
 
 /** Input to workspace-checkpoint restore. */
 export interface RestoreRequest {
   readonly checkpointId: CheckpointId
   readonly cwd: string
+  /**
+   * Lease already held by the Host operation. Providers may use it to avoid
+   * reacquiring the same workspace lease during a multi-step edit transaction.
+   */
+  readonly lease?: WorkspaceLease
   readonly signal?: AbortSignal
 }
 

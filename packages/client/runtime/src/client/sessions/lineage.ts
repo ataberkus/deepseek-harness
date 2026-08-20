@@ -9,6 +9,10 @@ import type { PendingInteractionStatus } from './pending.ts'
 /** Host list summary enriched with the latest mux-projected durable title. */
 export interface TitledSessionSummary extends SessionSummary {
   title?: string
+  /** User-facing checkpoint ordinal for this branch, when checkpoint state is known. */
+  checkpointLabelIndex?: number
+  /** Whether this session has a known usable workspace-file checkpoint. */
+  workspaceResumable?: boolean
   /** Current host-computed projection values for list consumers. */
   projectionValues?: Readonly<Partial<SessionProjectionMap>>
 }
@@ -27,6 +31,10 @@ export interface SessionListEntry {
   cwd?: string
   /** Agent preset the session's agent was composed from (summary passthrough). */
   agentPreset?: string
+  /** User-facing checkpoint ordinal for this branch, when checkpoint state is known. */
+  checkpointLabelIndex?: number
+  /** Whether this session has a known usable workspace-file checkpoint. */
+  workspaceResumable?: boolean
   /** Current host-computed projection values for list consumers. */
   projectionValues?: Readonly<Partial<SessionProjectionMap>>
   /** User interaction currently blocking this session, derived from live mux frames. */

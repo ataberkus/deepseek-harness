@@ -8,6 +8,8 @@
 export const zh = {
   'group.ungrouped': '未分组',
   'session.new': '新会话',
+  'checkpoint.label': '检查点 {n}',
+  'workspace.unrestorable': '对话可查看，但工作区文件无法恢复',
   'section.workspaces': '工作区',
   'section.sessions': '会话',
   'viewOptions.label': '视图选项',
@@ -77,6 +79,8 @@ export type WorkspaceKey = keyof typeof zh
 export const en = {
   'group.ungrouped': 'Ungrouped',
   'session.new': 'New Session',
+  'checkpoint.label': 'Checkpoint {n}',
+  'workspace.unrestorable': 'Conversation is readable, but workspace files cannot be restored',
   'section.workspaces': 'Workspaces',
   'section.sessions': 'Sessions',
   'viewOptions.label': 'View options',

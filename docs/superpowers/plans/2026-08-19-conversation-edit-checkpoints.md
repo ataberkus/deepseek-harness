@@ -59,7 +59,7 @@ This is one user-facing feature. Keep it as one plan. Ship it as three sequentia
 
 Later tasks consume these names exactly. Do not rename them in a later task.
 
-```ts
+```text
 import type { Branded } from '@deepseek-ai/dsh-brand'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { WorkspaceId } from '@deepseek-ai/dsh-host-apiproxy/api'
@@ -194,7 +194,8 @@ export class WorkspaceCheckpointError extends Error {
 
 Host RPC payloads:
 
-```ts
+```text
+interface SessionRpc {
 edit(request: RpcRequest<{
   sessionId: SessionId
   messageSeq: number
@@ -209,12 +210,13 @@ activate(request: RpcRequest<{
   checkpointId?: CheckpointId
   unavailable?: boolean
 }>>
+}
 ```
 
 Mux frame (complete replacement snapshot, same posture as `session/jobs`):
 
-```ts
-| {
+```text
+interface SessionCheckpointsFrame {
   type: 'session/checkpoints'
   sessionId: SessionId
   checkpoints: CheckpointView[]
@@ -257,7 +259,7 @@ Image blocks are preserved on Send. The client sends only `text`; Host copies th
 
 - [ ] **Step 1: Write the failing domain-spec tests**
 
-```ts
+```text
 import { describe, expect, it } from 'vitest'
 import { CheckpointId } from '../src/types.ts'
 import { workspaceCheckpointDomainSpec } from '../src/spec.ts'
@@ -296,7 +298,7 @@ Expected: FAIL with a module-not-found error for `../src/spec.ts`.
 
 `src/spec.ts`:
 
-```ts
+```text
 import { z } from 'zod'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import { defineDomain, domainTable } from '@deepseek-ai/dsh-storage-domain'
@@ -343,7 +345,7 @@ export const workspaceCheckpointDomainSpec = defineDomain({
 
 `src/index.ts` default-exports this class:
 
-```ts
+```text
 export abstract class WorkspaceCheckpoint extends Service {
   static readonly [Service.provide] = 'workspaceCheckpoint'
   constructor(ctx: Context) {
@@ -401,7 +403,7 @@ git commit -m "feat: add workspace-checkpoint service definition"
 
 Create a temp directory in `beforeEach`. Cover these cases in `packages/session/workspace-checkpoint-local/tests/manifest.spec.ts`:
 
-```ts
+```text
 it('records created, modified, and deleted files as a cwd-relative manifest', async () => {
   await writeFile(join(cwd, 'kept.txt'), 'a')
   await mkdir(join(cwd, 'sub'))
@@ -515,7 +517,7 @@ git commit -m "feat: capture workspace checkpoint manifests without following sy
 
 Boot a small Cordis app with `storage`, `storage-json` (`root` = temp), `storage-domain` (`backend: 'json'`), and the local provider (`objectRoot` = temp, `maxTotalBytes: 1024 * 1024`, `excludeGlobs: []`, `captureRetryCount: 2`, `captureRetryDelayMs: 10`).
 
-```ts
+```text
 it('stores file bytes by content hash and reuses identical contents', async () => {
   await writeFile(join(cwd, 'a.txt'), 'same')
   await writeFile(join(cwd, 'b.txt'), 'same')
@@ -563,7 +565,7 @@ Expected: FAIL because `LocalWorkspaceCheckpoint` is not registered.
 
 Config (schemastery, all required except `objectRoot` / `dshHome`):
 
-```ts
+```text
 export interface Config {
   objectRoot?: string
   dshHome?: string
@@ -617,7 +619,7 @@ git commit -m "feat: persist workspace checkpoints in a content-addressed store"
 
 - [ ] **Step 1: Write the failing restore tests**
 
-```ts
+```text
 it('restores modified, created, deleted, renamed, and binary files', async () => {
   await writeFile(join(cwd, 'a.txt'), 'one')
   await writeFile(join(cwd, 'keep.bin'), Buffer.from([1, 2, 3]))
@@ -712,7 +714,7 @@ git commit -m "feat: restore workspace checkpoints through a rollback journal"
 
 - [ ] **Step 1: Write the failing lease and retention tests**
 
-```ts
+```text
 it('serializes restore and capture on one workspace', async () => {
   const held = await ctx.workspaceCheckpoint.acquireLease(key)
   let started = false
@@ -779,7 +781,7 @@ When a checkpoint must go, delete unreferenced blobs, set `restoreEligible: fals
 
 Emit `workspace-checkpoint/changed` after durable commits. Invariant: every `appliedCheckpointId` either inspects as `restoreEligible: true` or the session index has `recoveryRequired` set.
 
-```ts
+```text
 declare module '@deepseek-ai/cordis' {
   interface Events {
     /**
@@ -830,7 +832,7 @@ git commit -m "feat: lease workspace restores and bound checkpoint retention"
 
 Use a real Loader composition: `session`, persistence-jsonl in temp, storage-json + storage-domain, workspace-checkpoint-local, this consumer, a stub llm/tools.
 
-```ts
+```text
 it('captures checkpoint 0 when the session obtains a cwd and a later checkpoint after turn/end', async () => {
   const session = ctx.sessions.create(SessionId('s1'), { meta: { cwd } })
   await waitFor(async () => (await ctx.workspaceCheckpoint.list(session.id)).length === 1)
@@ -947,7 +949,7 @@ git commit -m "feat: capture workspace checkpoints at session start and turn end
 
 Mount the local provider with a temp cwd. Seed a two-turn parent: user message A, assistant, user message B. Mutate a file after turn 1.
 
-```ts
+```text
 it('edits a later user message from the preceding checkpoint and hides descendants in the child', async () => {
   await writeFile(join(cwd, 'note.txt'), 'after-turn-2')
   const result = await sessions.edit({
@@ -1075,8 +1077,8 @@ git commit -m "feat: add session.edit restore-and-branch Host command"
 - Modify: `packages/client/runtime/src/client/sessions/session.ts`
 - Modify: `packages/client/runtime/src/client/sessions/service.ts`
 - Modify: `packages/client/runtime/src/client/sessions/manager.ts`
-- Create: `packages/client/runtime/src/client/sessions/checkpoints.ts`
-- Create: `packages/client/runtime/tests/checkpoints.client.spec.ts`
+- Create: `packages/client/runtime/src/client/sessions/checkpoint-store.ts`
+- Modify: `packages/client/runtime/tests/manager.client.spec.ts`
 
 **Interfaces:**
 - Consumes: `session/checkpoints` mux frames, `session.edit`, `session.activate`.
@@ -1084,7 +1086,7 @@ git commit -m "feat: add session.edit restore-and-branch Host command"
 
 - [ ] **Step 1: Write the failing runtime tests**
 
-```ts
+```text
 it('replaces checkpoint snapshots from mux frames and ignores stale in-flight operations after ready', async () => {
   session.handleMux({ type: 'session/checkpoints', sessionId, checkpoints: [view0], operation: preparing })
   expect(session.snapshot.checkpoints?.operation?.phase).toBe('preparing')
@@ -1114,7 +1116,7 @@ it('select() activates the branch and keeps conversation available when the work
 
 - [ ] **Step 2: Run the tests and verify they fail**
 
-Run: `pnpm exec vitest run packages/client/runtime/tests/checkpoints.client.spec.ts --reporter=dot`
+Run: `pnpm exec vitest run packages/client/runtime/tests/manager.client.spec.ts --reporter=dot`
 
 Expected: FAIL because `edit` / checkpoint snapshot fields do not exist.
 
@@ -1130,7 +1132,7 @@ Do not persist checkpoint blobs in `localStorage`.
 
 - [ ] **Step 4: Run runtime checkpoint tests plus lineage tests**
 
-Run: `pnpm exec vitest run packages/client/runtime/tests/checkpoints.client.spec.ts packages/client/runtime/tests/lineage.client.spec.ts --reporter=dot`
+Run: `pnpm exec vitest run packages/client/runtime/tests/manager.client.spec.ts --reporter=dot`
 
 Expected: PASS.
 
@@ -1148,11 +1150,11 @@ git commit -m "feat: project workspace checkpoint snapshots in the browser runti
 **Files:**
 - Modify: `packages/client/ui-conversation/src/client/chat/MessageIconActions.tsx`
 - Modify: `packages/client/ui-conversation/src/client/chat/MessageItem.tsx`
-- Create: `packages/client/ui-conversation/src/client/chat/EditResendBanner.tsx`
+- Modify: `packages/client/ui-conversation/src/client/skeleton/InputBar.tsx`
 - Modify: `packages/client/ui-conversation/src/client/stores.ts`
 - Modify: `packages/client/ui-conversation/src/client/locales.ts`
 - Modify: `packages/client/ui-conversation/src/client/input/` only to load text + preserved image ids into the existing composer
-- Create: `packages/client/ui-conversation/tests/edit-resend.client.spec.tsx`
+- Modify: `packages/client/ui-conversation/tests/chat-view.client.spec.tsx` and `input-bar.client.spec.tsx`
 - Modify: `packages/client/ui-conversation/README.md` and `README.zh.md` — remove the "no edit on settled messages" limitation
 
 **Interfaces:**
@@ -1163,7 +1165,7 @@ git commit -m "feat: project workspace checkpoint snapshots in the browser runti
 
 jsdom pragma on the spec file. Render `UserMessageNodeView` / banner with realistic props.
 
-```ts
+```text
 it('shows Edit & resend on a settled text user message with a ready preceding checkpoint', () => {
   renderUser({ seq: 4, content: [{ type: 'text', text: 'B' }], checkpointReady: true, running: false })
   expect(screen.getByRole('button', { name: 'Edit & resend' })).toBeTruthy()
@@ -1210,7 +1212,7 @@ English dictionary mirrors those keys. The default UI language remains Chinese.
 
 - [ ] **Step 2: Run the UI tests and verify they fail**
 
-Run: `pnpm exec vitest run packages/client/ui-conversation/tests/edit-resend.client.spec.tsx --reporter=dot`
+Run: `pnpm exec vitest run packages/client/ui-conversation/tests/chat-view.client.spec.tsx packages/client/ui-conversation/tests/input-bar.client.spec.tsx --reporter=dot`
 
 Expected: FAIL because the control is absent (the 2026-07-31 stub removal).
 
@@ -1257,7 +1259,7 @@ git commit -m "feat: add Edit & resend for settled conversation messages"
 
 - [ ] **Step 1: Write the failing tests**
 
-```ts
+```text
 it('shows checkpoint labels on ordinary fork children without hiding the parent', () => {
   renderTree([parent, child])
   expect(screen.getByText('检查点 0')).toBeTruthy()
@@ -1284,7 +1286,7 @@ Ordinary fork children already appear as top-level workspace rows (`tree.ts`). D
 
 - [ ] **Step 4: Run workspace and conversation GUI tests**
 
-Run: `pnpm exec vitest run packages/client/ui-workspace/tests/checkpoint-branch.client.spec.tsx packages/client/ui-conversation/tests/edit-resend.client.spec.tsx --reporter=dot`
+Run: `pnpm exec vitest run packages/client/ui-workspace/tests/checkpoint-branch.client.spec.tsx packages/client/ui-conversation/tests/chat-view.client.spec.tsx packages/client/ui-conversation/tests/input-bar.client.spec.tsx --reporter=dot`
 
 Expected: PASS.
 
@@ -1302,7 +1304,7 @@ git commit -m "feat: show checkpoint branch labels and unrestorable workspace st
 **Files:**
 - Modify: `packages/session/workspace-checkpoint-local/src/invariant.ts`
 - Modify: `packages/session/workspace-checkpoint-capture/src/invariant.ts`
-- Create: `packages/session/workspace-checkpoint-local/tests/invariant.spec.ts`
+- Modify: `packages/session/workspace-checkpoint-local/tests/store.spec.ts` and `lease.spec.ts`
 - Create: `docs/subsystems/workspace-checkpoint.md` (and `.zh.md`)
 - Modify: `docs/subsystems/README.md` and `README.zh.md`
 - Modify: `docs/architecture.md` only with a one-line link in the capability-seam map, no loop rewrite
@@ -1315,7 +1317,7 @@ git commit -m "feat: show checkpoint branch labels and unrestorable workspace st
 
 - [ ] **Step 1: Write the failing invariant tests**
 
-```ts
+```text
 it('rejects an applied checkpoint whose blobs are gone unless recoveryRequired is set', async () => {
   await deleteBlobs(appliedId)
   await expect(runInvariants(ctx)).rejects.toMatchObject({ message: expect.stringContaining('applied') })
@@ -1328,7 +1330,7 @@ it('rejects a ready operation that published no child after a failed edit', asyn
 
 - [ ] **Step 2: Run invariant tests and verify they fail if checks are still empty**
 
-Run: `pnpm exec vitest run packages/session/workspace-checkpoint-local/tests/invariant.spec.ts --reporter=dot`
+Run: `pnpm exec vitest run packages/session/workspace-checkpoint-local/tests/store.spec.ts packages/session/workspace-checkpoint-local/tests/lease.spec.ts --reporter=dot`
 
 Expected: FAIL on the missing relation.
 
@@ -1350,7 +1352,7 @@ Subsystem page: types from Shared interfaces as `ts` type-equiv blocks, plus gen
 
 - [ ] **Step 4: Run invariant tests and documentation gates that cover the new files**
 
-Run: `pnpm exec vitest run packages/session/workspace-checkpoint-local/tests/invariant.spec.ts --reporter=dot`
+Run: `pnpm exec vitest run packages/session/workspace-checkpoint-local/tests/store.spec.ts packages/session/workspace-checkpoint-local/tests/lease.spec.ts --reporter=dot`
 
 Then run the narrower `verify-md-links` / `verify-agent-note-format` / `verify-export-jsdoc` commands that the pre-push skill would select for the diff.
 

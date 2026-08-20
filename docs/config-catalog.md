@@ -3184,6 +3184,32 @@ export interface Config {
 
 Source: [`packages/workflow/workflow-worker-thread/src/index.ts:32`](../packages/workflow/workflow-worker-thread/src/index.ts)
 
+<a id="deepseek-aidsh-workspace-checkpoint-local"></a>
+
+## `@deepseek-ai/dsh-workspace-checkpoint-local`
+
+Requires: `storageDomain`
+
+```ts config-catalog
+/** Deployment-varying local provider settings. */
+export interface Config {
+  /** Object-store root. When omitted, `{dshHome}/workspace-checkpoints`. */
+  objectRoot?: string
+  /** Harness-home override used when `objectRoot` is omitted. */
+  dshHome?: string
+  /** Hard cap on stored blob bytes. Capture above this is fail-soft unavailable. */
+  maxTotalBytes: number
+  /** Glob patterns skipped by capture and restore planning. */
+  excludeGlobs: string[]
+  /** Extra `buildManifest` attempts after `CHECKPOINT_CONCURRENT_WRITE`. */
+  captureRetryCount: number
+  /** Delay between concurrent-write retries, in milliseconds. */
+  captureRetryDelayMs: number
+}
+```
+
+Source: [`packages/session/workspace-checkpoint-local/src/config.ts:11`](../packages/session/workspace-checkpoint-local/src/config.ts)
+
 ## Loadable plugins with no config
 
 These load from a `cordis.yml` entry with no `config:` block; they declare no configuration API.
@@ -3257,6 +3283,7 @@ These load from a `cordis.yml` entry with no `config:` block; they declare no co
 - `@deepseek-ai/dsh-tool-subagent-control` — requires `tools` · `subagents` ([`packages/subagent/tool-subagent-control/src/index.ts`](../packages/subagent/tool-subagent-control/src/index.ts))
 - `@deepseek-ai/dsh-user-questions` ([`packages/interaction/user-questions/src/index.ts`](../packages/interaction/user-questions/src/index.ts))
 - `@deepseek-ai/dsh-workspace` — requires `storageDomain` · `sessionPersistence` ([`packages/workspace/workspace/src/index.ts`](../packages/workspace/workspace/src/index.ts))
+- `@deepseek-ai/dsh-workspace-checkpoint-capture` — requires `workspaceCheckpoint` · `sessions` · `llm` · `tools` ([`packages/session/workspace-checkpoint-capture/src/index.ts`](../packages/session/workspace-checkpoint-capture/src/index.ts))
 
 ## Seam packages (not directly loadable)
 
@@ -3278,6 +3305,7 @@ Abstract service classes — a deployment loads a concrete implementation packag
 - `@deepseek-ai/dsh-spill` — abstract `SpillStore` ([`packages/spill/spill/src/index.ts`](../packages/spill/spill/src/index.ts))
 - `@deepseek-ai/dsh-subprocess` — abstract `SubprocessRuntime` ([`packages/subprocess/subprocess/src/index.ts`](../packages/subprocess/subprocess/src/index.ts))
 - `@deepseek-ai/dsh-workflow` — abstract `WorkflowEngine` ([`packages/workflow/workflow/src/index.ts`](../packages/workflow/workflow/src/index.ts))
+- `@deepseek-ai/dsh-workspace-checkpoint` — abstract `WorkspaceCheckpoint` ([`packages/session/workspace-checkpoint/src/index.ts`](../packages/session/workspace-checkpoint/src/index.ts))
 
 ## Library packages (no plugin entry)
 

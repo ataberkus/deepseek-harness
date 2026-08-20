@@ -12,7 +12,9 @@ import type { ClientContext, ISessions, SessionBinding, SessionFace, SessionId }
 import type { InputTriggerController, SubmitImageAttachment, SubmitOutcome } from '@deepseek-ai/dsh-client-ui-input-trigger/client'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-locale/client'
 import { queueReadFaceOf } from '../queue/store.ts'
-import type { ComposerKeyboard, DraftAttachmentId, SessionInputResolver, SessionInput } from './contract.ts'
+import type {
+  ComposerKeyboard, ConversationEditDraft, DraftAttachmentId, SessionInputResolver, SessionInput,
+} from './contract.ts'
 import type { InputSubmitMode } from '../contract/composer-submission.ts'
 import type { PopupDismissFace } from './facade.ts'
 import { SessionInputShell } from './facade.ts'
@@ -77,7 +79,8 @@ export class InputHub implements SessionInputResolver {
       inputTriggers: () => this.controller(actx),
       popup: () => this.popup(actx),
       queue: queueReadFaceOf(session),
-      defaultSink: (text, imageIds, mode, signal) => this.sink(session, text, imageIds, mode, signal),
+      defaultSink: (text, imageIds, mode, signal, edit) =>
+        this.sink(session, text, imageIds, mode, signal, edit),
       steerQueue: () => { void this.steerQueue(session, shell) },
       commandImages: {
         serialize: ids => this.conversation().serializeDraftImages(ids),
@@ -168,7 +171,22 @@ export class InputHub implements SessionInputResolver {
     imageIds: readonly DraftAttachmentId[],
     mode: InputSubmitMode,
     signal: AbortSignal,
+    edit?: ConversationEditDraft,
   ): Promise<SubmitOutcome> {
+    if (edit !== undefined) {
+      if (imageIds.length > 0) {
+        return Promise.resolve({ kind: 'error', text: this.t('message.editImagesUnsupported') })
+      }
+      return session.edit(edit.messageSeq, edit.checkpointId, text).then((result) => {
+        if (!result.ok) return { kind: 'error', text: `${result.error.message} (${result.error.code})` }
+        try {
+          this.sessions().open(result.value.sessionId)
+        } catch (error: unknown) {
+          return { kind: 'error', text: error instanceof Error ? error.message : String(error) }
+        }
+        return { kind: 'success' }
+      })
+    }
     if (text === '' && imageIds.length === 0) return Promise.resolve({ kind: 'success' })
     return this.conversation().sendSession(session, text, imageIds, mode, signal)
   }

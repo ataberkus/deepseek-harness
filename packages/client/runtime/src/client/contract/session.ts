@@ -13,6 +13,7 @@ import type {
 } from '@deepseek-ai/dsh-api-remotes/client'
 import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import type { ConversationSnapshot } from '../sessions/conversation.ts'
+import type { CheckpointView } from '../sessions/checkpoint-store.ts'
 import type { ObservableSnapshot } from './store.ts'
 
 /** Key-addressed projection read face (the useProjection resolution path; see ProjectionValueStore). */
@@ -71,6 +72,28 @@ export interface ISession {
    * @returns the normalized accepted title and its event seq, or the business error.
    */
   rename(title: string): Promise<RpcResult<{ title: string; seq: number }>>
+  /**
+   * Restore the selected workspace checkpoint and queue an edited message on
+   * the child branch created by Host.
+   * @param messageSeq - durable sequence of the direct user message.
+   * @param checkpointId - usable checkpoint immediately before that message's turn.
+   * @param text - replacement text.
+   * @returns the new child session id, or the Host error.
+   */
+  edit(
+    messageSeq: number,
+    checkpointId: CheckpointView['id'],
+    text: string,
+  ): Promise<RpcResult<{ sessionId: SessionId }>>
+  /**
+   * Restore the latest usable checkpoint for this idle session.
+   * @returns restore status and selected checkpoint, or the Host error.
+   */
+  activate(): Promise<RpcResult<{
+    restored: boolean
+    checkpointId?: CheckpointView['id']
+    unavailable?: boolean
+  }>>
   /**
    * Extend the history window backwards (older messages pagination).
    * @returns completion; failures land in snapshot.openState/loadingOlder.

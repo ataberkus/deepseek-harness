@@ -736,6 +736,7 @@ export function fixtureUserPrompts(fixtureText: string): string[] {
  * @param id - the seeded session id (stable for deterministic goldens).
  * @param agentPreset - the preset the recorded session was composed from,
  *   for scenarios asserting what a resumed session reports running.
+ * @param cwd - optional session workspace path; defaults to the scaffold root.
  * @returns the seeded id.
  */
 /**
@@ -750,13 +751,15 @@ export function fixtureUserPrompts(fixtureText: string): string[] {
  * @returns the realized fixture text.
  */
 export function realizeSeedFixture(scaffold: WebScaffold, fixtureText: string, id: string): string {
+  const jsonStringFragment = (value: string): string => JSON.stringify(value).slice(1, -1)
+  const workspaceFragment = jsonStringFragment(scaffold.workspaceCwd)
   const realized = fixtureText
-    .split('{{sessionId}}').join(id)
-    .split('{{cwd}}').join(scaffold.workspaceCwd)
+    .split('{{sessionId}}').join(jsonStringFragment(id))
+    .split('{{cwd}}').join(workspaceFragment)
   const fixtureCwd = (JSON.parse(realized.split('\n', 1)[0]!) as { cwd?: string }).cwd
   return fixtureCwd === undefined
     ? realized
-    : realized.split(fixtureCwd).join(scaffold.workspaceCwd)
+    : realized.split(jsonStringFragment(fixtureCwd)).join(workspaceFragment)
 }
 
 export async function seedSession(
@@ -764,6 +767,7 @@ export async function seedSession(
   fixtureText: string,
   id: string,
   agentPreset?: string,
+  cwd?: string,
 ): Promise<SessionId> {
   const events = parseSessionLog(realizeSeedFixture(scaffold, fixtureText, id))
   if (events.length === 0) throw new Error('seed fixture has no events')
@@ -775,7 +779,7 @@ export async function seedSession(
     version: SESSION_FORMAT_VERSION,
     id: SessionId(id),
     createdAt: Date.now() - 60_000,
-    cwd: scaffold.workspaceCwd,
+    cwd: cwd ?? scaffold.workspaceCwd,
     delegationDepth: 0,
     ...agentPreset === undefined ? {} : { agentPreset },
   }

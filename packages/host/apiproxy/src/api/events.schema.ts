@@ -11,7 +11,7 @@ import type { Wire } from './rpc.schema.ts'
 import { rpcErrorSchema, rpcIdSchema } from './rpc.schema.ts'
 import { approvalRequestIdSchema } from './approvals.schema.ts'
 import {
-  contentBlockSchema, messageIdSchema, sessionEventSchema, sessionIdSchema, toolEventViewSchema,
+  checkpointIdSchema, contentBlockSchema, messageIdSchema, sessionEventSchema, sessionIdSchema, toolEventViewSchema,
 } from './sessions.schema.ts'
 import { taskViewSchema } from './jobs.schema.ts'
 import { workspaceIdSchema, workspaceViewSchema } from './workspace.schema.ts'
@@ -39,6 +39,39 @@ const messageSchema = z.object({
   source: z.looseObject({ kind: z.string() }),
 })
 
+/** Client-safe checkpoint row used by the complete session/checkpoints snapshot. */
+const checkpointViewSchema = z.object({
+  id: checkpointIdSchema,
+  sessionId: sessionIdSchema,
+  boundarySeq: z.number().int().gte(-1),
+  labelIndex: z.number().int().nonnegative(),
+  role: z.union([z.literal('initial'), z.literal('turn'), z.literal('emergency')]),
+  status: z.union([
+    z.object({ kind: z.literal('ready') }),
+    z.object({ kind: z.literal('unavailable'), reason: z.string().min(1) }),
+  ]),
+  restoreEligible: z.boolean(),
+  fileCount: z.number().int().nonnegative(),
+  createdAt: z.number().int().nonnegative(),
+})
+
+/** Progress state for one Host-owned checkpoint operation. */
+const checkpointOperationSchema = z.object({
+  sourceSessionId: sessionIdSchema,
+  childSessionId: sessionIdSchema.optional(),
+  checkpointId: checkpointIdSchema,
+  phase: z.union([
+    z.literal('preparing'),
+    z.literal('capturing-emergency'),
+    z.literal('restoring'),
+    z.literal('creating-branch'),
+    z.literal('ready'),
+    z.literal('failed'),
+  ]),
+  fileCount: z.number().int().nonnegative(),
+  message: z.string().optional(),
+})
+
 /** MuxFrame union (payload slot of a mux-stream ServerRequest). */
 export const muxFrameSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('session/event'), sessionId: sessionIdSchema, event: sessionEventSchema, view: toolEventViewSchema.optional() }),
@@ -60,6 +93,16 @@ export const muxFrameSchema = z.discriminatedUnion('type', [
     })),
   }),
   z.object({ type: z.literal('session/jobs'), sessionId: sessionIdSchema, jobs: z.array(taskViewSchema) }),
+  z.object({
+    type: z.literal('session/checkpoints'),
+    sessionId: sessionIdSchema,
+    checkpoints: z.array(checkpointViewSchema),
+    appliedCheckpointId: checkpointIdSchema.optional(),
+    operation: checkpointOperationSchema.optional(),
+    branchLabelIndex: z.number().int().nonnegative().optional(),
+    workspaceResumable: z.boolean().optional(),
+    recoveryRequired: z.string().min(1).optional(),
+  }),
   // value stays wide: it already passed its unit's own schema on the host,
   // and deep-validating here would import every domain's schema into the carrier.
   z.object({ type: z.literal('session/projection'), sessionId: sessionIdSchema, key: z.string().min(1), value: z.unknown(), seq: z.number().int().nonnegative() }),

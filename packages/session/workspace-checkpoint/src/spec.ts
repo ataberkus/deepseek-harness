@@ -48,6 +48,13 @@ export const sessionCheckpointIndexSchema = z.object({
   appliedCheckpointId: z.string().min(1).optional(),
   emergencyCheckpointId: z.string().min(1).optional(),
   recoveryRequired: z.string().min(1).optional(),
+  edit: z.object({
+    sourceSessionId: z.string().min(1),
+    sourceBoundarySeq: z.number().int().gte(-1),
+    selectedCheckpointId: z.string().min(1),
+    emergencyCheckpointId: z.string().min(1),
+    childSessionId: z.string().min(1),
+  }).optional(),
 })
 
 /** Inferred durable checkpoint row. */

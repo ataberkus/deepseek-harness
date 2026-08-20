@@ -200,9 +200,14 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  flex: none;
   font-size: 12px;
   line-height: 20px;
   color: var(--dsw-alias-label-tertiary);
+}
+
+.unavailable {
+  color: var(--dsw-alias-state-warn-label);
 }
 
 .time {

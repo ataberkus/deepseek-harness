@@ -19,6 +19,7 @@ import type { ContextProvenanceView, KnownContextForm } from './context-provenan
 import type {
   ChatConversationViewNode, ConversationTimelineSnapshot, ConversationViewSnapshotStore,
 } from '../contract/conversation.ts'
+import type { CheckpointSnapshot } from './checkpoint-store.ts'
 export type { TodoItem }
 
 /** Request configuration recorded for one provider call. */
@@ -448,6 +449,8 @@ export interface ConversationSnapshot {
   pending: readonly PendingInteraction[]
   /** Authoritative transient inbox snapshot, including queued and steering placements. */
   queue: readonly QueuedMessage[]
+  /** Host-owned workspace checkpoint rows and edit/activation progress. */
+  checkpoints?: CheckpointSnapshot
   running: boolean
   /**
    * Catalog-discovered continuation address. Its parent availability controls

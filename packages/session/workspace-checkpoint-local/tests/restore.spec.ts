@@ -78,6 +78,44 @@ describe('LocalWorkspaceCheckpoint restore', () => {
     await expect(stat(join(harness.cwd, 'extra.txt'))).rejects.toMatchObject({ code: 'ENOENT' })
   })
 
+  it('leaves excluded trees in place when the object store lives inside cwd', async () => {
+    const parent = await mkdtemp(join(tmpdir(), 'dsh-workspace-checkpoint-restore-nested-'))
+    const cwd = join(parent, 'cwd')
+    const storageRoot = join(parent, 'storage')
+    const objectRoot = join(cwd, '.dsh-home', 'workspace-checkpoints')
+    await mkdir(cwd, { recursive: true })
+    await mkdir(storageRoot, { recursive: true })
+    await mkdir(objectRoot, { recursive: true })
+    const ctx = new Context()
+    await ctx.plugin(Storage)
+    await ctx.plugin(StorageJson, { root: storageRoot })
+    await ctx.plugin(StorageDomain, { backend: 'json' })
+    await ctx.plugin(LocalWorkspaceCheckpoint, {
+      objectRoot,
+      maxTotalBytes: 1024 * 1024,
+      excludeGlobs: ['**/.dsh-home/**'],
+      captureRetryCount: 2,
+      captureRetryDelayMs: 10,
+    } satisfies Config)
+    dispose.push(async () => {
+      await ctx.fiber.dispose()
+      await rm(parent, { recursive: true, force: true })
+    })
+    await writeFile(join(cwd, 'state.txt'), 'before-edit\n')
+    const cp = await ctx.workspaceCheckpoint.capture({
+      sessionId: SessionId('s1'),
+      cwd,
+      boundarySeq: -1,
+      role: 'initial',
+      turnOutcome: 'initial',
+    })
+    await writeFile(join(cwd, 'state.txt'), 'after-edit\n')
+    await writeFile(join(cwd, '.dsh-home', 'keep.txt'), 'harness')
+    await ctx.workspaceCheckpoint.restore({ checkpointId: cp.id, cwd })
+    expect(await readFile(join(cwd, 'state.txt'), 'utf8')).toBe('before-edit\n')
+    expect(await readFile(join(cwd, '.dsh-home', 'keep.txt'), 'utf8')).toBe('harness')
+  })
+
   it('rejects a missing blob without touching the workspace', async () => {
     const harness = await boot()
     dispose.push(() => harness.dispose())
