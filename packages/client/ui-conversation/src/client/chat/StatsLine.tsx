@@ -4,12 +4,15 @@
 
 import { Fragment, memo, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
-import type { ConversationSnapshot, UseProjection } from '@deepseek-ai/dsh-client-runtime/client'
-import type { SnapshotSelectorHook } from '@deepseek-ai/dsh-client-ui-slots'
+import type {
+  ConversationSnapshot, SessionId, SessionSummary,
+} from '@deepseek-ai/dsh-client-runtime/client'
+import type {
+  PropsLocale, PropsRuntime,
+} from '@deepseek-ai/dsh-client-ui-slots'
 // Type-only: merges the sessionStats key into SessionProjectionMap for useProjection.
 import type {} from '@deepseek-ai/dsh-session-stats/client'
 import type { ContextPressureProjection, TokenUsageProjection } from '@deepseek-ai/dsh-token-meter/client'
-import type { ComposerBarProps } from '../contract/slots.ts'
 import { formatTokensPerSecond } from './message-chrome.ts'
 import { assistantStepReading } from './turn-metrics.ts'
 import css from './StatsLine.module.css'
@@ -163,15 +166,47 @@ export function contextOccupancy(
   }
 }
 
-/** Props: the conversation-snapshot selector plus the projection read seat. */
-export interface StatsLineProps {
-  useSession: SnapshotSelectorHook<ConversationSnapshot>
-  useProjection: UseProjection
-  /** The owning dock's locale seat. */
-  t: ComposerBarProps['t']
+/** Return one positive provider-reported spend value, treating old data as unknown. */
+function positiveSpend(value: unknown): number {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : 0
 }
 
-export const StatsLine = memo(function StatsLine({ useSession, useProjection, t }: StatsLineProps) {
+/** Read one session summary's cumulative provider-reported spend. */
+function summarySpend(summary: SessionSummary | undefined): number {
+  return positiveSpend(summary?.projectionValues?.tokenUsage?.costUsd)
+}
+
+/** Sum descendants connected through uninterrupted subagent-origin lineage. */
+function subagentDescendantSpend(
+  summaries: Readonly<Record<SessionId, SessionSummary>>,
+  ownerId: SessionId,
+): number {
+  let total = 0
+  for (const descendant of Object.values(summaries)) {
+    if (descendant.origin !== 'subagent' || descendant.id === ownerId) continue
+    const spend = summarySpend(descendant)
+    if (spend === 0) continue
+    const seen = new Set<SessionId>()
+    let current: SessionSummary | undefined = descendant
+    while (current !== undefined && current.origin === 'subagent'
+      && current.parentId !== undefined && !seen.has(current.id)) {
+      seen.add(current.id)
+      if (current.parentId === ownerId) {
+        total += spend
+        break
+      }
+      current = summaries[current.parentId]
+    }
+  }
+  return total
+}
+
+/** Full props of the composer dock entry: runtime owner/standard/global shares and locale. */
+export type StatsLineProps = PropsRuntime<'conversation.composer.dock'> & PropsLocale<'conversation'>
+
+export const StatsLine = memo(function StatsLine({
+  useSession, useProjection, sessionId, useSessions, t,
+}: StatsLineProps) {
   const settledNodes = useSession(s => s.chat.legacy.nodes)
   const usage = useProjection('tokenUsage')
   // Every figure rides the durable sessionStats projection, so paging and
@@ -205,16 +240,28 @@ export const StatsLine = memo(function StatsLine({ useSession, useProjection, t 
   // compaction. Gated on actual billing activity: a session whose steps all
   // settled without billing (e.g. every request failed) shows its counts
   // without a zero-token group.
-  const costUsd = usage !== undefined && Object.hasOwn(usage, 'costUsd') ? usage.costUsd : 0
-  if (usage !== undefined
-    && (billedInputTokens(usage) > 0 || usage.outputTokens > 0 || costUsd > 0)) {
+  const ownCostUsd = positiveSpend(usage?.costUsd)
+  const descendantCostUsd = useSessions(list => subagentDescendantSpend(list.byId, sessionId))
+  const totalCostUsd = ownCostUsd + descendantCostUsd
+  const costLabel = totalCostUsd > 0
+    ? descendantCostUsd > 0
+      ? t('stats.costWithSubagents', {
+        cost: formatCost(totalCostUsd), own: formatCost(ownCostUsd),
+      })
+      : t('stats.cost', { cost: formatCost(ownCostUsd) })
+    : undefined
+  const hasBillingActivity = usage !== undefined
+    && (billedInputTokens(usage) > 0 || usage.outputTokens > 0 || ownCostUsd > 0)
+  if (hasBillingActivity) {
     const cacheHit = cacheHitPercent(usage)
     if (cacheHit !== null) groups.push(t('stats.cacheHit', { percent: cacheHit }))
-    if (costUsd > 0) groups.push(t('stats.cost', { cost: formatCost(costUsd) }))
+    if (costLabel !== undefined) groups.push(costLabel)
     groups.push(t('stats.tokens', {
       input: formatTokens(billedInputTokens(usage)),
       output: formatTokens(usage.outputTokens),
     }))
+  } else if (costLabel !== undefined) {
+    groups.push(costLabel)
   }
   const line = groups.join(' | ')
   // The row elides with ellipsis when overlong; a delayed hover tooltip carries

@@ -12,7 +12,7 @@ The Web composer stats line reports durable token buckets but not the USD spend 
 
 The live pi-ai stream maps a positive `usage.cost.total` to optional `TokenUsage.costUsd`; zero-rate and unknown-rate adapters omit the field, and replay reconstruction keeps its native zero-cost usage. `dsh-token-meter` carries `costUsd` in the existing `tokenUsage` projection, replaces it with the final sample for the same `(turn, step)`, and sums it across steps. The durable projection remains the owner described in [Projected token usage and request context](../architecture/2026-07-29-projected-token-usage-and-request-context.md); surface heuristics do not reprice this exact spend. State version `2` discards old checkpoint rows so the durable log refolds the new bucket.
 
-The browser fixture mirrors the projection with `usage.costUsd ?? 0`. `StatsLine` formats positive session spend as a localized cost group after cache hit and before the input/output token group. It hides zero and unknown spend, so costless logs retain their existing output and never show `$0.00`.
+The browser fixture mirrors the projection with `usage.costUsd ?? 0`. `StatsLine` reads the current session's projection and the retained session summaries, then reports positive spend from the current session plus uninterrupted subagent descendants after cache hit and before the input/output token group. When descendants contribute, the localized cost group shows the owner-only amount in parentheses, such as `Cost $1.20 (own $0.20)`. It hides zero and unknown spend, so costless logs retain their existing output and never show `$0.00`.
 
 ## Alternatives considered
 
@@ -24,6 +24,6 @@ The browser fixture mirrors the projection with `usage.costUsd ?? 0`. `StatsLine
 
 ## Consequences
 
-Catalog-priced pi-ai sessions retain per-call billing across model switches, pagination, compaction, reconnect, and replay of the durable log. Adapters without rates, including `llm-deepseek`, Cursor, and Gemini CLI routes, contribute zero and leave the UI unchanged until they report a positive `costUsd`.
+Catalog-priced pi-ai sessions retain per-call billing across model switches, pagination, compaction, reconnect, and replay of the durable log. Owner sessions add positive spend from uninterrupted subagent descendants without repricing or changing the durable owner projection; ordinary forks terminate the aggregation. Adapters without rates, including `llm-deepseek`, Cursor, and Gemini CLI routes, contribute zero and leave the UI unchanged until they report a positive `costUsd`.
 
 The existing session format remains compatible because `costUsd` is optional on per-call usage. The token-usage checkpoint schema is version `2`, so old checkpoint rows are refolded; the browser fixture has the same required projection field without adding positive-cost fixture data. The Web snapshot corpus remains unchanged because existing fixtures carry no positive spend.

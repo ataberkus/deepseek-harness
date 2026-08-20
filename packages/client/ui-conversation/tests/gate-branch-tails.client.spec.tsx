@@ -93,7 +93,23 @@ describe('render branch tails', () => {
     const view = render(
       <StatsLine
         t={t}
+        session={snap}
+        input={{ draft: '', imageIds: [], draftRev: 0, phase: 'plain', occurrences: [], queue: [] }}
+        sessionId={SID}
         useSession={bindSnapshotSelector(source) as unknown as UseSession<ConversationSnapshot>}
+        useWorkspaces={select => select({
+          items: [], archivedSessionIds: [], state: 'idle', phase: 'ready', error: null,
+          baselinesReady: true, recentWorkspaceId: undefined,
+        } satisfies WorkspaceListState)}
+        useSessions={select => select({
+          ids: [],
+          byId: {},
+          current: SID,
+          phase: 'ready',
+          subagentsByParent: {},
+          jobsBySession: {},
+          currentAddress: undefined,
+        })}
         useProjection={() => undefined}
       />,
     )

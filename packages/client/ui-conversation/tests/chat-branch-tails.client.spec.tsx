@@ -11,7 +11,7 @@ import { bindSnapshotSelector } from '@deepseek-ai/dsh-client-test-runtime'
 import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import { zh as commonZh } from '@deepseek-ai/dsh-client-locale/src/locales/zh.ts'
 import type {
-  ChatConversationViewNode, ConversationNode,
+  ChatConversationViewNode, ConversationNode, ConversationSnapshot, SessionId, WorkspaceListState,
 } from '@deepseek-ai/dsh-client-runtime/client'
 import type { ChatNodeViewProps } from '../src/client/contract/slots.ts'
 import {
@@ -1033,7 +1033,23 @@ describe('small branch tails', () => {
     const view = render(
       <StatsLine
         t={t}
+        session={snap as unknown as ConversationSnapshot}
+        input={{ draft: '', imageIds: [], draftRev: 0, phase: 'plain', occurrences: [], queue: [] }}
+        sessionId={'stats' as SessionId}
         useSession={bindSnapshotSelector(source) as unknown as StatsLineProps['useSession']}
+        useWorkspaces={select => select({
+          items: [], archivedSessionIds: [], state: 'idle', phase: 'ready', error: null,
+          baselinesReady: true, recentWorkspaceId: undefined,
+        } satisfies WorkspaceListState)}
+        useSessions={select => select({
+          ids: [],
+          byId: {},
+          current: 'stats' as SessionId,
+          phase: 'ready',
+          subagentsByParent: {},
+          jobsBySession: {},
+          currentAddress: undefined,
+        })}
         useProjection={(key: string) => key === 'tokenUsage'
           ? { uncachedInputTokens: 0, outputTokens: 10, cacheReadTokens: 0, cacheWriteTokens: 0, costUsd: 0 }
           : undefined}

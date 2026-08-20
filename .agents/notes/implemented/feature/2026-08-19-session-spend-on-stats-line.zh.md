@@ -12,7 +12,7 @@ Web composer 统计行已经报告持久化 token bucket，却没有展示 pi-ai
 
 实时 pi-ai 流会把正的 `usage.cost.total` 映射为可选的 `TokenUsage.costUsd`；零价格和未知价格的适配器省略该字段，回放重建仍保留原生的零花费 usage。`dsh-token-meter` 在现有 `tokenUsage` 投影中携带 `costUsd`，同一 `(turn, step)` 的最终样本会替换先前样本，并在不同步骤之间求和。持久投影仍由[持久 token 用量与请求上下文](../architecture/2026-07-29-projected-token-usage-and-request-context.md)说明的所有权规则负责；表层启发式不会重新给这笔精确花费定价。状态版本为 `2`，旧检查点行会被丢弃，以便从持久日志重新折算新增 bucket。
 
-独立浏览器 fixture 以 `usage.costUsd ?? 0` 镜像该投影。`StatsLine` 将正的会话花费格式化为本地化分组，放在缓存命中率之后、输入／输出 token 分组之前。花费为零或未知时隐藏该分组，因此无花费日志保持原有输出，绝不显示 `$0.00`。
+独立浏览器 fixture 以 `usage.costUsd ?? 0` 镜像该投影。`StatsLine` 读取当前会话的投影与列表中保留的会话摘要，在缓存命中率之后、输入／输出 token 分组之前，报告当前会话与未被普通 fork 中断的 subagent 后代的正数花费。当后代有花费时，本地化花费分组会在括号中显示 owner 自身花费，例如 `花费 $1.20（本会话 $0.20）`。花费为零或未知时隐藏该分组，因此无花费日志保持原有输出，绝不显示 `$0.00`。
 
 ## 考虑过的替代方案
 
@@ -24,6 +24,6 @@ Web composer 统计行已经报告持久化 token bucket，却没有展示 pi-ai
 
 ## 后果
 
-按目录价格计算的 pi-ai 会话会在模型切换、分页、压缩、重新连接以及持久日志回放后保留逐调用记账。没有价格的适配器（包括 `llm-deepseek`、Cursor 和 Gemini CLI 路由）贡献零花费，在报告正的 `costUsd` 之前不会改变界面。
+按目录价格计算的 pi-ai 会话会在模型切换、分页、压缩、重新连接以及持久日志回放后保留逐调用记账。owner 会话会加入未被普通 fork 中断的 subagent 后代的正数花费，但不会重新定价或修改 owner 的持久化投影；普通 fork 会终止聚合。没有价格的适配器（包括 `llm-deepseek`、Cursor 和 Gemini CLI 路由）贡献零花费，在报告正的 `costUsd` 之前不会改变界面。
 
 现有会话格式保持兼容，因为逐调用 usage 上的 `costUsd` 是可选字段。token 用量检查点 schema 使用版本 `2`，旧检查点行会重新折算；浏览器 fixture 具有同样的必需投影字段，但不添加正花费 fixture 数据。现有 fixture 不携带正花费，因此 Web snapshot 集合保持不变。

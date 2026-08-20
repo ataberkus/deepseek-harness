@@ -5,7 +5,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render } from '@testing-library/react'
 import type {
-  AssistantMessageNode, ConversationSnapshot, SessionId, ToolResultNode,
+  AssistantMessageNode, ConversationSnapshot, SessionId, SessionListState, SessionSummary, ToolResultNode, WorkspaceListState,
 } from '@deepseek-ai/dsh-client-runtime/client'
 import { EMPTY_CONVERSATION_VIEWS } from '@deepseek-ai/dsh-client-runtime/client'
 import { bindSnapshotSelector } from '@deepseek-ai/dsh-client-test-runtime'
@@ -36,6 +36,14 @@ afterEach(() => {
 })
 
 const SID = 's1' as SessionId
+const CHILD = 'child' as SessionId
+const EMPTY_INPUT: StatsLineProps['input'] = {
+  draft: '', imageIds: [], draftRev: 0, phase: 'plain', occurrences: [], queue: [],
+}
+const EMPTY_WORKSPACES: WorkspaceListState = {
+  items: [], archivedSessionIds: [], state: 'idle', phase: 'ready', error: null,
+  baselinesReady: true, recentWorkspaceId: undefined,
+}
 
 const assistant = (seq: number, turn: number, usage?: unknown): AssistantMessageNode => ({
   kind: 'assistant', seq, time: seq * 1_000, turn, step: seq, blocks: [{ kind: 'text', text: `t${seq}` }],
@@ -192,8 +200,27 @@ describe('StatsLine', () => {
   function props(
     source: { getSnapshot(): ConversationSnapshot; subscribe(fn: () => void): () => void },
     values: Record<string, unknown> = { tokenUsage: USAGE },
+    summaries: Record<SessionId, SessionSummary> = {},
   ): StatsLineProps {
-    return { useSession: bindSnapshotSelector(source), useProjection: projections(values), t: tEn }
+    const sessions = {
+      ids: Object.keys(summaries) as SessionId[],
+      byId: summaries,
+      current: SID,
+      phase: 'ready',
+      subagentsByParent: {},
+      jobsBySession: {},
+      currentAddress: undefined,
+    } satisfies SessionListState
+    return {
+      session: source.getSnapshot(),
+      input: EMPTY_INPUT,
+      sessionId: SID,
+      useSession: bindSnapshotSelector(source),
+      useProjection: projections(values),
+      useSessions: select => select(sessions),
+      useWorkspaces: select => select(EMPTY_WORKSPACES),
+      t: tEn,
+    }
   }
 
   it('renders the grouped stats row and hides a brand-new empty session', () => {
@@ -221,6 +248,50 @@ describe('StatsLine', () => {
     const chinese = render(<StatsLine {...props(source, values)} t={t} />)
     expect(chinese.container.textContent)
       .toBe('1 轮 · 1 步| 缓存命中 90%| 花费 $0.20| 输入 100 tok · 输出 5 tok')
+  })
+
+  it('shows total spend with the owner amount in parentheses', () => {
+    const { source } = makeSource({ nodes: [assistant(1, 1)] })
+    const usage = (costUsd: number) => ({
+      uncachedInputTokens: 0,
+      outputTokens: 0,
+      cacheReadTokens: 0,
+      cacheWriteTokens: 0,
+      costUsd,
+    })
+    const child = (id: SessionId, parentId: SessionId, costUsd: number): SessionSummary => ({
+      id,
+      displayTitle: id,
+      parentId,
+      origin: 'subagent',
+      running: false,
+      blank: false,
+      updatedAt: 1,
+      projectionValues: { tokenUsage: usage(costUsd) },
+    })
+    const fork = {
+      id: 'fork' as SessionId,
+      displayTitle: 'fork',
+      parentId: SID,
+      running: false,
+      blank: false,
+      updatedAt: 1,
+    } satisfies SessionSummary
+    const values = { tokenUsage: { ...USAGE, costUsd: 0.20 } }
+    const summaries = {
+      [CHILD]: child(CHILD, SID, 0.30),
+      ['grandchild' as SessionId]: child('grandchild' as SessionId, CHILD, 0.40),
+      [fork.id]: fork,
+      ['fork-child' as SessionId]: child('fork-child' as SessionId, fork.id, 0.70),
+    }
+    const english = render(<StatsLine {...props(source, values, summaries)} />)
+    expect(english.container.textContent)
+      .toBe('1 turns · 1 steps| Cache hit 90%| Cost $0.90 (own $0.20)| Input 100 tok · Output 5 tok')
+    english.unmount()
+
+    const chinese = render(<StatsLine {...props(source, values, summaries)} t={t} />)
+    expect(chinese.container.textContent)
+      .toBe('1 轮 · 1 步| 缓存命中 90%| 花费 $0.90（本会话 $0.20）| 输入 100 tok · 输出 5 tok')
   })
 
   it('omits unknown session spend', () => {
