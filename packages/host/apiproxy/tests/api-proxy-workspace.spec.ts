@@ -370,7 +370,8 @@ describe('session creation and Workspace membership', () => {
     const workspace = expectOk(await api.workspace.create(request({ path: stageDir(root, 'project') }))).workspace
     const sessionId = SessionId('session-workspace-preallocated')
 
-    expectOk(await api.sessions.create(request({ workspaceId: workspace.workspaceId, sessionId })))
+    const created = expectOk(await api.sessions.create(request({ workspaceId: workspace.workspaceId, sessionId })))
+    expect(created).toMatchObject({ sessionId, cwd: workspace.path })
     expectOk(await api.sessions.create(request({ workspaceId: workspace.workspaceId, sessionId })))
     expect(expectOk(await api.workspace.list(request({}))).items[0]?.sessionIds).toEqual([sessionId])
     expect(ctx.agents.list().filter(agent => agent.id === sessionId)).toHaveLength(1)

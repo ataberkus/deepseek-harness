@@ -113,9 +113,10 @@ export const sessionCreateRequestSchema = z.object({
   { message: 'session.create accepts workspaceId or cwd, not both' },
 ) satisfies z.ZodType<Wire<RequestPayload<'session.create'>>>
 
-/** session.create response value. */
+/** session.create response value; `cwd` is the resolved workspace root. */
 export const sessionCreateValueSchema = z.object({
   sessionId: sessionIdSchema,
+  cwd: z.string().optional(),
   agentPreset: z.string().optional(),
 }) satisfies z.ZodType<Wire<ResponseValue<'session.create'>>>
 

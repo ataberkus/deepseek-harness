@@ -252,7 +252,9 @@ export interface SessionsApi {
    * preallocate `sessionId`: retries with the same id and cwd return the same
    * session, while a different cwd fails with `session-conflict`. Workspace
    * creation attaches the session after publication; an attach failure
-   * returns `workspace-attach-failed` with the published session id.
+   * returns `workspace-attach-failed` with the published session id. A
+   * successful response echoes the session's resolved canonical `cwd`, so a
+   * client can address workspace-relative paths before the next list refresh.
    *
    * `agentPreset` names the composition the new session's agent is built
    * from; omitted, the effective default applies — the user's stored choice
@@ -262,7 +264,7 @@ export interface SessionsApi {
    * cannot be mounted fails with `agent-preset-invalid`.
    */
   create(request: RpcRequest<{ workspaceId?: WorkspaceId; cwd?: string; sessionId?: SessionId; agentPreset?: string }>):
-  Promise<RpcResponse<{ sessionId: SessionId; agentPreset?: string }>>
+  Promise<RpcResponse<{ sessionId: SessionId; cwd?: string; agentPreset?: string }>>
 
   /**
    * Reads a window of history events; page boundaries align to append-origin message

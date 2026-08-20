@@ -23,7 +23,7 @@ Hard constraints: the host is the single source of truth; every registration goe
 
 Host-side `session.create(workspaceId)` produces Session + Agent + cwd in one piece (an atomic bundle, never split); the client side is the mirror of that birth — the instant a session row enters the list mirror, the client mints its Agent scope (actx + provide + the full input surface mounted):
 
-- Session identity is the host's true form from birth: the sessionId arrives via the `session.create` response / the `host/session-added` frame, and every client-side address (the scope tag, slot store keys, RPC addressing) uses that same id.
+- Session identity and the resolved cwd arrive in the `session.create` success value; `host/session-added` repeats them for stream reconciliation. Every client-side address (the scope tag, slot store keys, RPC addressing, and workspace-relative path resolution) uses that session id and cwd.
 - The materialization moment = the instant the user picks a Workspace (cwd settled): the client calls `session.create({workspaceId})` on the spot and receives the complete entity.
 - "New Session with no workspace picked" is a **pure view state** (a navigation position) corresponding to no session/scope entity; until the pick, the composer is locked whole (no slash, no plain text).
 - A "blank session" is just an ordinary materialized session whose log is still empty; to every Agent-scope plugin on the host (goal/plan/skill/…) it is indistinguishable from any session, so slash/plan are all naturally live.
@@ -75,7 +75,7 @@ A session "materialized but with no first prompt" is governed by the summary-der
 `workspaces.connectWorkspace(workspaceId): Promise<SessionId>` (owned by WorkspaceRuntime — it holds both the workspace canonical path and the sessions reference):
 
 - The reuse arm: the list mirror is searched for `blank && cwd == workspace.path && sessionIds.includes(id)` — the host's own membership rule, never cwd alone. A cwd match without the account slot (a CLI/TUI session birthed at the host cwd, or a deleted/recreated registration) would open a session no grouping surface can show under this Workspace, so it falls through to the create arm instead (see the [membership reuse fix](../bug-fix/2026-08-05-workspace-blank-session-reuse-membership.md)); a hit returns that id directly, creating nothing.
-- The create arm: on a miss, `session.create({workspaceId})` returns the new id.
+- The create arm: on a miss, `session.create({workspaceId})` returns the new id and its resolved cwd; SessionManager installs that cwd in the list mirror before the caller can open the session. The later `host/session-added` frame remains a reconciliation source.
 - An unknown workspaceId fails loud (never silently creating somewhere else).
 - The resolution guarantee (one contract for both arms): when the promise resolves, the returned id is already in the list store and `sessions.binding(id)` resolves synchronously — `SessionRuntime.create` projects the list synchronously after RPC success before resolving, so a draft mover can write text into the new scope's machine before open, without waiting for a notifier flush.
 - The caller takes the id and does its own `sessions.open`; sending the first prompt is an ordinary `session.prompt` — the session already exists, a failure is an ordinary prompt failure, the draft text is still in the machine, and a retry is simply sending again.
