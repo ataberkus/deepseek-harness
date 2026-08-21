@@ -13,6 +13,7 @@ import { PiAiAdapter } from '@deepseek-ai/dsh-llm-pi-ai'
 import { MAX_TIMER_DELAY_MS } from '@deepseek-ai/dsh-timeout'
 import { getBuiltinModels } from '@earendil-works/pi-ai/providers/all'
 import { DEFAULT_MAX_REQUEST_IMAGE_BYTES, resolveProfiles } from '../src/config.ts'
+import { memoryAuth } from './auth-double.ts'
 import { assemble } from './assemble.ts'
 import { isolateDshHome, removeIsolatedHomes } from './dsh-home.ts'
 import { closeMockServers, mockServer, textEvents } from './mock-server.ts'
@@ -53,6 +54,7 @@ function adapterOf(
   return new PiAiAdapter({
     profiles: () => resolveProfiles(providers),
     resolveApiKey: () => Promise.resolve(apiKey),
+    auth: memoryAuth(),
   })
 }
 

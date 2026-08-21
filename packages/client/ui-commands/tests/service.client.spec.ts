@@ -882,13 +882,13 @@ describe('openai-codex login tab', () => {
     expect(open).toHaveBeenCalledWith('about:blank', 'dsh-oauth-login')
   })
 
-  it('opens a blank tab for /login google-gemini-cli', async () => {
+  it('opens a blank tab for /login google-antigravity', async () => {
     const tab = { closed: false, location: { href: 'about:blank' } }
     const open = vi.fn(() => tab)
     vi.stubGlobal('window', { open })
     const { source, warm } = await loginBench()
     await warm(proj('s1'))
-    await submitLogin(source, 'google-gemini-cli')
+    await submitLogin(source, 'google-antigravity')
     expect(open).toHaveBeenCalledWith('about:blank', 'dsh-oauth-login')
   })
 

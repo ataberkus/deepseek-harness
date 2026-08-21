@@ -7,9 +7,9 @@
 
 import { CURSOR_DISPLAY_NAME, CURSOR_PROVIDER } from './cursor/constants.ts'
 import {
-  GOOGLE_GEMINI_CLI_DISPLAY_NAME,
-  GOOGLE_GEMINI_CLI_PROVIDER,
-} from './google-gemini-cli/constants.ts'
+  GOOGLE_ANTIGRAVITY_DISPLAY_NAME,
+  GOOGLE_ANTIGRAVITY_PROVIDER,
+} from './google-antigravity/constants.ts'
 
 /** Installed pi-ai provider id for ChatGPT Codex subscription auth. */
 export const OPENAI_CODEX_PROVIDER = 'openai-codex'
@@ -52,13 +52,13 @@ const HOSTS: readonly HostedOAuthProvider[] = [
     logoutFailed: 'Cursor logout failed',
   },
   {
-    id: GOOGLE_GEMINI_CLI_PROVIDER,
-    displayName: GOOGLE_GEMINI_CLI_DISPLAY_NAME,
+    id: GOOGLE_ANTIGRAVITY_PROVIDER,
+    displayName: GOOGLE_ANTIGRAVITY_DISPLAY_NAME,
     signedIn:
-      'Signed in to Gemini CLI. Select a google-gemini-cli model to use the Gemini CLI subscription.',
-    signedOut: 'Signed out of Gemini CLI.',
-    loginFailed: 'Gemini CLI login failed',
-    logoutFailed: 'Gemini CLI logout failed',
+      'Signed in to Antigravity. Select a google-antigravity model to use the Antigravity subscription.',
+    signedOut: 'Signed out of Antigravity.',
+    loginFailed: 'Antigravity login failed',
+    logoutFailed: 'Antigravity logout failed',
   },
 ]
 
@@ -81,6 +81,11 @@ export function hostedOAuthProvider(id: string): HostedOAuthProvider | undefined
   return BY_ID.get(id)
 }
 
+const ALIASES: ReadonlyMap<string, string> = new Map([
+  ['antigravity', GOOGLE_ANTIGRAVITY_PROVIDER],
+  ['google-gemini-cli', GOOGLE_ANTIGRAVITY_PROVIDER],
+])
+
 /**
  * Resolve `/login` / `/logout` remainder; empty input means openai-codex.
  * @param rawInput - command remainder after the slash name.
@@ -89,7 +94,8 @@ export function hostedOAuthProvider(id: string): HostedOAuthProvider | undefined
 export function parseOAuthProvider(rawInput: string): string | undefined {
   const trimmed = rawInput.trim()
   if (trimmed.length === 0) return OPENAI_CODEX_PROVIDER
-  return BY_ID.has(trimmed) ? trimmed : undefined
+  const aliased = ALIASES.get(trimmed) ?? trimmed
+  return BY_ID.has(aliased) ? aliased : undefined
 }
 
 /** Shown when `/login` is invoked while another hosted login is still waiting. */
@@ -97,12 +103,12 @@ export const OAUTH_LOGIN_IN_PROGRESS =
   'A login is already in progress. Finish or cancel the open browser tab, then run /login again.'
 
 /** Command remainder hint listing every hosted id. */
-export const OAUTH_COMMAND_HINT = '[openai-codex|cursor|google-gemini-cli]'
+export const OAUTH_COMMAND_HINT = '[openai-codex|cursor|google-antigravity]'
 
 /** Error when `/login` names a route this host does not offer. */
 export const OAUTH_LOGIN_UNSUPPORTED =
-  'Only /login openai-codex, /login cursor, and /login google-gemini-cli are supported.'
+  'Only /login openai-codex, /login cursor, and /login google-antigravity are supported.'
 
 /** Error when `/logout` names a route this host does not offer. */
 export const OAUTH_LOGOUT_UNSUPPORTED =
-  'Only /logout openai-codex, /logout cursor, and /logout google-gemini-cli are supported.'
+  'Only /logout openai-codex, /logout cursor, and /logout google-antigravity are supported.'

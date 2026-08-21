@@ -22,7 +22,6 @@ import { catalogProvider } from './catalog.ts'
 import type { PiAiProviderProfile } from './config.ts'
 import {
   hostedOAuthProvider,
-  OAUTH_COMMAND_HINT,
   OAUTH_LOGIN_IN_PROGRESS,
   OAUTH_LOGIN_UNSUPPORTED,
   OAUTH_LOGOUT_UNSUPPORTED,
@@ -44,10 +43,9 @@ export {
 } from './oauth-hosts.ts'
 export { CURSOR_DISPLAY_NAME, CURSOR_PROVIDER } from './cursor/constants.ts'
 export {
-  GOOGLE_GEMINI_CLI_DISPLAY_NAME,
-  GOOGLE_GEMINI_CLI_PROVIDER,
-} from './google-gemini-cli/constants.ts'
-
+  GOOGLE_ANTIGRAVITY_DISPLAY_NAME,
+  GOOGLE_ANTIGRAVITY_PROVIDER,
+} from './google-antigravity/constants.ts'
 /** pi-ai's browser login method id for OpenAI Codex. */
 export const OPENAI_CODEX_BROWSER_LOGIN_METHOD = 'browser'
 
@@ -55,10 +53,9 @@ export const OPENAI_CODEX_BROWSER_LOGIN_METHOD = 'browser'
 /**
  * Settings-free profiles for OAuth credentials this host persists.
  *
- * Only hosted table ids (`openai-codex`, `cursor`, `google-gemini-cli`) are
+ * Only hosted table ids (`openai-codex`, `cursor`, `google-antigravity`) are
  * injected: other catalog providers that offer OAuth beside an api-key method
  * stay on the key path the Models page already configures. Settings profiles
- * for the same route win at merge time.
  * @param infos - non-secret store listing.
  * @returns a providers dict suitable for {@link resolveProfiles}.
  */
@@ -228,9 +225,9 @@ export function createBrowserOAuthInteraction(
 
 /**
  * Run hosted OAuth login against `store` and persist the credential.
- * @param id - hosted provider id (`openai-codex`, `cursor`, or `google-gemini-cli`).
+ * @param id - hosted provider id (`openai-codex`, `cursor`, or `google-antigravity`).
  * @param store - the host credential store passed to `createModels`.
- * @param interaction - host {@link AuthInteraction}; Codex hangs `manual_code`, Cursor and Gemini CLI only need `auth_url`.
+ * @param interaction - host {@link AuthInteraction}; Codex hangs `manual_code`, Cursor and Antigravity only need `auth_url`.
  */
 export async function loginHostedOAuth(
   id: string,
@@ -279,8 +276,7 @@ export function registerOAuthCommands(ctx: Context, deps: OAuthCommandDeps): voi
     let loginInFlight = false
     commandCtx.commands.register({
       name: 'login',
-      description: 'Sign in to OpenAI Codex, Cursor, or Gemini CLI',
-      input: { hint: OAUTH_COMMAND_HINT },
+      description: 'Sign in to OpenAI Codex, Cursor, or Antigravity',
       handler: async ({ rawInput, signal }) => {
         const provider = parseOAuthProvider(rawInput)
         if (provider === undefined) {
@@ -324,8 +320,7 @@ export function registerOAuthCommands(ctx: Context, deps: OAuthCommandDeps): voi
     })
     commandCtx.commands.register({
       name: 'logout',
-      description: 'Sign out of OpenAI Codex, Cursor, or Gemini CLI',
-      input: { hint: OAUTH_COMMAND_HINT },
+      description: 'Sign out of OpenAI Codex, Cursor, or Antigravity',
       handler: async ({ rawInput }) => {
         const provider = parseOAuthProvider(rawInput)
         if (provider === undefined) {
@@ -344,7 +339,7 @@ export function registerOAuthCommands(ctx: Context, deps: OAuthCommandDeps): voi
 
 /**
  * Delete the hosted OAuth credential for one table id and refresh live routes.
- * @param provider - `openai-codex`, `cursor`, or `google-gemini-cli`.
+ * @param provider - `openai-codex`, `cursor`, or `google-antigravity`.
  * @param deps - store and route-refresh hook.
  * @returns the signed-out success text.
  */

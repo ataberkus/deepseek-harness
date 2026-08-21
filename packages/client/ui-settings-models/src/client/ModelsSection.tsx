@@ -140,7 +140,7 @@ export async function removeProviderProfile(
  * and unregisters the route; it does not mutate settings.
  * @param api - the llm wire face.
  * @param controller - the page store to refresh.
- * @param provider - live route id (`openai-codex`, `cursor`, or `google-gemini-cli`).
+ * @param provider - live route id (`openai-codex`, `cursor`, or `google-antigravity`).
  * @returns the failure message, or undefined once logout and reload landed.
  */
 export async function logoutOAuthProvider(
@@ -338,8 +338,8 @@ function Loaded({ injected }: { injected: ModelsSectionFace }): ReactNode {
           if (row.entry.auth === 'oauth' && row.entry.settingsNs === '') {
             const oauthLabel = row.entry.provider === 'cursor'
               ? t('oauthConfiguredCursor')
-              : row.entry.provider === 'google-gemini-cli'
-                ? t('oauthConfiguredGemini')
+              : row.entry.provider === 'google-antigravity' || row.entry.provider === 'google-gemini-cli'
+                ? t('oauthConfiguredAntigravity')
                 : t('oauthConfigured')
             const oauthTarget: DeleteTarget = {
               provider: row.entry.provider,

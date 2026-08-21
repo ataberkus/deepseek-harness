@@ -320,13 +320,13 @@ describe('ModelsSection', () => {
     })).toBeTruthy()
   })
 
-  it('renders Gemini CLI signed-in copy on a google-gemini-cli OAuth live route', async () => {
+  it('renders Antigravity signed-in copy on a google-antigravity OAuth live route', async () => {
     const scripted = scriptedFace()
     scripted.face.llm.providers.mockImplementation(() => Promise.resolve(ok({
       providers: [
         {
-          provider: 'google-gemini-cli',
-          displayName: 'Gemini CLI',
+          provider: 'google-antigravity',
+          displayName: 'Antigravity',
           settingsNs: '',
           settingsPath: [],
           active: true,
@@ -336,12 +336,12 @@ describe('ModelsSection', () => {
       ],
     })))
     await mountFace(scripted)
-    expect(screen.getByText('Gemini CLI')).toBeTruthy()
-    const signedIn = screen.getByRole('img', { name: en.oauthConfiguredGemini })
-    expect(signedIn.getAttribute('title')).toBe(en.oauthConfiguredGemini)
-    expect(screen.queryByRole('button', { name: 'Edit Gemini CLI' })).toBeNull()
+    expect(screen.getByText('Antigravity')).toBeTruthy()
+    const signedIn = screen.getByRole('img', { name: en.oauthConfiguredAntigravity })
+    expect(signedIn.getAttribute('title')).toBe(en.oauthConfiguredAntigravity)
+    expect(screen.queryByRole('button', { name: 'Edit Antigravity' })).toBeNull()
     expect(screen.getByRole('button', {
-      name: providerCopy(en.oauthSignOutProvider, { provider: 'google-gemini-cli', displayName: 'Gemini CLI' }),
+      name: providerCopy(en.oauthSignOutProvider, { provider: 'google-antigravity', displayName: 'Antigravity' }),
     })).toBeTruthy()
   })
 

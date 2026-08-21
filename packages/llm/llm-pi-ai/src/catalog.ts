@@ -32,9 +32,9 @@ import { CURSOR_PROVIDER } from './cursor/constants.ts'
 import { cursorFallbackModels } from './cursor/models.ts'
 import { cursorProvider } from './cursor/provider.ts'
 import { THINKING_LEVELS } from './thinking-levels.ts'
-import { GOOGLE_GEMINI_CLI_PROVIDER } from './google-gemini-cli/constants.ts'
-import { geminiCliFallbackModels } from './google-gemini-cli/models.ts'
-import { geminiCliProvider } from './google-gemini-cli/provider.ts'
+import { GOOGLE_ANTIGRAVITY_PROVIDER } from './google-antigravity/constants.ts'
+import { antigravityFallbackModels } from './google-antigravity/models.ts'
+import { antigravityProvider } from './google-antigravity/provider.ts'
 
 export { THINKING_LEVELS } from './thinking-levels.ts'
 
@@ -158,7 +158,7 @@ function catalogProviders(): Map<string, Provider> {
  */
 export function catalogProvider(provider: string): Provider | undefined {
   if (provider === CURSOR_PROVIDER) return cursorProvider()
-  if (provider === GOOGLE_GEMINI_CLI_PROVIDER) return geminiCliProvider()
+  if (provider === GOOGLE_ANTIGRAVITY_PROVIDER) return antigravityProvider()
   return catalogProviders().get(provider)
 }
 
@@ -177,11 +177,11 @@ export function catalogProviderIds(): readonly string[] {
  * A key is what the harness resolves through its own credential seam and hands
  * pi-ai per request. pi-ai's other method, OAuth, resolves from a stored
  * credential in the collection's `CredentialStore`. `/login openai-codex`,
- * `/login cursor`, and `/login google-gemini-cli` persist that credential and
+ * `/login cursor`, and `/login google-antigravity` persist that credential and
  * register a live route; the configurable-provider directory still withholds
  * OAuth-only cards, because a key field cannot authenticate them and a blank
  * card would invite a posture that fails. Hosted `cursor` and
- * `google-gemini-cli` are withheld the same way: they are not in
+ * `google-antigravity` are withheld the same way: they are not in
  * {@link catalogProviderIds} and this function returns false for them.
  * @param provider - provider route key.
  * @returns whether the catalog provider takes an api key; false for a route
@@ -193,7 +193,7 @@ export function catalogProviderTakesApiKey(provider: string): boolean {
 
 /**
  * The installed catalog models for one route, indexed by model id. Hosted
- * `cursor` and `google-gemini-cli` return their bundled fallback catalogs.
+ * `cursor` and `google-antigravity` return their bundled fallback catalogs.
  * @param provider - provider route key.
  * @returns catalog models by id; empty for a route neither pi-ai nor this host ships.
  */
@@ -201,8 +201,8 @@ export function catalogModels(provider: string): Map<string, Model<Api>> {
   if (provider === CURSOR_PROVIDER) {
     return new Map(cursorFallbackModels().map(model => [model.id, model]))
   }
-  if (provider === GOOGLE_GEMINI_CLI_PROVIDER) {
-    return new Map(geminiCliFallbackModels().map(model => [model.id, model]))
+  if (provider === GOOGLE_ANTIGRAVITY_PROVIDER) {
+    return new Map(antigravityFallbackModels().map(model => [model.id, model]))
   }
   if (!catalogProviders().has(provider)) return new Map()
   const models = getBuiltinModels(provider as BuiltinProvider) as Model<Api>[]

@@ -13,14 +13,16 @@
  * way down: switching models mid-reply takes effect on the next step, never
  * inside the one in flight.
  *
- * API-key credentials stay outside that collection. The harness resolves a
- * route's key through its own seam and passes it as the request's `apiKey`
- * option, which pi-ai treats as the highest-priority auth override, so a named
- * `apiKeyEnv` keeps fail-loud reference semantics; the named LM Studio route
- * uses a non-secret placeholder only when no explicit reference is configured.
- * OAuth credentials use the optional collection store: pi-ai refreshes them under
- * `CredentialStore.modify`,
- * and a missing stored token fails as `Provider is not configured`.
+ * A route naming a credential reference still resolves it through the harness
+ * seam and passes it as the request's `apiKey` option, which pi-ai treats as
+ * the highest-priority auth override — that is what keeps the fail-loud
+ * reference semantics; the named LM Studio route uses a non-secret placeholder
+ * only when no explicit reference is configured. Everything that override does
+ * not cover reaches pi-ai through the collection's own auth: the credential
+ * store holds the records a login wrote and a refresh rotates, and the auth
+ * context answers the ambient questions a provider asks while resolving. Both
+ * are stable across snapshots, so a configuration change rebuilds the
+ * collection without forgetting who is signed in.
  *
  * @module dsh-llm-pi-ai/adapter
  */
@@ -28,6 +30,7 @@
 import { createModels, getSupportedThinkingLevels } from '@earendil-works/pi-ai'
 import type {
   Api,
+  AuthContext,
   CredentialStore,
   Model,
   Models,
@@ -99,12 +102,14 @@ export interface PiAiAdapterOptions {
    */
   resolveApiKey: (provider: string, profile: ResolvedPiAiProviderProfile) => Promise<string | undefined>
   /**
-   * Persistent OAuth credential store shared across snapshots. API keys still
-   * arrive per request through {@link resolveApiKey}; this store is how
-   * `openai-codex`, hosted `cursor`, and hosted `google-gemini-cli`
-   * authenticate.
+   * How every collection this adapter builds resolves auth the request-level
+   * `apiKey` override does not cover. Required rather than optional: a
+   * collection built without them gets pi-ai's in-memory default store, which
+   * is empty at every boot and discarded on every configuration change, so a
+   * route whose only method is a login would report itself unconfigured on
+   * every request no matter how often the human signed in.
    */
-  credentials?: CredentialStore
+  auth: PiAiAuthInjection
   /**
    * Live routes this adapter registered only because an OAuth credential is
    * stored, not because settings named them. `providerInfo` reports `auth:
@@ -115,8 +120,7 @@ export interface PiAiAdapterOptions {
   /**
    * Delete the hosted OAuth credential for one route and refresh live
    * registration. Absent on adapters that do not host OAuth.
-   * @param provider Hosted OAuth route id (`openai-codex`, `cursor`, or `google-gemini-cli`).
-   * @returns After the stored login is gone.
+   * @param provider Hosted OAuth route id (`openai-codex`, `cursor`, or `google-antigravity`).
    */
   logoutOAuth?: (provider: string) => Promise<void>
   /** Resolve the optional durable attachment service at request time. */
@@ -126,6 +130,14 @@ export interface PiAiAdapterOptions {
    * conversion because its stored replay state is unusable by this build.
    */
   onReplayDegrade?: (detail: { provider: string; model: string; reason: string }) => void
+}
+
+/** The two auth injectables a pi-ai collection is built with. */
+export interface PiAiAuthInjection {
+  /** Durable storage for credentials pi-ai itself writes: logins, and the refreshes it runs under its own lock. */
+  credentials: CredentialStore
+  /** Ambient lookups a provider performs while resolving its own auth. */
+  authContext: AuthContext
 }
 
 /** Copy profile stream knobs into pi-ai's common option vocabulary. */
@@ -251,9 +263,7 @@ export class PiAiAdapter extends LlmAdapter {
   private current(): PiAiSnapshot {
     const profiles = this.config.profiles()
     if (this.snapshot?.profiles === profiles) return this.snapshot
-    const models: MutableModels = createModels(
-      this.config.credentials === undefined ? {} : { credentials: this.config.credentials },
-    )
+    const models: MutableModels = createModels(this.config.auth)
     for (const profile of profiles.values()) models.setProvider(profile.piProvider)
     this.snapshot = { profiles, models, served: new Map() }
     return this.snapshot

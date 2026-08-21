@@ -3,4 +3,4 @@
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-08-03-pi-ai-declared-provider-catalog.md
 2026-08-03-pi-ai-declared-provider-catalog.md: da5c93f18d8b7bfab5f40429efdf58973030ffe0
-2026-08-03-pi-ai-declared-provider-catalog.zh.md: 268420de28e0a44b75a9248063552e9e73020f28
+2026-08-03-pi-ai-declared-provider-catalog.zh.md: 93e67ab5278cb680a2732fca3c2332844509aa67

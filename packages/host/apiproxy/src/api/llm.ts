@@ -96,9 +96,9 @@ export interface LlmApi {
   ): Promise<RpcResponse<{ models: DiscoveredModelView[] }>>
 
   /**
-   * Sign out of a hosted OAuth live route (Codex, Cursor, or Gemini CLI).
+   * Sign out of a hosted OAuth live route (Codex, Cursor, or Antigravity).
    * Deletes the stored login and unregisters the route.
-   * `/logout openai-codex`, `/logout cursor`, and `/logout google-gemini-cli`
+   * `/logout openai-codex`, `/logout cursor`, and `/logout google-antigravity`
    * remain the command equivalents.
    */
   logout(

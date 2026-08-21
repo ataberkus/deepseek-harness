@@ -28,7 +28,7 @@ Status: implemented
 
 可配置提供方目录跟随 profiles，因此每当一条声明路由出现或离开它都会变化。「撤销旧注册再新建一个」表达不了这件事：注册表拒绝的候选集合——比如一份键为 `deepseek-official` 的 profile，而 `llm-deepseek` 已声明了它——会让本插件的整个目录被撤走、Models 页变空，而且是静默的，因为 settings 变更回调把失败容住了。因此 `registerConfigurableProviders` 改为返回带 `replace(entries)` 的句柄，其「候选集先整体校验」的原子性与 `registerAdapter` 相同，插件改用它。被拒的替换只付出一条诊断；先前的条目继续服务。
 
-解析失败得响亮，并点名出问题的路由与模型：catalog 未描述的模型会回落到该路由自己的 `defaultContextWindow`／`defaultMaxTokens`，因此只公布 id 的列表也能得到可服务的路由；命名的 `lmstudio` 路由提供 `api` 与 `baseURL` 默认值，但仍需要非空的 `models` 列表，其他 catalog 未提供的路由则需要全部三个字段（见 [LM Studio 决策](../feature/2026-08-20-lm-studio-local-provider.md)）。由于构造出的 `Provider` 是解析结果的一部分，协议或模型出错时最后可用的路由集合会继续服务——与此前坏的 settings 快照的行为完全一致。
+解析失败得响亮，并点名出问题的路由与模型：catalog 未描述的模型会回落到该路由自己的 `defaultContextWindow`／`defaultMaxTokens`，因此只公布 id 的列表也能得到可服务的路由；命名的 `lmstudio` 路由提供 `api` 与 `baseURL` 默认值，但仍需要非空的 `models` 列表，其他 catalog 未提供的路由则需要全部三个字段（见 [LM Studio 决策](../feature/2026-08-20-lm-studio-local-provider.zh.md)）。由于构造出的 `Provider` 是解析结果的一部分，协议或模型出错时最后可用的路由集合会继续服务——与此前坏的 settings 快照的行为完全一致。
 
 可配置提供方目录现在是已安装 catalog **与**当前 profile 声明的每条路由的并集，并在该集合变化时重新登记。没有这个并集，手工声明的路由就没有 settings 地址，任何配置界面都无法展示或编辑它。
 
@@ -44,7 +44,7 @@ pi-ai 的 `Models` 自带一套凭据概念——按提供方 ID 索引的 `Cred
 
 `ModelsImpl.applyAuth` 会把 `options.apiKey` 当作该请求的密钥，但这条路必须经由一个声明了 api-key 方法的提供方：`resolveProviderAuth` 在覆盖存在时短路到该方法，否则依次落到凭据存储与环境发现；若提供方压根没有 api-key 方法，它返回空，请求随即以 `Provider is not configured` 失败。因此 harness 一如既往经自身 seam 解析点名路由的密钥，并把结果作为请求的 `apiKey` 传入。OAuth 凭据走集合的 store：插件以 `$DSH_HOME/oauth-credentials.json` 构造 `createModels({ credentials })`，`/login openai-codex`／`/login cursor`／`/login google-gemini-cli` 是填入它的宿主登录（[[2026-08-18-openai-codex-oauth-host]]、[[2026-08-18-cursor-oauth-host]]、[[2026-08-19-google-gemini-cli-oauth-host]]）。API 密钥从不进入该 store，因此点名了却取不到的 `apiKeyEnv` 仍以 `MISSING_CREDENTIAL` 失败，而不会用环境里恰好持有的某个无关密钥完成认证。
 
-路由的 auth 由此推出。catalog 路由保留已安装提供方自己的 `auth`，从而为不点名凭据的 profile 保住其提供方原生环境发现，且在 `api` 覆盖之下同样保留：提供方读哪个环境是提供方自身的属性，而非其模型所讲协议格式（wire format）的属性。例外是没有 api-key 方法的 catalog 提供方——`openai-codex` 只走 OAuth——此时点名了凭据的 profile 会在提供方原有 auth 之外再获得 harness 的方法，否则它配置的密钥会在任何请求发出之前被拒。这类路由上不点名凭据的 profile 什么也不加：OAuth 在登录后从集合 store 解析，没有已存 token 时 pi-ai 仍给出那句诚实的拒绝。手工声明的路由则获得一个 harness 自有的 `ApiKeyAuth`，它报告「已配置但无密钥」而非「未配置」，把该要求留给协议——那才是它真正所在的位置：pi-ai 的 OpenAI 兼容实现仍要求密钥或 `Authorization` 标头，并且会自己说出来。命名的 `lmstudio` 路由是明确例外：没有配置 `apiKeyEnv` 时，其解析器提供非机密的 `lm-studio` 占位值（见 [LM Studio 决策](../feature/2026-08-20-lm-studio-local-provider.md)）。
+路由的 auth 由此推出。catalog 路由保留已安装提供方自己的 `auth`，从而为不点名凭据的 profile 保住其提供方原生环境发现，且在 `api` 覆盖之下同样保留：提供方读哪个环境是提供方自身的属性，而非其模型所讲协议格式（wire format）的属性。例外是没有 api-key 方法的 catalog 提供方——`openai-codex` 只走 OAuth——此时点名了凭据的 profile 会在提供方原有 auth 之外再获得 harness 的方法，否则它配置的密钥会在任何请求发出之前被拒。这类路由上不点名凭据的 profile 什么也不加：OAuth 在登录后从集合 store 解析，没有已存 token 时 pi-ai 仍给出那句诚实的拒绝。手工声明的路由则获得一个 harness 自有的 `ApiKeyAuth`，它报告「已配置但无密钥」而非「未配置」，把该要求留给协议——那才是它真正所在的位置：pi-ai 的 OpenAI 兼容实现仍要求密钥或 `Authorization` 标头，并且会自己说出来。命名的 `lmstudio` 路由是明确例外：没有配置 `apiKeyEnv` 时，其解析器提供非机密的 `lm-studio` 占位值（见 [LM Studio 决策](../feature/2026-08-20-lm-studio-local-provider.zh.md)）。
 
 ## Alternatives considered
 
@@ -61,8 +61,8 @@ pi-ai 的 `Models` 自带一套凭据概念——按提供方 ID 索引的 `Cred
 
 配置一个提供方不再取决于 pi-ai 的发布节奏。网关、自建服务，或比锁定 catalog 更新的模型，都是一次 `settings.yaml` 编辑，陈旧的上下文窗口也能就地更正。废弃的 `/compat` 导入已经消失，因此 pi-ai 删除它不再是破坏性事件。`defaultMaxTokens` 现在会在部署明确给出时从配置中传入，不会从 catalog 元数据里发明一个上限。
 
-代价是：声明式路由会让 `settings.yaml` 变长，因为它必须自报端点、协议与模型 id。`api` 作用于整条路由，因此混合协议的 catalog 路由无法承载另一种协议的模型——把它拆成两个路由键是变通办法。通用运行时解析不会查询提供方的 `/models`，因此模型列表的新鲜度只到最近一次编辑为止；Models 页面会为命名的 LM Studio 路由执行一次性的明确发现，并只持久化用户采纳的 id（见 [LM Studio 决策](../feature/2026-08-20-lm-studio-local-provider.md)）。有一种情形下报错形状发生变化：auth 解析不出任何值的路由，现在会在任何网络调用之前把 pi-ai 自己的诊断作为错误 `finish` 分片呈现，而此前的适配器会发出无密钥请求并呈现提供方的 401。
+代价是：声明式路由会让 `settings.yaml` 变长，因为它必须自报端点、协议与模型 id。`api` 作用于整条路由，因此混合协议的 catalog 路由无法承载另一种协议的模型——把它拆成两个路由键是变通办法。通用运行时解析不会查询提供方的 `/models`，因此模型列表的新鲜度只到最近一次编辑为止；Models 页面会为命名的 LM Studio 路由执行一次性的明确发现，并只持久化用户采纳的 id（见 [LM Studio 决策](../feature/2026-08-20-lm-studio-local-provider.zh.md)）。有一种情形下报错形状发生变化：auth 解析不出任何值的路由，现在会在任何网络调用之前把 pi-ai 自己的诊断作为错误 `finish` 分片呈现，而此前的适配器会发出无密钥请求并呈现提供方的 401。
 
 ## Testing
 
-`tests/catalog.spec.ts` 针对本地 mock 服务器端到端覆盖该约定：命名 LM Studio 路由的目录／默认值／凭据行为、手工声明的路由带着自己的凭据流向自己的端点、它在可配置提供方目录中的出现、每模型覆盖从已安装 catalog 继承默认值、向 catalog 路由添加模型、带与不带端点覆盖的协议改指、catalog 独有元数据在覆盖后存活、无密钥姿态及其 `Authorization` 标头变通、只走 OAuth 的 catalog 路由用 profile 点名的密钥完成认证而无密钥者保持未配置、改指协议的路由保留其 catalog auth，以及每一种点名路由或模型的解析失败。`tests/catalog.spec.ts` 还钉住了快照与目录两项约定：在途请求即便其路由集在 credential await 期间改变，仍抵达它解析时对应的端点；下一个请求取用新配置；冲突的声明路由让目录保持完好；声明路由的条目随其 profile 出现与离开。`packages/llm/llm/tests/topology.spec.ts` 覆盖 `replace`——拒绝他人已拥有的候选同时保住当前集合、接受对自身条目的替换、允许空集合，以及 dispose 之后失败。`tests/sdk-options.spec.ts` 把 SDK 边界从已移除的 `/compat` 导入改指到协议表的 lazy api 模块，同时钉住「setup 失败以终止性错误分片而非抛出的形式抵达」。twin 的[设计验证角色](2026-06-13-twin-llm-adapters.md)不变。
+`tests/catalog.spec.ts` 针对本地 mock 服务器端到端覆盖该约定：命名 LM Studio 路由的目录／默认值／凭据行为、手工声明的路由带着自己的凭据流向自己的端点、它在可配置提供方目录中的出现、每模型覆盖从已安装 catalog 继承默认值、向 catalog 路由添加模型、带与不带端点覆盖的协议改指、catalog 独有元数据在覆盖后存活、无密钥姿态及其 `Authorization` 标头变通、只走 OAuth 的 catalog 路由用 profile 点名的密钥完成认证而无密钥者保持未配置、改指协议的路由保留其 catalog auth，以及每一种点名路由或模型的解析失败。`tests/catalog.spec.ts` 还钉住了快照与目录两项约定：在途请求即便其路由集在 credential await 期间改变，仍抵达它解析时对应的端点；下一个请求取用新配置；冲突的声明路由让目录保持完好；声明路由的条目随其 profile 出现与离开。`packages/llm/llm/tests/topology.spec.ts` 覆盖 `replace`——拒绝他人已拥有的候选同时保住当前集合、接受对自身条目的替换、允许空集合，以及 dispose 之后失败。`tests/sdk-options.spec.ts` 把 SDK 边界从已移除的 `/compat` 导入改指到协议表的 lazy api 模块，同时钉住「setup 失败以终止性错误分片而非抛出的形式抵达」。twin 的[设计验证角色](2026-06-13-twin-llm-adapters.zh.md)不变。

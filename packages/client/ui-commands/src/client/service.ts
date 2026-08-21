@@ -52,7 +52,7 @@ function submittedCommandName(line: string): string {
 
 /**
  * `/login`, `/login openai-codex`, `/login cursor`, and
- * `/login google-gemini-cli` are hosted OAuth login lines. `/login anthropic`
+ * `/login google-antigravity` are hosted OAuth login lines. `/login anthropic`
  * and `/login-foo` are not.
  */
 function isHostedOAuthLoginLine(line: string): boolean {
@@ -64,6 +64,8 @@ function isHostedOAuthLoginLine(line: string): boolean {
   return rest.length === 0
     || rest === 'openai-codex'
     || rest === 'cursor'
+    || rest === 'google-antigravity'
+    || rest === 'antigravity'
     || rest === 'google-gemini-cli'
 }
 

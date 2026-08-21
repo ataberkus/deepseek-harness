@@ -1,4 +1,4 @@
-// Real Web composition regression: a completed Gemini CLI OAuth login persists a
+// Real Web composition regression: a completed Antigravity OAuth login persists a
 // credential, registers its hosted route, forwards the topology event, and refreshes
 // an already-open model picker. Google and Cloud Code Assist HTTP plus the loopback
 // callback are deterministic; no model request or real credential is used.
@@ -33,7 +33,7 @@ function requestUrl(input: Parameters<typeof fetch>[0]): string {
   return input.url
 }
 
-describe('web e2e: Gemini OAuth refreshes an open model directory', () => {
+describe('web e2e: Antigravity OAuth refreshes an open model directory', () => {
   let scaffold: WebScaffold
   let browser: Browser
   let page: Page
@@ -101,7 +101,7 @@ describe('web e2e: Gemini OAuth refreshes an open model directory', () => {
   })
 
   it('refreshes the loaded picker after the hosted login commits', async () => {
-    onTestFailed(() => saveFailureShot(page, 'web-e2e-gemini-oauth-model-directory'))
+    onTestFailed(() => saveFailureShot(page, 'web-e2e-antigravity-oauth-model-directory'))
 
     const trigger = page.getByRole('button', { name: /Select model/ }).first()
     await trigger.click()
@@ -116,13 +116,13 @@ describe('web e2e: Gemini OAuth refreshes an open model directory', () => {
     agentHandle = agent
     const login = await scaffold.ctx.commands.execute(
       agent.agent,
-      '/login google-gemini-cli',
+      '/login google-antigravity',
       [],
       AbortSignal.timeout(15_000),
     )
     expect(login?.result).toEqual({
       kind: 'success',
-      text: 'Signed in to Gemini CLI. Select a google-gemini-cli model to use the Gemini CLI subscription.',
+      text: 'Signed in to Antigravity. Select a google-antigravity model to use the Antigravity subscription.',
     })
 
     const hostModels = await scaffold.ctx.apiProxy.llm.models({
@@ -130,10 +130,10 @@ describe('web e2e: Gemini OAuth refreshes an open model directory', () => {
       payload: {},
     })
     if (!hostModels.result.ok) throw new Error(`llm.models failed: ${hostModels.result.error.message}`)
-    expect(hostModels.result.value.groups.find(group => group.id === 'google-gemini-cli')?.models)
-      .toEqual(expect.arrayContaining([expect.objectContaining({ id: 'gemini-2.5-flash' })]))
+    expect(hostModels.result.value.groups.find(group => group.id === 'google-antigravity')?.models)
+      .toEqual(expect.arrayContaining([expect.objectContaining({ id: 'gemini-3.7-flash' })]))
 
-    await page.getByRole('menuitemradio', { name: 'Gemini 2.5 Flash', exact: true })
+    await page.getByRole('menuitemradio', { name: 'Gemini 3.7 Flash', exact: true })
       .waitFor({ state: 'visible', timeout: 15_000 })
     expect((await page.content()).includes(ACCESS_TOKEN)).toBe(false)
     expect((await page.content()).includes(REFRESH_TOKEN)).toBe(false)

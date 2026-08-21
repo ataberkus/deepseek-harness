@@ -17,6 +17,10 @@ import type { ToolEventView } from './events.ts'
 import type { WorkspaceId } from './workspace.ts'
 
 declare module '@deepseek-ai/dsh-session-projection/types' {
+  interface SessionProjectionStateMap {
+    sessionListMetadata: SessionListMetadata
+    imageLimits: null
+  }
   interface SessionProjectionMap {
     /**
      * Session-list hints persisted by the projection cache. `blank: false`
@@ -255,6 +259,11 @@ export interface SessionsApi {
    * returns `workspace-attach-failed` with the published session id. A
    * successful response echoes the session's resolved canonical `cwd`, so a
    * client can address workspace-relative paths before the next list refresh.
+   * `reuseWorkspaceBlank: true` is valid only with both `workspaceId` and an
+   * existing `sessionId`; it reports the Web workspace runtime's New Session
+   * reuse candidate. The host notifies optional session-default owners only
+   * while that session is still blank, belongs to the Workspace, matches its
+   * cwd, and is not archived.
    *
    * `agentPreset` names the composition the new session's agent is built
    * from; omitted, the effective default applies — the user's stored choice
@@ -263,7 +272,13 @@ export interface SessionsApi {
    * id fails with `agent-preset-not-found`, and a preset whose composition
    * cannot be mounted fails with `agent-preset-invalid`.
    */
-  create(request: RpcRequest<{ workspaceId?: WorkspaceId; cwd?: string; sessionId?: SessionId; agentPreset?: string }>):
+  create(request: RpcRequest<{
+    workspaceId?: WorkspaceId
+    cwd?: string
+    sessionId?: SessionId
+    agentPreset?: string
+    reuseWorkspaceBlank?: true
+  }>):
   Promise<RpcResponse<{ sessionId: SessionId; cwd?: string; agentPreset?: string }>>
 
   /**

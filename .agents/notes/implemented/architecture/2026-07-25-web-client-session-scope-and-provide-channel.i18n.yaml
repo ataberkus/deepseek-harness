@@ -3,4 +3,4 @@
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-07-25-web-client-session-scope-and-provide-channel.md
 2026-07-25-web-client-session-scope-and-provide-channel.md: efe0e3238cdc511837f492d34747a4fd57e1aeaf
-2026-07-25-web-client-session-scope-and-provide-channel.zh.md: 0f5c1137cfd21ebf89c47d96953c76e445bcd0f3
+2026-07-25-web-client-session-scope-and-provide-channel.zh.md: 571b4a140590ff4d09555e717595b67fdb1bf258

@@ -58,7 +58,8 @@ describe('parseOAuthProvider', () => {
     expect(parseOAuthProvider('')).toBe(OPENAI_CODEX_PROVIDER)
     expect(parseOAuthProvider('  openai-codex  ')).toBe(OPENAI_CODEX_PROVIDER)
     expect(parseOAuthProvider('cursor')).toBe('cursor')
-    expect(parseOAuthProvider('google-gemini-cli')).toBe('google-gemini-cli')
+    expect(parseOAuthProvider('google-antigravity')).toBe('google-antigravity')
+    expect(parseOAuthProvider('antigravity')).toBe('google-antigravity')
     expect(parseOAuthProvider('anthropic')).toBeUndefined()
   })
 })
@@ -68,14 +69,14 @@ describe('oauthProviderProfiles', () => {
     expect(oauthProviderProfiles([
       { providerId: 'openai-codex', type: 'oauth' },
       { providerId: 'cursor', type: 'oauth' },
-      { providerId: 'google-gemini-cli', type: 'oauth' },
+      { providerId: 'google-antigravity', type: 'oauth' },
       { providerId: 'anthropic', type: 'oauth' },
       { providerId: 'openai-codex', type: 'api_key' },
     ])).toEqual({
       'openai-codex': { displayName: catalog.catalogProvider('openai-codex')?.name ?? 'OpenAI Codex' },
       cursor: { displayName: catalog.catalogProvider('cursor')?.name ?? 'Cursor' },
-      'google-gemini-cli': {
-        displayName: catalog.catalogProvider('google-gemini-cli')?.name ?? 'Gemini CLI',
+      'google-antigravity': {
+        displayName: catalog.catalogProvider('google-antigravity')?.name ?? 'Antigravity',
       },
     })
     expect(oauthProviderProfiles([])).toEqual({})
@@ -413,10 +414,10 @@ describe('login and logout commands', () => {
     expect(ctx.llm.listProviders()).toEqual([])
   })
 
-  it('signs in with /login google-gemini-cli, injects a live route, and keeps the key card withheld', async () => {
+  it('signs in with /login google-antigravity, injects a live route, and keeps the key card withheld', async () => {
     const home = await isolateDshHome()
-    const provider = catalog.catalogProvider('google-gemini-cli')
-    if (provider?.auth.oauth === undefined) throw new Error('expected google-gemini-cli oauth')
+    const provider = catalog.catalogProvider('google-antigravity')
+    if (provider?.auth.oauth === undefined) throw new Error('expected google-antigravity oauth')
     vi.spyOn(provider.auth.oauth, 'login').mockImplementation(async (interaction) => {
       interaction.notify({
         type: 'auth_url',
@@ -424,8 +425,8 @@ describe('login and logout commands', () => {
       })
       return {
         type: 'oauth',
-        access: 'gemini-access',
-        refresh: 'gemini-refresh',
+        access: 'antigravity-access',
+        refresh: 'antigravity-refresh',
         expires: Date.now() + 60_000,
         projectId: 'proj-test',
       }
@@ -436,33 +437,33 @@ describe('login and logout commands', () => {
     await ctx.plugin(CommandRuntime)
     await ctx.plugin(LlmPiAi, {})
     expect(ctx.llm.listConfigurableProviders().map(entry => entry.provider))
-      .not.toContain('google-gemini-cli')
-    const login = await ctx.commands.execute(fakeAgent(), '/login google-gemini-cli', [], AbortSignal.timeout(5_000))
+      .not.toContain('google-antigravity')
+    const login = await ctx.commands.execute(fakeAgent(), '/login google-antigravity', [], AbortSignal.timeout(5_000))
     expect(login?.result).toEqual({
       kind: 'success',
-      text: 'Signed in to Gemini CLI. Select a google-gemini-cli model to use the Gemini CLI subscription.',
+      text: 'Signed in to Antigravity. Select a google-antigravity model to use the Antigravity subscription.',
     })
     expect(ctx.llm.listProviders()).toEqual([
-      { id: 'google-gemini-cli', name: provider.name, auth: 'oauth' },
+      { id: 'google-antigravity', name: provider.name, auth: 'oauth' },
     ])
     expect(ctx.llm.listConfigurableProviders().map(entry => entry.provider))
-      .not.toContain('google-gemini-cli')
-    const models = await ctx.llm.listModels('google-gemini-cli')
+      .not.toContain('google-antigravity')
+    const models = await ctx.llm.listModels('google-antigravity')
     expect(models.length).toBeGreaterThan(0)
-    expect(models[0]?.provider).toBe('google-gemini-cli')
+    expect(models[0]?.provider).toBe('google-antigravity')
     const stored = JSON.parse(await readFile(join(home, OAUTH_CREDENTIALS_FILENAME), 'utf8'))
-    expect(stored['google-gemini-cli']).toMatchObject({
+    expect(stored['google-antigravity']).toMatchObject({
       type: 'oauth',
-      refresh: 'gemini-refresh',
+      refresh: 'antigravity-refresh',
       projectId: 'proj-test',
     })
     const logout = await ctx.commands.execute(
       fakeAgent(),
-      '/logout google-gemini-cli',
+      '/logout google-antigravity',
       [],
       AbortSignal.timeout(5_000),
     )
-    expect(logout?.result).toEqual({ kind: 'success', text: 'Signed out of Gemini CLI.' })
+    expect(logout?.result).toEqual({ kind: 'success', text: 'Signed out of Antigravity.' })
     expect(ctx.llm.listProviders()).toEqual([])
   })
 
@@ -661,10 +662,10 @@ describe('login and logout commands', () => {
     expect(ctx.llm.listConfigurableProviders().map(entry => entry.provider)).not.toContain('cursor')
   })
 
-  it('registers google-gemini-cli from a stored credential at boot without a settings profile', async () => {
+  it('registers google-antigravity from a stored credential at boot without a settings profile', async () => {
     const home = await isolateDshHome()
     await writeFile(join(home, OAUTH_CREDENTIALS_FILENAME), `${JSON.stringify({
-      'google-gemini-cli': {
+      'google-antigravity': {
         type: 'oauth',
         access: 'access-token',
         refresh: 'refresh-token',
@@ -677,11 +678,11 @@ describe('login and logout commands', () => {
     await ctx.plugin(LlmRuntime)
     await ctx.plugin(LlmPiAi, {})
     expect(ctx.llm.listProviders()).toEqual([{
-      id: 'google-gemini-cli',
-      name: catalog.catalogProvider('google-gemini-cli')?.name ?? 'Gemini CLI',
+      id: 'google-antigravity',
+      name: catalog.catalogProvider('google-antigravity')?.name ?? 'Antigravity',
       auth: 'oauth',
     }])
-    expect(ctx.llm.listConfigurableProviders().map(entry => entry.provider)).not.toContain('google-gemini-cli')
+    expect(ctx.llm.listConfigurableProviders().map(entry => entry.provider)).not.toContain('google-antigravity')
   })
 
   it('does not mark a settings-declared openai-codex route as oauth-injected', async () => {
@@ -724,10 +725,10 @@ describe('login and logout commands', () => {
     }])
   })
 
-  it('does not mark a settings-declared google-gemini-cli route as oauth-injected', async () => {
+  it('does not mark a settings-declared google-antigravity route as oauth-injected', async () => {
     const home = await isolateDshHome()
     await writeFile(join(home, OAUTH_CREDENTIALS_FILENAME), `${JSON.stringify({
-      'google-gemini-cli': {
+      'google-antigravity': {
         type: 'oauth',
         access: 'access-token',
         refresh: 'refresh-token',
@@ -738,10 +739,10 @@ describe('login and logout commands', () => {
     const ctx = new Context()
     contexts.push(ctx)
     await ctx.plugin(LlmRuntime)
-    await ctx.plugin(LlmPiAi, { providers: { 'google-gemini-cli': { apiKeyEnv: 'GEMINI_CLI_TOKEN' } } })
+    await ctx.plugin(LlmPiAi, { providers: { 'google-antigravity': { apiKeyEnv: 'ANTIGRAVITY_TOKEN' } } })
     expect(ctx.llm.listProviders()).toEqual([{
-      id: 'google-gemini-cli',
-      name: 'google-gemini-cli',
+      id: 'google-antigravity',
+      name: 'google-antigravity',
     }])
   })
 
@@ -884,22 +885,22 @@ describe('login and logout commands', () => {
     expect(JSON.stringify(result.finish)).toMatch(/\/login cursor/)
   })
 
-  it('maps a keyless google-gemini-cli stream without a stored token to MISSING_CREDENTIAL', async () => {
+  it('maps a keyless google-antigravity stream without a stored token to MISSING_CREDENTIAL', async () => {
     await isolateDshHome()
     const ctx = new Context()
     contexts.push(ctx)
     await ctx.plugin(LlmRuntime)
-    await ctx.plugin(LlmPiAi, { providers: { 'google-gemini-cli': {} } })
+    await ctx.plugin(LlmPiAi, { providers: { 'google-antigravity': {} } })
     const result = await assemble(ctx, {
-      provider: 'google-gemini-cli',
-      model: 'gemini-2.5-flash',
+      provider: 'google-antigravity',
+      model: 'gemini-3.7-flash',
       messages: [createUserMessage({
         content: [{ type: 'text', text: 'hi' }],
         source: { kind: 'plugin', plugin: 'test' },
       })],
     })
     expect(result.finish).toMatchObject({ kind: 'error', failure: { code: 'MISSING_CREDENTIAL' } })
-    expect(JSON.stringify(result.finish)).toMatch(/\/login google-gemini-cli/)
+    expect(JSON.stringify(result.finish)).toMatch(/\/login google-antigravity/)
   })
 })
 
@@ -964,10 +965,10 @@ describe('rethrowPiAiError', () => {
       expect(String(cursorError)).toMatch(/\/login cursor/)
     }
     try {
-      rethrowPiAiError(new Error('Provider is not configured: google-gemini-cli'))
-    } catch (geminiError) {
-      expect(geminiError).toMatchObject({ code: 'MISSING_CREDENTIAL' })
-      expect(String(geminiError)).toMatch(/\/login google-gemini-cli/)
+      rethrowPiAiError(new Error('Provider is not configured: google-antigravity'))
+    } catch (antigravityError) {
+      expect(antigravityError).toMatchObject({ code: 'MISSING_CREDENTIAL' })
+      expect(String(antigravityError)).toMatch(/\/login google-antigravity/)
     }
   })
 
