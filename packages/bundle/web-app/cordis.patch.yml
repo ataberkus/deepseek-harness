@@ -69,6 +69,7 @@
         excludeGlobs:
           - '**/.git/**'
           - '**/node_modules/**'
+          - '**/processhacker_audit.log'
         captureRetryCount: 3
         captureRetryDelayMs: 50
 
