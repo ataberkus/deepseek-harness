@@ -80,10 +80,9 @@ function textResponse(text: string): StreamChunk[] {
 }
 
 /**
- * A degenerate empty provider completion as an error finish chunk. Both
- * adapters emit this shape and the EMPTY_RESPONSE code (the field the policy
- * routes on); the message text here is the deepseek adapter's phrasing (pi-ai
- * qualifies it with the model name).
+ * A degenerate non-Cursor provider completion as an error finish chunk. The
+ * Cursor adapter uses its provider-specific code so backend recovery remains
+ * observable.
  */
 function emptyCompletion(): StreamChunk[] {
   return [
@@ -93,6 +92,22 @@ function emptyCompletion(): StreamChunk[] {
       reason: {
         kind: 'error',
         failure: { message: 'model returned a completed response with no content', code: EMPTY_RESPONSE_CODE },
+      },
+    },
+  ]
+}
+
+function cursorEmptyCompletion(): StreamChunk[] {
+  return [
+    { type: 'usage', usage: { inputTokens: 0, outputTokens: 0 } },
+    {
+      type: 'finish',
+      reason: {
+        kind: 'error',
+        failure: {
+          message: 'Cursor backend returned a heartbeat-only response with no content for model "composer-2.5"',
+          code: 'CURSOR_EMPTY_STREAM',
+        },
       },
     },
   ]
@@ -252,6 +267,33 @@ describe('provider-routed retry policy', () => {
       turn: event.data.turn,
       step: event.data.step,
     }))).toEqual([{ turn: 1, step: 1 }])
+    expect(agent.session.deriveMessages().at(-1)).toMatchObject({
+      role: 'assistant',
+      content: [{ type: 'text', text: 'recovered' }],
+    })
+  })
+
+  it('retries a Cursor heartbeat-only failure under the default retryable codes', async () => {
+    vi.useFakeTimers()
+    const adapter = new ScriptedAdapter([
+      cursorEmptyCompletion(),
+      textResponse('recovered'),
+    ])
+    ;({ ctx: context } = await harness(adapter))
+    const agent = context.agentLoop.create(SessionId('retry-cursor-empty-stream'), {
+      provider: 'mock',
+      model: 'composer-2.5',
+    })
+
+    agent.followup(createUserMessage({ content: [{ type: 'text', text: 'go' }], source: { kind: 'user' } }))
+    await vi.advanceTimersByTimeAsync(500)
+    await agent.whenIdle()
+
+    expect(adapter.requests).toHaveLength(2)
+    expect(agent.session.events.find(event => event.type === 'llm/retry')?.data.failure).toEqual({
+      message: 'Cursor backend returned a heartbeat-only response with no content for model "composer-2.5"',
+      code: 'CURSOR_EMPTY_STREAM',
+    })
     expect(agent.session.deriveMessages().at(-1)).toMatchObject({
       role: 'assistant',
       content: [{ type: 'text', text: 'recovered' }],
