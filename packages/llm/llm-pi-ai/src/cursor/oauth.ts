@@ -19,7 +19,7 @@ import {
 export const cursorOAuthInternals = {
   /** Resolves `fetch` at call time so `vi.stubGlobal('fetch')` still applies. */
   fetch: ((input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) =>
-    globalThis.fetch(input, init)) as typeof fetch,
+    globalThis.fetch(input, init)),
   /** Delay between poll attempts; tests replace this to avoid waiting. */
   sleep: (ms: number, signal?: AbortSignal): Promise<void> => sleepMs(ms, signal),
   randomUUID: (): string => crypto.randomUUID(),

@@ -33,6 +33,7 @@ import {
   refreshCursorToken,
   tokenExpiry,
 } from '../src/cursor/oauth.ts'
+import { memoryAuth } from './auth-double.ts'
 import { createCursorProvider, cursorProvider, loginCursor, refreshCursor, toCursorAuth } from '../src/cursor/provider.ts'
 import {
   concat,
@@ -1812,7 +1813,10 @@ describe('cursor adapter listing', () => {
     const adapter = new PiAiAdapter({
       profiles: () => resolveProfiles({ cursor: {} }),
       resolveApiKey: async () => undefined,
-      credentials: store,
+      auth: {
+        credentials: store,
+        authContext: { env: async () => undefined, fileExists: async () => false },
+      },
     })
     const models = await adapter.listModels('cursor')
     expect(models.map(model => model.id)).toContain('live-only')
@@ -1838,7 +1842,10 @@ describe('cursor adapter listing', () => {
     const adapter = new PiAiAdapter({
       profiles: () => resolveProfiles({ cursor: {} }),
       resolveApiKey: async () => undefined,
-      credentials: store,
+      auth: {
+        credentials: store,
+        authContext: { env: async () => undefined, fileExists: async () => false },
+      },
     })
     await expect(adapter.listModels('cursor')).rejects.toMatchObject({ code: 'CURSOR_NO_USABLE_MODELS' })
     await expect(adapter.listModels('cursor')).resolves.toEqual(expect.arrayContaining([
@@ -1851,6 +1858,7 @@ describe('cursor adapter listing', () => {
     const adapter = new PiAiAdapter({
       profiles: () => resolveProfiles({ cursor: {} }),
       resolveApiKey: async () => undefined,
+      auth: memoryAuth(),
     })
     const models = await adapter.listModels('cursor')
     expect(models.map(model => model.id)).toContain('composer-1.5')
@@ -1869,7 +1877,10 @@ describe('cursor adapter listing', () => {
     const adapter = new PiAiAdapter({
       profiles: () => resolveProfiles({ cursor: {} }),
       resolveApiKey: async () => undefined,
-      credentials: store,
+      auth: {
+        credentials: store,
+        authContext: { env: async () => undefined, fileExists: async () => false },
+      },
     })
     expect((await adapter.listModels('cursor')).map(model => model.id)).not.toContain('live-only')
   })
@@ -1878,11 +1889,14 @@ describe('cursor adapter listing', () => {
     const adapter = new PiAiAdapter({
       profiles: () => resolveProfiles({ cursor: {} }),
       resolveApiKey: async () => undefined,
-      credentials: {
-        read: async () => ({ type: 'api_key', key: 'k' }),
-        list: async () => [],
-        modify: async () => undefined,
-        delete: async () => undefined,
+      auth: {
+        credentials: {
+          read: async () => ({ type: 'api_key', key: 'k' }),
+          list: async () => [],
+          modify: async () => undefined,
+          delete: async () => undefined,
+        },
+        authContext: { env: async () => undefined, fileExists: async () => false },
       },
     })
     expect((await adapter.listModels('cursor')).map(model => model.id)).not.toContain('live-only')
@@ -1898,6 +1912,7 @@ describe('cursor adapter listing', () => {
         cursor: { models: [{ id: 'composer-1.5' }] },
       }),
       resolveApiKey: async () => undefined,
+      auth: memoryAuth(),
     })
     expect((await adapter.listModels('cursor')).map(model => model.id)).toEqual(['composer-1.5'])
   })

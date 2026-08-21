@@ -151,7 +151,7 @@ function catalogProviders(): Map<string, Provider> {
 
 /**
  * The installed catalog provider for one route, when pi-ai ships one, plus the
- * hosted `cursor` and `google-gemini-cli` providers this adapter owns (not in
+ * hosted `cursor` and `google-antigravity` providers this adapter owns (not in
  * {@link catalogProviderIds}).
  * @param provider - provider route key.
  * @returns the catalog or hosted provider, or `undefined` for an unknown route.

@@ -369,6 +369,7 @@ export function apply(ctx: Context, config: Config): void {
 
   onCredentialChange = () => {
     lastRaw = undefined
+    lastOAuthRevision = undefined
     try {
       ensureRegistrationFacts()
     } catch (error) {

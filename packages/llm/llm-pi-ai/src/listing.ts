@@ -97,7 +97,7 @@ interface ListingEntry {
 export const modelListingInternals = {
   /** Resolves `fetch` at call time so `vi.stubGlobal('fetch')` still applies. */
   fetch: ((input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) =>
-    globalThis.fetch(input, init)) as typeof fetch,
+    globalThis.fetch(input, init)),
   /* v8 ignore next -- production leaves VITEST unset and always lists non-loopback endpoints. */
   allowNonLoopback: process.env['VITEST'] !== 'true',
 }

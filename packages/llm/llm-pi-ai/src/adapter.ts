@@ -109,7 +109,7 @@ export interface PiAiAdapterOptions {
    * route whose only method is a login would report itself unconfigured on
    * every request no matter how often the human signed in.
    */
-  auth: PiAiAuthInjection
+  auth?: PiAiAuthInjection
   /**
    * Live routes this adapter registered only because an OAuth credential is
    * stored, not because settings named them. `providerInfo` reports `auth:
@@ -263,7 +263,7 @@ export class PiAiAdapter extends LlmAdapter {
   private current(): PiAiSnapshot {
     const profiles = this.config.profiles()
     if (this.snapshot?.profiles === profiles) return this.snapshot
-    const models: MutableModels = createModels(this.config.auth)
+    const models: MutableModels = createModels(this.config.auth ?? {})
     for (const profile of profiles.values()) models.setProvider(profile.piProvider)
     this.snapshot = { profiles, models, served: new Map() }
     return this.snapshot
@@ -311,7 +311,7 @@ export class PiAiAdapter extends LlmAdapter {
     const installed = snapshot.models.getModels(provider)
     if (!profile.servesInstalledCatalog) return installed
     if (provider === CURSOR_PROVIDER) {
-      const token = await cursorAccessToken(this.config.credentials)
+      const token = await cursorAccessToken(this.config.auth?.credentials)
       if (token === undefined) return installed
       return listCursorModels(token)
     }

@@ -442,9 +442,9 @@ describe('SubagentHeaderLineage', () => {
         },
       },
     })
-    render(<SubagentCatalogAction {...input} t={makeTranslate(en)} />)
-    fireEvent.click(screen.getByRole('button', { name: '1 subagent' }))
-
+    render(<SubagentHeaderLineage {...input} t={makeTranslate(en)} />)
+    const trigger = screen.getByRole('button', { name: /1 subagent/ })
+    hoverCatalog(trigger)
     expect(screen.getByRole('treeitem', { name: /worker.*Cost \$0\.0101.*3 tok/ })).toBeTruthy()
     expect(screen.getByText('Cost $0.0101')).toBeTruthy()
   })

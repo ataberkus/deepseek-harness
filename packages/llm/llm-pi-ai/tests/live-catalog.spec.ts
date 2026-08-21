@@ -9,6 +9,7 @@ import { PiAiAdapter } from '@deepseek-ai/dsh-llm-pi-ai'
 import { getBuiltinModels } from '@earendil-works/pi-ai/providers/all'
 import { resolveProfiles } from '../src/config.ts'
 import { isolateDshHome, removeIsolatedHomes } from './dsh-home.ts'
+import { memoryAuth } from './auth-double.ts'
 import { resetModelListingCache } from '../src/listing.ts'
 
 const servers: Server[] = []
@@ -186,18 +187,21 @@ describe('live catalog overlay', () => {
     const missing = new PiAiAdapter({
       profiles: () => resolveProfiles({ openrouter: { apiKeyEnv: 'ABSENT_LIVE_KEY', baseURL: server.url } }),
       resolveApiKey: () => Promise.reject(new LlmError('missing', 'MISSING_CREDENTIAL')),
+      auth: memoryAuth(),
     })
     expect((await missing.listModels('openrouter')).map(model => model.id)).toContain('vendor/live-only')
 
     const invalid = new PiAiAdapter({
       profiles: () => resolveProfiles({ openrouter: { apiKeyEnv: 'ABSENT_LIVE_KEY', baseURL: server.url } }),
       resolveApiKey: () => Promise.reject(new LlmError('bad key', 'INVALID_CREDENTIAL')),
+      auth: memoryAuth(),
     })
     expect((await invalid.listModels('openrouter')).map(model => model.id)).toContain('vendor/live-only')
 
     const boom = new PiAiAdapter({
       profiles: () => resolveProfiles({ openrouter: { baseURL: server.url } }),
       resolveApiKey: () => Promise.reject(new Error('disk')),
+      auth: memoryAuth(),
     })
     await expect(boom.listModels('openrouter')).rejects.toThrow(/disk/)
   })
@@ -223,6 +227,7 @@ describe('live catalog overlay', () => {
         },
       }),
       resolveApiKey: () => Promise.resolve('listing-secret'),
+      auth: memoryAuth(),
     })
     expect((await adapter.listModels('openrouter')).map(model => model.id)).toContain('vendor/keyed')
     expect(headers).toEqual(['Bearer listing-secret'])

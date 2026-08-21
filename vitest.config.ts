@@ -121,7 +121,7 @@ const processBoundTests = [
   'packages/subprocess/subprocess-local/tests/spawn.spec.ts',
   'packages/context/time-context/tests/time-context.spec.ts',
   'packages/llm/llm-pi-ai/tests/adapter.spec.ts',
-  'packages/boot/app-boot/tests/app-boot.spec.ts',
+  'packages/llm/llm-pi-ai/tests/oauth-login.spec.ts',
   'packages/workflow/workflow-worker-thread/tests/session.spec.ts',
 ]
 

@@ -1,7 +1,7 @@
 /**
  * Hosted OAuth login for `openai-codex` (pi-ai browser PKCE), `cursor`
- * (loginDeepControl poll), and `google-gemini-cli` (Google auth-code on
- * 127.0.0.1:8085). All persist in {@link FileOAuthStore}.
+ * (loginDeepControl poll), and `google-antigravity` (Google auth-code on
+ * 127.0.0.1:51121). All persist in {@link FileOAuthStore}.
  *
  * Codex keeps {@link createBrowserOAuthInteraction}: always choose browser
  * login, open the authorize URL, hang the manual-code prompt until the
@@ -200,8 +200,8 @@ export function createBrowserOAuthInteraction(
               fail(options.signal.reason)
               return
             }
-            signal?.addEventListener('abort', () => fail(signal.reason), { once: true })
-            options.signal?.addEventListener('abort', () => fail(options.signal?.reason), { once: true })
+            signal?.addEventListener('abort', () =>{  fail(signal.reason) }, { once: true })
+            options.signal?.addEventListener('abort', () =>{  fail(options.signal?.reason) }, { once: true })
           })
         }
         default:

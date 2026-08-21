@@ -227,6 +227,7 @@ describe('PiAiAdapter provider routing', () => {
         'openai-codex': { displayName: 'OpenAI Codex' },
       }),
       resolveApiKey: () => Promise.resolve(undefined),
+      auth: memoryAuth(),
       oauthInjected: () => new Set(['openai-codex']),
     })
     expect(adapter.providerInfo('openai')).toEqual({ id: 'openai', name: 'openai' })
@@ -236,11 +237,11 @@ describe('PiAiAdapter provider routing', () => {
       auth: 'oauth',
     })
   })
-
   it('refuses logout when the adapter has no OAuth host hook', async () => {
     const adapter = new PiAiAdapter({
       profiles: () => resolveProfiles({ openai: { apiKeyEnv: 'OPENAI_API_KEY' } }),
       resolveApiKey: () => Promise.resolve(undefined),
+      auth: memoryAuth(),
     })
     await expect(adapter.logout('openai')).rejects.toMatchObject({ code: 'UNSUPPORTED_OPTION' })
   })

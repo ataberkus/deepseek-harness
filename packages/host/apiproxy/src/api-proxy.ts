@@ -2857,14 +2857,14 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
           fileCount: number,
           childSessionId?: SessionId,
           message?: string,
-        ): void => publishCheckpointOperation({
+        ): void =>{  publishCheckpointOperation({
           sourceSessionId: sessionId,
           checkpointId,
           phase,
           fileCount,
           ...childSessionId === undefined ? {} : { childSessionId },
           ...message === undefined ? {} : { message },
-        })
+        }) }
         operation('preparing', selected.fileCount)
 
         let emergency: CheckpointRecord | undefined
@@ -3048,13 +3048,13 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
           phase: CheckpointOperationPhase,
           fileCount: number,
           message?: string,
-        ): void => publishCheckpointOperation({
+        ): void =>{  publishCheckpointOperation({
           sourceSessionId: sessionId,
           checkpointId,
           phase,
           fileCount,
           ...message === undefined ? {} : { message },
-        })
+        }) }
         operation('preparing', selected.fileCount)
         let emergency: CheckpointRecord | undefined
         let lease: Awaited<ReturnType<WorkspaceCheckpoint['acquireLease']>> | undefined

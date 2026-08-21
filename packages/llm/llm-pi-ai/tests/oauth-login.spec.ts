@@ -109,7 +109,7 @@ describe('createBrowserOAuthInteraction', () => {
 
     interaction.notify({ type: 'info', message: 'starting' })
     interaction.notify({ type: 'auth_url', url: 'https://auth.example/authorize' })
-    await vi.waitFor(() => expect(opened).toEqual(['https://auth.example/authorize']))
+    await vi.waitFor(() =>{  expect(opened).toEqual(['https://auth.example/authorize']) })
     expect(written).toEqual(['https://auth.example/authorize'])
 
     const ac = new AbortController()
@@ -604,7 +604,7 @@ describe('login and logout commands', () => {
     await ctx.plugin(LlmPiAi, {})
     const agent = fakeAgent()
     const first = ctx.commands.execute(agent, '/login openai-codex', [], AbortSignal.timeout(5_000))
-    await vi.waitFor(() => expect(login).toHaveBeenCalledTimes(1))
+    await vi.waitFor(() =>{  expect(login).toHaveBeenCalledTimes(1) })
     expect((await ctx.commands.execute(agent, '/login', [], AbortSignal.timeout(1_000)))?.result)
       .toEqual({ kind: 'error', text: OAUTH_LOGIN_IN_PROGRESS })
     expect(login).toHaveBeenCalledTimes(1)
