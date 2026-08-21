@@ -82,7 +82,7 @@ export function createCordisInventory(
       try {
         request = port.inventory()
       } catch (error) {
-        request = Promise.reject(error)
+        request = Promise.reject(error instanceof Error ? error : new Error(String(error)))
       }
       inFlight = request.then(
         (rows) => {

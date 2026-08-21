@@ -30,7 +30,7 @@ Status: implemented
 
 ## Consequences
 
-编辑会保留两个对话分支，并为恢复编辑前工作区提供持久的紧急路径。检查点元数据是旁车而不是模型可见的会话历史，因此客户端可以重新连接并看到分支与恢复诊断，而不会收到文件内容。本地提供方要求 storage-domain 后端，并由 invariant companion 报告跨记录关系错误。这重新引入了[移除用户消息编辑占位](../simplification/2026-07-31-drop-user-message-edit-stub.md)中去掉的已结算消息编辑入口，现由检查点恢复和子分支支撑。
+编辑会保留两个对话分支，并为恢复编辑前工作区提供持久的紧急路径。检查点元数据是旁车而不是模型可见的会话历史，因此客户端可以重新连接并看到分支与恢复诊断，而不会收到文件内容。本地提供方要求 storage-domain 后端，并由 invariant companion 报告跨记录关系错误。这重新引入了[移除用户消息编辑占位](../simplification/2026-07-31-drop-user-message-edit-stub.zh.md)中去掉的已结算消息编辑入口，现由检查点恢复和子分支支撑。
 
 ## Testing
 

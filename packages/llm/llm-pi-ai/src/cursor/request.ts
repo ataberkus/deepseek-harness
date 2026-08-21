@@ -174,7 +174,7 @@ export function buildRootPromptMessagesJson(
           if (block.text.length > 0) parts.push({ type: 'text', text: block.text })
         } else if (block.type === 'thinking') {
           if (block.thinking.length > 0) parts.push({ type: 'text', text: block.thinking })
-        } else if (block.type === 'toolCall') {
+        } else {
           parts.push({
             type: 'tool-call',
             toolCallId: block.id,
@@ -187,7 +187,7 @@ export function buildRootPromptMessagesJson(
         const json = JSON.stringify({ role: 'assistant', content: parts })
         blobIds.push(storeBlob(blobStore, new TextEncoder().encode(json)))
       }
-    } else if (msg.role === 'toolResult') {
+    } else {
       const resultText = userContentText(msg.content)
       const json = JSON.stringify({
         role: 'tool',
@@ -254,7 +254,7 @@ export function buildConversationTurns(
             if (item.thinking.length === 0) continue
             const step = encodeMessage(3, encodeString(1, item.thinking))
             stepBlobIds.push(storeBlob(blobStore, step))
-          } else if (item.type === 'toolCall') {
+          } else {
             const mcpCall = encodeMessage(15, encodeMessage(1, concat(
               encodeString(1, item.name),
               encodeMcpArgMap(item.arguments),

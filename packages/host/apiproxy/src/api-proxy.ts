@@ -1252,7 +1252,7 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
     if (service === undefined) return undefined
     const enabled = service.enabled
     const checkpoints = [...await service.list(sessionId)]
-    const index = service.sessionIndex?.(sessionId)
+    const index = service.sessionIndex(sessionId)
     const session = ctx.sessions.get(sessionId)
     const recoveryRequired = session?.header.cwd === undefined
       ? undefined
@@ -3033,7 +3033,7 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
         const checkpointId = selected.id
         let index: Awaited<ReturnType<WorkspaceCheckpoint['sessionIndex']>>
         try {
-          index = service.sessionIndex?.(sessionId)
+          index = service.sessionIndex(sessionId)
         } catch (error: unknown) {
           return err(request, {
             code: 'internal',

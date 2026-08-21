@@ -10,7 +10,7 @@ Web composer 统计行已经报告持久化 token bucket，却没有展示 pi-ai
 
 ## 决策
 
-实时 pi-ai 流会把正的 `usage.cost.total` 映射为可选的 `TokenUsage.costUsd`；零价格和未知价格的适配器省略该字段，回放重建仍保留原生的零花费 usage。`dsh-token-meter` 在现有 `tokenUsage` 投影中携带 `costUsd`，同一 `(turn, step)` 的最终样本会替换先前样本，并在不同步骤之间求和。持久投影仍由[持久 token 用量与请求上下文](../architecture/2026-07-29-projected-token-usage-and-request-context.md)说明的所有权规则负责；表层启发式不会重新给这笔精确花费定价。状态版本为 `2`，旧检查点行会被丢弃，以便从持久日志重新折算新增 bucket。
+实时 pi-ai 流会把正的 `usage.cost.total` 映射为可选的 `TokenUsage.costUsd`；零价格和未知价格的适配器省略该字段，回放重建仍保留原生的零花费 usage。`dsh-token-meter` 在现有 `tokenUsage` 投影中携带 `costUsd`，同一 `(turn, step)` 的最终样本会替换先前样本，并在不同步骤之间求和。持久投影仍由[持久 token 用量与请求上下文](../architecture/2026-07-29-projected-token-usage-and-request-context.zh.md)说明的所有权规则负责；表层启发式不会重新给这笔精确花费定价。状态版本为 `2`，旧检查点行会被丢弃，以便从持久日志重新折算新增 bucket。
 
 独立浏览器 fixture 以 `usage.costUsd ?? 0` 镜像该投影。`StatsLine` 读取当前会话的投影与列表中保留的会话摘要，在缓存命中率之后、输入／输出 token 分组之前，报告当前会话与未被普通 fork 中断的 subagent 后代的正数花费。当后代有花费时，本地化花费分组会在括号中显示 owner 自身花费，例如 `花费 $1.20（本会话 $0.20）`。花费为零或未知时隐藏该分组，因此无花费日志保持原有输出，绝不显示 `$0.00`。
 

@@ -3,4 +3,4 @@
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-08-20-conversation-edit-checkpoints.md
 2026-08-20-conversation-edit-checkpoints.md: db8e8f79a8bab93949113e3e522ca3a64c157ff8
-2026-08-20-conversation-edit-checkpoints.zh.md: 3afcb269da515319b379084869c0e98e7b400a50
+2026-08-20-conversation-edit-checkpoints.zh.md: b95ffd1554396ede4f8c6aeb3f76d71f9fe73246

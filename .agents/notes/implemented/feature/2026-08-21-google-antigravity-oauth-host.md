@@ -18,6 +18,14 @@ Antigravity login uses the public Antigravity client on `127.0.0.1:51121/oauth-c
 
 Inference requests are formatted in the Antigravity envelope (`project`, `requestId`, `request: { contents, systemInstruction, tools, toolConfig, generationConfig, labels, sessionId }`, `model`, `userAgent: "antigravity"`, `requestType: "agent"`), adding `anthropic-beta: interleaved-thinking-2025-05-14` for Claude reasoning models. The bundled fallback catalog includes Gemini 3.7 Flash, Gemini 3.1 Pro, Gemini 3 Flash/Pro, Gemini 2.5 Pro/Flash, Claude Sonnet 4.5/4.6, Claude Opus 4.5/4.6, and GPT OSS 120B.
 
+## Alternatives considered
+
+**Retain Gemini CLI OAuth.** Rejected: its explicit project requirement, callback port, and narrower model coverage do not provide the hosted Antigravity connection.
+
+**Require users to configure a Google Cloud project.** Rejected: Antigravity's public client and Cloud Code Assist provisioning can discover and provision the free-tier project without a deployment-specific project setting.
+
+**Add Antigravity as an API-key provider.** Rejected: the route authenticates through browser OAuth and stores refresh credentials, not an API key.
+
 ## Consequences
 
 A CLI, ACP, or Web session can run `/login google-antigravity`, complete Google login, and access Antigravity models with zero cloud project configuration. Settings → Models shows the route as signed in with Antigravity.

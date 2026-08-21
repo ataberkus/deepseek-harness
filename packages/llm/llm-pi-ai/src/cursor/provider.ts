@@ -95,6 +95,6 @@ export async function refreshCursor(
  * @param credential - access token source; never logged.
  * @returns bearer headers Models merges into the stream options.
  */
-export async function toCursorAuth(credential: OAuthCredential): Promise<ModelAuth> {
-  return { headers: { authorization: `Bearer ${credential.access}` } }
+export function toCursorAuth(credential: OAuthCredential): Promise<ModelAuth> {
+  return Promise.resolve({ headers: { authorization: `Bearer ${credential.access}` } })
 }

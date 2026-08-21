@@ -66,7 +66,7 @@ async function walk(
     entries.push({
       relativePath,
       kind: 'file',
-      size: Number(info.size),
+      size: info.size,
       restoreSafe: false,
       ...modeOf(info),
     })
@@ -124,7 +124,7 @@ async function fileEntry(absolutePath: string, relativePath: string, before: Sta
   return {
     relativePath,
     kind: 'file',
-    size: Number(before.size),
+    size: before.size,
     hash,
     restoreSafe: true,
     ...modeOf(before),

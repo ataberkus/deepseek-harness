@@ -146,7 +146,7 @@ describe('workspace-checkpoint-capture', () => {
     ctx.on('session/flush', (session) => { flushes.push(session) })
     const session = ctx.sessions.create(SessionId('capture-unavailable'), { meta: { cwd: process.cwd() } })
     await waitFor(() => probe.records.length, 1)
-    probe.captures.mockImplementationOnce(async (request: CaptureRequest) => {
+    probe.captures.mockImplementationOnce((request: CaptureRequest) => {
       const record: CheckpointRecord = {
         id: CheckpointId('cp-unavailable'),
         sessionId: request.sessionId,

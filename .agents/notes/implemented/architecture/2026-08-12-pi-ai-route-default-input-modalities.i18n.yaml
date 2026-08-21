@@ -3,4 +3,4 @@
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-08-12-pi-ai-route-default-input-modalities.md
 2026-08-12-pi-ai-route-default-input-modalities.md: 5a4611d8ead2210b0d9ee95e4d111f7daf2fdaac
-2026-08-12-pi-ai-route-default-input-modalities.zh.md: 2f93b14054ed5dffe5eac81dd92075b3078deeba
+2026-08-12-pi-ai-route-default-input-modalities.zh.md: 7a73f692adc4c69742f66ef43b0d71edf09bbf10

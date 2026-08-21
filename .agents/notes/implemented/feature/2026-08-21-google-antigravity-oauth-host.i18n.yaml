@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-08-21-google-antigravity-oauth-host.md
-2026-08-21-google-antigravity-oauth-host.md: 04981b8ab5fa7b33d0d962701d290b6d2ab3e213
-2026-08-21-google-antigravity-oauth-host.zh.md: 524f0710ec2bc38203f836ec47797f6f4b5661bb
+2026-08-21-google-antigravity-oauth-host.md: 46e74b063de945f78dc64e17c6fab1ee88f10d47
+2026-08-21-google-antigravity-oauth-host.zh.md: 7bd3f6dd828d19b2de01ae395ba63d8e9417384c

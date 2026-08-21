@@ -3,4 +3,4 @@
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-08-20-lm-studio-local-provider.md
 2026-08-20-lm-studio-local-provider.md: 18dbd79dc7f79dce3eb0a2161878e000db404bce
-2026-08-20-lm-studio-local-provider.zh.md: e9d7b7483bba76ebb673ab459917a8eee755ea4c
+2026-08-20-lm-studio-local-provider.zh.md: eea296474b7f2d02402947d901ac8927421d10ea

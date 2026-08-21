@@ -13,7 +13,7 @@ import { createReadStream } from 'node:fs'
  */
 export async function hashFile(path: string): Promise<string> {
   const hash = createHash('sha256')
-  for await (const chunk of createReadStream(path)) {
+  for await (const chunk of createReadStream(path) as AsyncIterable<Buffer>) {
     hash.update(chunk)
   }
   return hash.digest('hex')

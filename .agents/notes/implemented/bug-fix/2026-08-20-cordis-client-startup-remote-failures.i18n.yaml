@@ -3,4 +3,4 @@
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-08-20-cordis-client-startup-remote-failures.md
 2026-08-20-cordis-client-startup-remote-failures.md: a3e873e84c852c1c33cbe18e48b972a9795239f0
-2026-08-20-cordis-client-startup-remote-failures.zh.md: 09b536eeb841a0007274b316c8c1b17b26c1fe8f
+2026-08-20-cordis-client-startup-remote-failures.zh.md: 5744f0e66f85da6e13103cb8b9292e2eb6d16c3e

@@ -96,13 +96,14 @@ describe('buildManifest', () => {
       isFile: () => true,
       isSymbolicLink: () => false,
     } as Stats
+    const withStats = (over: Partial<Stats>): Stats => Object.assign({}, stable, over)
     expect(fileStatsRaced(stable, stable)).toBe(false)
-    expect(fileStatsRaced(stable, { ...stable, size: 2 })).toBe(true)
-    expect(fileStatsRaced(stable, { ...stable, mtimeMs: 11 })).toBe(true)
-    expect(fileStatsRaced(stable, { ...stable, isFile: () => false })).toBe(true)
-    expect(fileStatsRaced(stable, { ...stable, isSymbolicLink: () => true })).toBe(true)
+    expect(fileStatsRaced(stable, withStats({ size: 2 }))).toBe(true)
+    expect(fileStatsRaced(stable, withStats({ mtimeMs: 11 }))).toBe(true)
+    expect(fileStatsRaced(stable, withStats({ isFile: () => false }))).toBe(true)
+    expect(fileStatsRaced(stable, withStats({ isSymbolicLink: () => true }))).toBe(true)
     expect(() =>{  throwIfFileRaced(stable, stable, 'kept.txt') }).not.toThrow()
-    expect(() =>{  throwIfFileRaced(stable, { ...stable, size: 2 }, 'kept.txt') })
+    expect(() =>{  throwIfFileRaced(stable, withStats({ size: 2 }), 'kept.txt') })
       .toThrow(/file changed while hashing/)
     await expect(hashFile(join(cwd, 'missing.bin'))).rejects.toMatchObject({ code: 'ENOENT' })
   })

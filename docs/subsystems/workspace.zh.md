@@ -236,7 +236,7 @@ abstract evict(): Promise<void>
 
 Types: [SessionId](core.zh.md)
 
-Source: [`packages/session/workspace-checkpoint/src/index.ts:69`](../../packages/session/workspace-checkpoint/src/index.ts)
+Source: [`packages/session/workspace-checkpoint/src/index.ts`](../../packages/session/workspace-checkpoint/src/index.ts)
 
 <a id="ctxworkspaceregistry--workspaceregistry"></a>
 

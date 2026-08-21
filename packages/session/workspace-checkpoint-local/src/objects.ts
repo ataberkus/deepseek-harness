@@ -77,7 +77,7 @@ export async function totalBlobBytes(objectRoot: string): Promise<number> {
   for (const name of names) {
     const path = join(root, name)
     const info = await stat(path)
-    if (info.isFile()) total += Number(info.size)
+    if (info.isFile()) total += info.size
   }
   return total
 }

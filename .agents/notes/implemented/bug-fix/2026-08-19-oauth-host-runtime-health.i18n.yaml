@@ -3,4 +3,4 @@
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-08-19-oauth-host-runtime-health.md
 2026-08-19-oauth-host-runtime-health.md: 7e5ca277341645fa8ce33bcc6a192ab384674809
-2026-08-19-oauth-host-runtime-health.zh.md: 9b0a3c8e388d01669be9348d11751511c3b2064c
+2026-08-19-oauth-host-runtime-health.zh.md: e2729544445b2f0134971b7b3bdee5aec031c8f5

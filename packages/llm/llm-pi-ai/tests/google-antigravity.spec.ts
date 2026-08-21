@@ -152,14 +152,14 @@ describe('antigravity oauth', () => {
     ])
 
     const credential = await completeAntigravityLogin('auth-code-123', 'http://127.0.0.1:51121/oauth-callback')
-    expect(credential).toEqual({
+    expect(credential).toMatchObject({
       type: 'oauth',
       access: 'antigravity-access',
       refresh: 'antigravity-refresh',
-      expires: expect.any(Number),
       projectId: 'discovered-project-123',
       email: 'user@example.com',
     })
+    expect(credential.expires).toBeTypeOf('number')
   })
 
   it('provisions a project via onboardUser when loadCodeAssist has no project', async () => {
@@ -262,14 +262,14 @@ describe('antigravity oauth', () => {
     }
 
     const refreshed = await refreshAntigravityToken(oldCredential)
-    expect(refreshed).toEqual({
+    expect(refreshed).toMatchObject({
       type: 'oauth',
       access: 'new-access-token',
       refresh: 'new-refresh-token',
-      expires: expect.any(Number),
       projectId: 'my-proj',
       email: 'user@example.com',
     })
+    expect(refreshed.expires).toBeTypeOf('number')
   })
 
   it('refreshes an Antigravity token keeping old refresh token if new one is omitted', async () => {

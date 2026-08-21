@@ -20,7 +20,7 @@ profile 仍然要求明确的 `models` 列表。列表项是用户持久化的�
 
 没有 `apiKeyEnv` 时，请求解析只为 `lmstudio` 路由提供非机密值 `lm-studio`。这满足 pi-ai 的 OpenAI 客户端要求，却不会保存或暴露凭据。其他路由仍保留现有区别：无引用时使用提供方原生环境发现，点名引用却无法解析时以 `MISSING_CREDENTIAL` 失败。
 
-现有的 `llm.discoverModels` 路径承担发现工作。对 LM Studio，它请求已配置兼容端点的 `/models` 资源，把返回的 id 展示在 Models 页面，并只把用户采纳的模型写入 `settings.yaml`。运行时模型解析读取这份明确列表，不会轮询 LM Studio，也不会在每次请求时替换列表。因此不透明 id 在发现、settings、选择器元数据与请求之间始终是唯一标识。提供方声明目录的决策仍由[已有 Agent Note](../architecture/2026-08-03-pi-ai-declared-provider-catalog.md)拥有，本记录只扩展它。
+现有的 `llm.discoverModels` 路径承担发现工作。对 LM Studio，它请求已配置兼容端点的 `/models` 资源，把返回的 id 展示在 Models 页面，并只把用户采纳的模型写入 `settings.yaml`。运行时模型解析读取这份明确列表，不会轮询 LM Studio，也不会在每次请求时替换列表。因此不透明 id 在发现、settings、选择器元数据与请求之间始终是唯一标识。提供方声明目录的决策仍由[已有 Agent Note](../architecture/2026-08-03-pi-ai-declared-provider-catalog.zh.md)拥有，本记录只扩展它。
 
 可配置提供方视图为 `api` 与 `baseURL` 携带可选设置默认值。LLM 注册表会复制这些嵌套值，Host API 会投影并校验它们，Models 编辑器只在用户层和有效 profile 都没有字段时才把默认值写进草稿。应用草稿会把采纳的默认值作为普通 profile 字段保存，因此显式编辑和 composition 值都不会被覆盖。
 

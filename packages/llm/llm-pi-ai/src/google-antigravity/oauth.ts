@@ -189,7 +189,7 @@ export async function refreshAntigravityToken(
   const parsed = parseTokenJson(await response.json(), 'token refresh')
   return antigravityCredential(
     parsed.access,
-    parsed.refresh ?? credential.refresh ?? '',
+    parsed.refresh ?? credential.refresh,
     parsed.expiresIn,
     projectId,
     typeof (credential as Record<string, unknown>).email === 'string' ? (credential as Record<string, unknown>).email as string : undefined,

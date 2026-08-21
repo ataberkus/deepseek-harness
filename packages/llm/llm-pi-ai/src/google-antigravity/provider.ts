@@ -102,15 +102,15 @@ export async function refreshAntigravity(
  * @param credential - access token and `projectId` source; never logged.
  * @returns bearer and quota-project headers Models merges into stream options.
  */
-export async function toAntigravityAuth(credential: OAuthCredential): Promise<ModelAuth> {
+export function toAntigravityAuth(credential: OAuthCredential): Promise<ModelAuth> {
   const projectId = antigravityProjectId(credential)
   if (projectId === undefined) {
-    throw new Error('Antigravity OAuth credential is missing projectId; run /login google-antigravity again')
+    return Promise.reject(new Error('Antigravity OAuth credential is missing projectId; run /login google-antigravity again'))
   }
-  return {
+  return Promise.resolve({
     headers: {
       Authorization: `Bearer ${credential.access}`,
       [GOOGLE_ANTIGRAVITY_PROJECT_HEADER]: projectId,
     },
-  }
+  })
 }

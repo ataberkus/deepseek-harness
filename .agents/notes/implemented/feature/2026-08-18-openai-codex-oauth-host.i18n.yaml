@@ -3,4 +3,4 @@
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-08-18-openai-codex-oauth-host.md
 2026-08-18-openai-codex-oauth-host.md: 2f5e0963848c49463f515688699e9ad743f4ffa7
-2026-08-18-openai-codex-oauth-host.zh.md: f5bc6861d0ffd87d8fd07b7b79fbbc9db402d80a
+2026-08-18-openai-codex-oauth-host.zh.md: 629217aa45fd2a7850c1797302d0ff260054dcb7

@@ -2,7 +2,7 @@
 
 Status: implemented
 
-English | [English](2026-08-20-cordis-client-startup-remote-failures.md)
+[English](2026-08-20-cordis-client-startup-remote-failures.md) | 中文
 
 ## Problem
 

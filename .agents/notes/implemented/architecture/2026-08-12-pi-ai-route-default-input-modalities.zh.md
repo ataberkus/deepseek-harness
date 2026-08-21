@@ -10,7 +10,7 @@ Status: implemented
 
 Harness 把缺失的模态当作否定能力，并有三个准入点在构造任何请求之前就依据它行动：模型选择拒绝切换进已含图片的会话，prompt 准入拒绝图片，`read_image` 拒绝读取。它们的诊断让用户去选一个支持图片的模型——这条建议没有可达的指向对象，因为没有任何配置键能让手写模型变得支持图片。这条路封死在元数据上而非能力上：请求转换器和每种 pi-ai 线路协议都能携带图片，`llm-pi-ai` 自身的流前置检查才是唯一会拦下它的东西。
 
-源码中把这一假定论证为适配器的真实能力而非部署选择，而 [[2026-08-03-pi-ai-declared-provider-catalog]] 在决定配置面公开哪些 `Model` 字段时记录了同一套论证（「没有任何读取方：…… `context.ts` 只保留文本块」）。该论证描述的是 DeepSeek chat-completions 适配器——它的序列化器确实拒绝 image block——对 pi-ai 路由从来就不成立。本 note 仅在模态一项上取代那一条；定价仍因其自身理由不开放配置，而实时目录总价通过[会话花费投影](../feature/2026-08-19-session-spend-on-stats-line.md)报告。
+源码中把这一假定论证为适配器的真实能力而非部署选择，而 [[2026-08-03-pi-ai-declared-provider-catalog]] 在决定配置面公开哪些 `Model` 字段时记录了同一套论证（「没有任何读取方：…… `context.ts` 只保留文本块」）。该论证描述的是 DeepSeek chat-completions 适配器——它的序列化器确实拒绝 image block——对 pi-ai 路由从来就不成立。本 note 仅在模态一项上取代那一条；定价仍因其自身理由不开放配置，而实时目录总价通过[会话花费投影](../feature/2026-08-19-session-spend-on-stats-line.zh.md)报告。
 
 ## 决策
 

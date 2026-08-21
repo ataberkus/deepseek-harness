@@ -3,4 +3,4 @@
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-08-18-cursor-oauth-host.md
 2026-08-18-cursor-oauth-host.md: 4f77184c8b5e31f592b7bc8972a02d339f81c205
-2026-08-18-cursor-oauth-host.zh.md: dd72d301a3df9ca46429fcac479c0bf8d9969279
+2026-08-18-cursor-oauth-host.zh.md: 446e9c9257860c1083571190c8930120421460af

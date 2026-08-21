@@ -12,11 +12,11 @@ OpenRouter 实时叠加对快照未收录的 id 有同样的少声明：`overlay
 
 ## 决策
 
-托管 Cursor 的聊天家族宣称 `[text, image]`。与推理相同的 id 标记（`grok`、`claude`、`gpt-`、`composer`、`gemini`、`kimi`、`glm`、`opus`、`sonnet`）以及每条捆绑 fallback id 都算聊天家族。`grok-code` 与未知实时 id 仍为 `[text]`，以免 harness 接纳随后会被非官方后端拒绝的图片。[Cursor OAuth](../feature/2026-08-18-cursor-oauth-host.md) 仍拥有登录与列表并集；本笔记拥有模态宣称与线路。
+托管 Cursor 的聊天家族宣称 `[text, image]`。与推理相同的 id 标记（`grok`、`claude`、`gpt-`、`composer`、`gemini`、`kimi`、`glm`、`opus`、`sonnet`）以及每条捆绑 fallback id 都算聊天家族。`grok-code` 与未知实时 id 仍为 `[text]`，以免 harness 接纳随后会被非官方后端拒绝的图片。[Cursor OAuth](../feature/2026-08-18-cursor-oauth-host.zh.md) 仍拥有登录与列表并集；本笔记拥有模态宣称与线路。
 
 栅格字节作为非官方 `SelectedImage` 走 `UserMessage.selected_context`（`uuid` 为 2、`path` 为 3、`mime_type` 为 7、`data` 为 8）。展平历史发送每张用户与工具结果图片；带检查点的后续轮次只发送本轮。图片块不贡献提示文本。
 
-仅实时 OpenRouter id 若在 `architecture.input_modalities` 或 `architecture.modality`（`text+image->text`）中公布了图片，会被标为 `[text, image]`；省略 architecture 的列表仍为纯文本。发现回复仍省略 `input`，与 `reasoning` 一致。[OpenRouter 实时叠加](../feature/2026-08-18-openrouter-live-catalog.md) 拥有这份并集；本笔记拥有图片标志。
+仅实时 OpenRouter id 若在 `architecture.input_modalities` 或 `architecture.modality`（`text+image->text`）中公布了图片，会被标为 `[text, image]`；省略 architecture 的列表仍为纯文本。发现回复仍省略 `input`，与 `reasoning` 一致。[OpenRouter 实时叠加](../feature/2026-08-18-openrouter-live-catalog.zh.md) 拥有这份并集；本笔记拥有图片标志。
 
 ## 考虑过的替代方案
 

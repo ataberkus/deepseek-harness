@@ -3,4 +3,4 @@
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-08-19-per-model-listing-reasoning-efforts.md
 2026-08-19-per-model-listing-reasoning-efforts.md: c3f340494072d9a03c3683ded5772f6c8d4e54d3
-2026-08-19-per-model-listing-reasoning-efforts.zh.md: a9805d1c46ea2c2d9ad2d13737cb76ea6a4f8cde
+2026-08-19-per-model-listing-reasoning-efforts.zh.md: 9693837d92dd4de67a21a9fb1eb0ebbb3b2a9510

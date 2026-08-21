@@ -3,4 +3,4 @@
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-08-19-google-gemini-cli-oauth-host.md
 2026-08-19-google-gemini-cli-oauth-host.md: 2d24b128725ae7c0987fb8a66cd6d136f734d5b4
-2026-08-19-google-gemini-cli-oauth-host.zh.md: db9117cfaccf7391befb65e557aeb8fa93a17934
+2026-08-19-google-gemini-cli-oauth-host.zh.md: e857733eaf85dcd174fc2b75d7ca9a1633acc9f2

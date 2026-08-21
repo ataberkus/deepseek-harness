@@ -95,7 +95,6 @@ export async function restoreCheckpoint(
     }
     await writeJournal(journalPath(options.objectRoot, cwd), journal)
     mutated = true
-    if (journal === undefined) throw new Error('restore journal was not created')
     await applyJournal(journal)
     await options.clearRecoveryRequired(cwd)
     await rm(staging, { recursive: true, force: true })

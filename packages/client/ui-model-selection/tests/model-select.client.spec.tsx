@@ -323,7 +323,9 @@ describe('ModelSelect model search', () => {
     fireEvent.change(search, { target: { value: 'Acme' } })
     fireEvent.keyDown(screen.getByRole('menu'), { key: 'Escape' })
     fireEvent.click(screen.getByRole('menuitem', { name: /模型/ }))
-    expect((screen.getByRole('textbox', { name: '筛选模型' }) as HTMLInputElement).value).toBe('')
+    const filter = screen.getByRole('textbox', { name: '筛选模型' })
+    if (!(filter instanceof HTMLInputElement)) throw new Error('model filter is not an input')
+    expect(filter.value).toBe('')
     expect(screen.getByRole('menuitemradio', { name: 'DeepSeek-V4-Flash' })).toBeTruthy()
   })
 

@@ -12,7 +12,7 @@ Status: implemented
 
 ## 决策
 
-`dsh-llm-pi-ai` 把 Cursor OAuth 托管在 [`FileOAuthStore`](../../../../packages/llm/llm-pi-ai/src/oauth-store.ts) 上，与 [OpenAI Codex](2026-08-18-openai-codex-oauth-host.md) 和 [Gemini CLI](2026-08-19-google-gemini-cli-oauth-host.md) 共用同一份存储。一张托管 id 表（`openai-codex`、`cursor`、`google-gemini-cli`）拥有 `/login`／`/logout` 以及 live 路由注入。空的 `/login` 仍表示 `openai-codex`。其他名字失败。一次进行中的登录覆盖整个宿主，因此 Cursor 轮询、Codex 的 localhost 回调与 Gemini 回环不能竞态。Web 客户端仍会为 `/login`、`/login openai-codex`、`/login cursor` 和 `/login google-gemini-cli` 打开空白标签。
+`dsh-llm-pi-ai` 把 Cursor OAuth 托管在 [`FileOAuthStore`](../../../../packages/llm/llm-pi-ai/src/oauth-store.ts) 上，与 [OpenAI Codex](2026-08-18-openai-codex-oauth-host.zh.md) 和 [Gemini CLI](2026-08-19-google-gemini-cli-oauth-host.zh.md) 共用同一份存储。一张托管 id 表（`openai-codex`、`cursor`、`google-gemini-cli`）拥有 `/login`／`/logout` 以及 live 路由注入。空的 `/login` 仍表示 `openai-codex`。其他名字失败。一次进行中的登录覆盖整个宿主，因此 Cursor 轮询、Codex 的 localhost 回调与 Gemini 回环不能竞态。Web 客户端仍会为 `/login`、`/login openai-codex`、`/login cursor` 和 `/login google-gemini-cli` 打开空白标签。
 
 Cursor 登录构造托管的 `cursor` Provider（`auth.oauth.login`／`refreshToken`，没有 `auth.apiKey`），并调用 `models.setProvider` 以及 `models.login('cursor', 'oauth', interaction)`。interaction 只复用 `createBrowserOAuthInteraction` 来打开 `auth_url`；Cursor 从不提示 `select` 或 `manual_code`。刷新走 `https://api2.cursor.sh/auth/exchange_user_api_key`。
 

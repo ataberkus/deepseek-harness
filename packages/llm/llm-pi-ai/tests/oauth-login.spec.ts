@@ -53,6 +53,17 @@ function fakeAgent(): Agent {
   return { session, status: 'idle', options: {} } as unknown as Agent
 }
 
+interface StoredCredentialRecord {
+  readonly type: string
+  readonly refresh?: string
+  readonly projectId?: string
+}
+
+/** Parse the persisted credential fixture without treating JSON.parse output as typed data. */
+function parseStoredCredentials(serialized: string): Record<string, StoredCredentialRecord> {
+  return JSON.parse(serialized) as Record<string, StoredCredentialRecord>
+}
+
 describe('parseOAuthProvider', () => {
   it('defaults empty input to openai-codex, accepts hosted ids, and rejects any other name', () => {
     expect(parseOAuthProvider('')).toBe(OPENAI_CODEX_PROVIDER)
@@ -381,9 +392,9 @@ describe('login and logout commands', () => {
     expect(models.length).toBeGreaterThan(0)
     expect(models[0]?.provider).toBe(OPENAI_CODEX_PROVIDER)
 
-    const stored = JSON.parse(await readFile(join(home, OAUTH_CREDENTIALS_FILENAME), 'utf8'))
-    expect(stored['openai-codex'].type).toBe('oauth')
-    expect(stored['openai-codex'].refresh).toBe('refresh-token')
+    const stored = parseStoredCredentials(await readFile(join(home, OAUTH_CREDENTIALS_FILENAME), 'utf8'))
+    expect(stored['openai-codex']!.type).toBe('oauth')
+    expect(stored['openai-codex']!.refresh).toBe('refresh-token')
 
     await ctx.llm.logout(OPENAI_CODEX_PROVIDER)
     expect(ctx.llm.listProviders()).toEqual([])
@@ -424,7 +435,7 @@ describe('login and logout commands', () => {
     const models = await ctx.llm.listModels('cursor')
     expect(models.length).toBeGreaterThan(0)
     expect(models[0]?.provider).toBe('cursor')
-    const stored = JSON.parse(await readFile(join(home, OAUTH_CREDENTIALS_FILENAME), 'utf8'))
+    const stored = parseStoredCredentials(await readFile(join(home, OAUTH_CREDENTIALS_FILENAME), 'utf8'))
     expect(stored.cursor).toMatchObject({ type: 'oauth', refresh: 'cursor-refresh' })
     const logout = await ctx.commands.execute(fakeAgent(), '/logout cursor', [], AbortSignal.timeout(5_000))
     expect(logout?.result).toEqual({ kind: 'success', text: 'Signed out of Cursor.' })
@@ -468,7 +479,7 @@ describe('login and logout commands', () => {
     const models = await ctx.llm.listModels('google-antigravity')
     expect(models.length).toBeGreaterThan(0)
     expect(models[0]?.provider).toBe('google-antigravity')
-    const stored = JSON.parse(await readFile(join(home, OAUTH_CREDENTIALS_FILENAME), 'utf8'))
+    const stored = parseStoredCredentials(await readFile(join(home, OAUTH_CREDENTIALS_FILENAME), 'utf8'))
     expect(stored['google-antigravity']).toMatchObject({
       type: 'oauth',
       refresh: 'antigravity-refresh',

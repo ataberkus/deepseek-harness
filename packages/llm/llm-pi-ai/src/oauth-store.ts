@@ -179,16 +179,16 @@ export class FileOAuthStore implements CredentialStore {
    * @param providerId - provider route key.
    * @returns the stored credential, or `undefined` when the provider has none.
    */
-  async read(providerId: string): Promise<Credential | undefined> {
+  read(providerId: string): Promise<Credential | undefined> {
     this.loadFromDisk()
-    return this.credentials.get(providerId)
+    return Promise.resolve(this.credentials.get(providerId))
   }
 
   /**
    * @returns provider id and type for each stored credential, without secrets.
    */
-  async list(): Promise<CredentialInfo[]> {
-    return this.credentialInfos()
+  list(): Promise<CredentialInfo[]> {
+    return Promise.resolve(this.credentialInfos())
   }
 
   /**

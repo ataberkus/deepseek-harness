@@ -6,7 +6,7 @@ Status: implemented
 
 ## 问题
 
-模型页无法用密钥字段认证 `openai-codex`。pi-ai 已安装 catalog 把该路由标成仅 OAuth：ChatGPT 浏览器 PKCE、已存储的 access/refresh token，以及 Codex Responses 后端——不是 `api.openai.com` 的 Chat Completions，也不是 `DEEPSEEK_API_KEY`。[目录不予提供](../bug-fix/2026-08-13-oauth-only-providers-withheld.md)关掉了坏掉的密钥卡片；若没有宿主登录和持久 `CredentialStore`，这条路由仍然跑不起来。
+模型页无法用密钥字段认证 `openai-codex`。pi-ai 已安装 catalog 把该路由标成仅 OAuth：ChatGPT 浏览器 PKCE、已存储的 access/refresh token，以及 Codex Responses 后端——不是 `api.openai.com` 的 Chat Completions，也不是 `DEEPSEEK_API_KEY`。[目录不予提供](../bug-fix/2026-08-13-oauth-only-providers-withheld.zh.md)关掉了坏掉的密钥卡片；若没有宿主登录和持久 `CredentialStore`，这条路由仍然跑不起来。
 
 在 pi-ai 旁边再手写一套 Codex Responses 客户端，会重复 pi-ai 已经拥有的 OAuth 刷新、SSE 与工具映射。把 OpenAI 的 Codex app-server 拉成子进程，则会在 harness 循环和模型之间再插入另一套 agent runtime。
 
@@ -24,11 +24,11 @@ Web 客户端在提交 `/login` 的按键手势里打开空白标签，并在收
 
 已存储的 `openai-codex` oauth 凭据会向适配器注册表注入一条无 settings 的 live 路由，模型选择器因此可以列出 pi-ai catalog 模型。可配置提供方目录仍然不提供仅 OAuth 的 catalog **密钥卡片**，这是不予提供那条笔记的决策；settings 里已存储的 profile 仍会出现在目录中，以便编辑或删除。live 路由不点名 `apiKeyEnv`，因此首次引导在 Codex 登录之前仍要求有一个可用的 API 密钥提供方。模型页把这条注入路由显示为已登录行（名称加上已连接圆点，通过 `llm.logout` 退出登录，没有编辑器，也没有 Sign-in 按钮）。`/logout openai-codex` 仍是命令等价物。
 
-`Provider is not configured` 映射为 `LlmError('MISSING_CREDENTIAL')`，并点名 `/login openai-codex`。托管的 `cursor` 与 `google-gemini-cli` 登录是同一 store 与命令表上的兄弟路由；那些非官方传输见 [Cursor OAuth 宿主](2026-08-18-cursor-oauth-host.md) 和 [Gemini CLI OAuth 宿主](2026-08-19-google-gemini-cli-oauth-host.md)。
+`Provider is not configured` 映射为 `LlmError('MISSING_CREDENTIAL')`，并点名 `/login openai-codex`。托管的 `cursor` 与 `google-gemini-cli` 登录是同一 store 与命令表上的兄弟路由；那些非官方传输见 [Cursor OAuth 宿主](2026-08-18-cursor-oauth-host.zh.md) 和 [Gemini CLI OAuth 宿主](2026-08-19-google-gemini-cli-oauth-host.zh.md)。
 
 ## 考虑过的替代方案
 
-**新建 `dsh-llm-openai-codex` 包并手写 Responses/SSE 客户端。** 否决：harness 对其余非 DeepSeek catalog 路由已经包装 pi-ai，且[优先使用受维护依赖](../process/2026-07-26-dependencies-over-hand-rolling.md)禁止再复制 pi-ai 已经提供的协议。
+**新建 `dsh-llm-openai-codex` 包并手写 Responses/SSE 客户端。** 否决：harness 对其余非 DeepSeek catalog 路由已经包装 pi-ai，且[优先使用受维护依赖](../process/2026-07-26-dependencies-over-hand-rolling.zh.md)禁止再复制 pi-ai 已经提供的协议。
 
 **经 JSON-RPC 把 OpenAI Codex app-server 当子进程。** 否决：认证维护会更轻，但模型后端将不再只是模型后端——Codex 自己的 agent runtime 会插进 harness 的工具与审批循环。
 
