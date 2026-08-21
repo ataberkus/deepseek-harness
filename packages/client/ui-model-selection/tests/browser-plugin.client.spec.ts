@@ -15,7 +15,11 @@ import type { SessionId } from '@deepseek-ai/dsh-client-runtime/client'
 import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
 import { TestRemote } from '@deepseek-ai/dsh-client-test-runtime'
 import type { ModelSelection } from '@deepseek-ai/dsh-api-remotes/client'
-import type { CommandContribution, SelectOption } from '@deepseek-ai/dsh-client-ui-commands/client'
+import type {
+  CommandContribution,
+  CommandDecoration,
+  SelectOption,
+} from '@deepseek-ai/dsh-client-ui-commands/client'
 import type { ModelSelectInjected } from '../src/client/slots.ts'
 import { apply, inject } from '../src/client/index.ts'
 import { zh } from '../src/client/locales.ts'
@@ -87,10 +91,24 @@ async function bench() {
     },
   })
   let contribution: CommandContribution | undefined
+  let loginDecoration: CommandDecoration | undefined
+  const commandExecutions: Array<{ sessionId: SessionId; line: string }> = []
   ctx.provide('commandUi', {
     register(c: CommandContribution) {
       contribution = c
-      return () => { contribution = undefined }
+      return () => {
+        if (contribution === c) contribution = undefined
+      }
+    },
+    decorate(c: CommandDecoration) {
+      loginDecoration = c
+      return () => {
+        if (loginDecoration === c) loginDecoration = undefined
+      }
+    },
+    execute: async (session: { sessionId: SessionId }, line: string) => {
+      commandExecutions.push({ sessionId: session.sessionId, line })
+      return { kind: 'success' as const }
     },
   })
   const seats = new Map<string, {
@@ -128,8 +146,13 @@ async function bench() {
     return handle
   }
   return {
-    ctx, fiber, mint, calls,
+    ctx,
+    fiber,
+    mint,
+    calls,
     contribution: () => contribution!,
+    loginDecoration: () => loginDecoration!,
+    commandExecutions,
     seat: () => seats.get('conversation.input.model')!,
     hostCurrent: () => current,
     setHostCurrent: (selection: ModelSelection) => { current = selection },
@@ -149,6 +172,34 @@ describe('ui-model-selection dual entry', () => {
     expect(b.seat().inject).toBeTypeOf('function')
     // Copy rides the standard locale seat.
     expect(b.seat().locale).toBe('model')
+  })
+
+  it('offers hosted login providers and submits the canonical provider id', async () => {
+    const b = await bench()
+    b.mint('s1')
+    const decoration = b.loginDecoration()
+    expect(decoration.name).toBe('login')
+    const options = await decoration.ui.options(projection('s1'), new AbortController().signal)
+    expect(options).toEqual([
+      { id: 'openai-codex', label: 'OpenAI Codex', detail: 'ChatGPT 订阅' },
+      { id: 'cursor', label: 'Cursor', detail: 'Cursor 订阅' },
+      { id: 'google-antigravity', label: 'Antigravity', detail: 'Google Cloud Code Assist 订阅' },
+    ])
+    await decoration.ui.onSelect(options[2]!, projection('s1'))
+    expect(b.commandExecutions).toEqual([{ sessionId: sid('s1'), line: '/login google-antigravity' }])
+  })
+
+  it('withholds the login picker from addressed subagent sessions', async () => {
+    const b = await bench()
+    b.address(sid('child'))
+    expect(b.loginDecoration().available(projection('child'))).toBe(false)
+  })
+
+  it('disposes the login decoration with the plugin fiber', async () => {
+    const b = await bench()
+    expect(b.loginDecoration()).toBeDefined()
+    await b.fiber.dispose()
+    expect(b.loginDecoration()).toBeUndefined()
   })
 
   it('popup options mark the host current active with the provider group in the detail', async () => {

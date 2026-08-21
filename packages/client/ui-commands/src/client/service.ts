@@ -159,6 +159,8 @@ export class CommandUiRuntime extends Service implements CommandUiContract {
   static inject = ['inputTriggers', 'sessions', 'remote', 'remote.commands']
 
   private readonly directory: CommandDirectory
+  /** Captured at construction so public calls remain independent of the caller fiber's injected properties. */
+  private readonly remoteCommands: Context['remote']['commands']
   private readonly live: LiveState = { contributions: new Map(), decorations: new Map(), popups: new Map() }
   /** `command`-namespace translator (composer refusal notices). */
   private readonly t: TranslateNS<'command'>
@@ -172,6 +174,7 @@ export class CommandUiRuntime extends Service implements CommandUiContract {
     const locale = ctx.get('locale')
     if (locale === undefined) throw new Error('ui-commands: locale service unavailable')
     this.t = locale.bind('command')
+    this.remoteCommands = ctx.remote.commands
     this.directory = new CommandDirectory(async (sessionId) => {
       if (this.sessions().subagentAddress(sessionId) !== undefined) return []
       const result = await ctx.remote.commands.list(sessionId)
@@ -455,23 +458,25 @@ export class CommandUiRuntime extends Service implements CommandUiContract {
   }
 
   /**
-   * The command.execute transaction, addressed to the session's agent — pure
-   * admission semantics. An unmatched line reports an error outcome (the
-   * composer's immediate admission feedback); an admitted command reports
-   * plain success regardless of its handler outcome, because the host
-   * executor durably logged the lifecycle (`command/run`/`command/done`) and
-   * the outcome renders as a persistent flow node — the composer never
-   * echoes it. A handler error result reports an error outcome so the
-   * composer keeps the submission (draft and images) for correction.
+   * Execute one complete command line for the session. An unmatched line
+   * returns an error outcome; an admitted command returns plain success
+   * regardless of handler outcome because the host logs the lifecycle and
+   * renders the result as a persistent flow node. Image-carrying handler
+   * errors return an error outcome so the composer retains the attachments.
+   * Hosted OAuth lines prepare the named browser tab before remote execution.
    * Transport failures throw.
+   * @param session - receiving client session projection.
+   * @param line - complete command line, including the leading slash.
+   * @param images - serialized composer images accompanying the command.
+   * @returns the command submission outcome.
    */
-  private async execute(
+  async execute(
     session: ClientSessionContext,
     line: string,
     images: readonly SubmitImageAttachment[] = [],
   ): Promise<SubmitOutcome> {
     if (isHostedOAuthLoginLine(line)) this.prepareLoginTab()
-    const result = await this.ctx.remote.commands.execute(session.sessionId, line, images)
+    const result = await this.remoteCommands.execute(session.sessionId, line, images)
     if (!result.ok) throw new Error(`command.execute failed: ${result.error.code}: ${result.error.message}`)
     if (result.value === undefined) return { kind: 'error', text: `unknown or malformed command: ${line}` }
     this.notifyExecuted(session.sessionId, submittedCommandName(line), result.value.result)

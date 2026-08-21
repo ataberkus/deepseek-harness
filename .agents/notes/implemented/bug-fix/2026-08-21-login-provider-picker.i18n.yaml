@@ -1,0 +1,6 @@
+# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
+# side as of the last confirmed-consistent state. Both languages carry equal authority;
+# after editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-08-21-login-provider-picker.md
+2026-08-21-login-provider-picker.md: 5f5c389b9aeb44cb59a53d0ab64ef9d5d4dfb184
+2026-08-21-login-provider-picker.zh.md: a7f20bbb2225c15d865c1580d97904c91215d38c

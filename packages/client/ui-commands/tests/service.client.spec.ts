@@ -862,6 +862,22 @@ describe('openai-codex login tab', () => {
     await expect(pending).resolves.toEqual({ kind: 'success' })
   })
 
+  it('exposes command execution without bypassing login tab preparation', async () => {
+    const tab = { closed: false, location: { href: 'about:blank' } }
+    const open = vi.fn(() => tab)
+    vi.stubGlobal('window', { open })
+    const gate = Promise.withResolvers<ExecuteValue>()
+    const { ctx, command, warm } = await loginBench(() => gate.promise)
+    await warm(proj('s1'))
+
+    const pending = command.execute(proj('s1'), '/login cursor')
+    expect(open).toHaveBeenCalledWith('about:blank', 'dsh-oauth-login')
+    ctx.remote.$dispatch('commands/open-url', [CODEX_AUTH_URL])
+    expect(tab.location.href).toBe(CODEX_AUTH_URL)
+    gate.resolve({ matched: true })
+    await expect(pending).resolves.toEqual({ kind: 'success' })
+  })
+
   it('opens a blank tab for a bare /login line', async () => {
     const tab = { closed: false, location: { href: 'about:blank' } }
     const open = vi.fn(() => tab)

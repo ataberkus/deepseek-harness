@@ -1,15 +1,13 @@
 /**
- * Model selection plugin, browser half — TWO entries over ONE per-session
- * directory owned by ModelDirectoryResolver (`ctx.modelDirectories`). The /model popupSelect
- * contribution and the composer's named `conversation.input.model` seat both
- * load the session's provider-grouped advisory directory (`session.models`)
- * and submit through `session.selectModel` via the same directory instance,
- * so the host-reported current selection is the single fact both surfaces echo
- * — a switch made in either entry is what the other shows next. Failures
- * ride each entry's own retry surface (popup shell error/retry; seat menu
- * inline error) without forking the state. Addressed subagent sessions expose
- * neither entry because those Agent-bound RPCs would activate persisted
- * history outside the direct-parent continuation path.
+ * Model selection and hosted login browser plugin. It provides TWO model
+ * entries over ONE per-session directory owned by ModelDirectoryResolver
+ * (`ctx.modelDirectories`) and decorates the host `/login` command with a
+ * provider picker. The `/model` popupSelect contribution and the composer's
+ * named `conversation.input.model` seat both load the session's
+ * provider-grouped advisory directory (`session.models`) and submit through
+ * `session.selectModel` via the same directory instance, while the login
+ * decoration submits canonical provider ids through `ctx.commandUi.execute`.
+ * Addressed subagent sessions expose neither model entry nor the login picker.
  */
 // Type-only: the carrier types, the forwarded Host-event face and the ctx.remote merge.
 import type { ModelSelection, SessionModels } from '@deepseek-ai/dsh-api-remotes/client'
@@ -96,6 +94,21 @@ function selectionOf(state: ModelDirectoryState, id: string): ModelSelection | u
 /** Dictionary namespace owned by this plugin. */
 const NS = 'model'
 
+const LOGIN_OPTIONS = [
+  { id: 'openai-codex', label: 'login.openai.label', detail: 'login.openai.detail' },
+  { id: 'cursor', label: 'login.cursor.label', detail: 'login.cursor.detail' },
+  { id: 'google-antigravity', label: 'login.antigravity.label', detail: 'login.antigravity.detail' },
+] as const
+
+/** Build the hosted OAuth provider options from the active locale. */
+function loginOptions(t: TranslateNS<'model'>): SelectOption[] {
+  return LOGIN_OPTIONS.map(option => ({
+    id: option.id,
+    label: t(option.label),
+    detail: t(option.detail),
+  }))
+}
+
 /** Required services: the contribution registry, the seat's slot registry, locale, and the service's own faces. */
 export const inject = ['commandUi', 'connection', 'locale', 'sessions', 'slots', 'remote']
 
@@ -148,6 +161,21 @@ export function apply(ctx: ClientContext): void {
         },
       },
     }), 'ui-model-selection: /model contribution')
+
+    scope.effect(() => command.decorate({
+      name: 'login',
+      available: session => sessions.subagentAddress(session.sessionId) === undefined,
+      ui: {
+        kind: 'popupSelect',
+        options: () => Promise.resolve(loginOptions(t)),
+        onSelect: async (option, session) => {
+          const outcome = await command.execute(session, `/login ${option.id}`)
+          if (outcome.kind === 'error') {
+            throw new Error(outcome.text ?? 'login command execution failed')
+          }
+        },
+      },
+    }), 'ui-model-selection: /login decoration')
   })
 
   // Entry 2: the composer's named model seat over the SAME directory.

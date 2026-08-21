@@ -2,9 +2,9 @@
 
 [English](README.md) | 中文
 
-客户端命令 API（`ctx.commandUi`）：以会话为 key 的命令目录缓存、带 `matchSpace`／`matchEnter` 决策钩子的 `/` 命令 source、三类派发（`execute`／`popupSelect`／`leadingInput`），以及面向业务包的 popupSelect 注册。[Web 命令 Agent Note](../../../.agents/notes/implemented/architecture/2026-07-25-web-command-surfaces-and-assembly.zh.md) 记录了这项决策。
+客户端命令 API（`ctx.commandUi`）：以会话为 key 的命令目录缓存、带 `matchSpace`／`matchEnter` 决策钩子的 `/` 命令 source、三类派发（`execute`／`popupSelect`／`leadingInput`）、面向业务包的 popupSelect 注册，以及供 popup 消费者使用、保留准入和浏览器用户手势行为的共享 `execute(session, line, images?)`。 [Web 命令 Agent Note](../../../.agents/notes/implemented/architecture/2026-07-25-web-command-surfaces-and-assembly.zh.md) 记录了这项决策。
 
-`src/client/contract.ts` 是固定的业务 API 约定：`CommandUiContract.register(name, spec)` 与 `decorate(name, spec)` 是业务包消费的全部内容；`CommandUiSpec{options, onSelect}` 自己提供 popup 数据——外层组件归本包所有，业务包永远见不到它。贡献项是客户端自有命令（与 host 命令同名时会明确报错）；装饰项则为**已存在的** host 命令添加裸调用 popup。host 保留目录行、带参 claim（空格／带参数的 Enter）与生命周期记账，被装饰的名字若在会话目录中无 host 行，则永不触发。命令类型按每次派发派生，绝不在注册时定型：带 `input` 的 host descriptor 是 `leadingInput`，注册了 `CommandUiSpec` 的是 `popupSelect`，其余全部是 `execute`。
+`src/client/contract.ts` 是固定的业务 API 约定：`CommandUiContract.register(name, spec)`、`decorate(name, spec)` 与 `execute(session, line, images?)` 是业务包消费的客户端接口。`CommandUiSpec{options, onSelect}` 自己提供 popup 数据——外层组件归本包所有，业务包永远见不到它。贡献项是客户端自有命令（与 host 命令同名时会明确报错）；装饰项则为**已存在的** host 命令添加裸调用 popup；`execute` 复用准入、生命周期确认和浏览器用户手势准备。host 保留目录行、带参 claim（空格／带参数的 Enter）与生命周期记账，被装饰的名字若在会话目录中无 host 行，则永不触发。命令类型按每次派发派生，绝不在注册时定型：带 `input` 的 host descriptor 是 `leadingInput`，注册了 `CommandUiSpec` 的是 `popupSelect`，其余全部是 `execute`。
 
 `CommandDirectory`（`src/client/directory.ts`）是唯一的 wire 派生缓存，以会话为 key。普通会话通过 `command.list({sessionId})` 拉取，source 的 scope 出生 `warm` 钩子会预热该会话的缓存项。由目录寻址的可继续子代理会在客户端解析为空命令目录：`command.list` 绑定 Agent，若预热它，就会仅因查看持久化历史而激活子代理。缓存项由转发的 owner 事件 `commands/change` 软失效（重拉在途期间旧快照继续服务），也由转发的 `agent-preset/selected` 对该会话单独软失效（重组 agent 不产生任何注册，注册表级信号不会为它触发），由 `connection/reset` 硬失效，并以 epoch 把关，被取代的旧拉取永远无法覆盖更新的结果。`matchSpace` 只凭该缓存同步应答；`matchEnter` 在 SubmitAttempt 信号上强等缓存，预热失败即拒绝——`/` 开头的一行绝不会被静默降级为普通提示词。
 
@@ -12,7 +12,7 @@
 
 `command.execute` 返回已匹配的命令结果后，当前浏览器会发布本地 `command/executed(sessionId, name, result)`。其他客户端只会通过 Host 事件流收到持久命令节点，不会收到这条确认，因此浏览器专属副作用可以筛选由实际提交命令的客户端收到的成功结果，而不会把 Session 回放当成操作请求。监听器失败会逐项记录并隔离，不会改变已经准入的命令结果，也不会阻止后续监听器运行。
 
-在 `/login`、`/login openai-codex`、`/login cursor` 或 `/login google-antigravity` 时，当前浏览器会在按键手势里打开空白标签，并在 Host 转发 `commands/open-url` 时导航到授权页，因为授权 URL 到达后再 `window.open` 会被弹窗拦截。非 https URL 会被忽略。命名标签会被复用，因此第二次 `/login` 不会把进行中的授权页换成空白页。
+在 `/login`、`/login openai-codex`、`/login cursor` 或 `/login google-antigravity` 时，当前浏览器会在发起操作的用户手势里打开空白标签，并在 Host 转发 `commands/open-url` 时导航到授权页，因为授权 URL 到达后再 `window.open` 会被弹窗拦截。非 https URL 会被忽略。命名标签会被复用，因此第二次 `/login` 不会把进行中的授权页换成空白页。
 
 菜单查询会按顺序且不区分大小写地模糊匹配命令名的子序列。前缀排名最高；其余匹配项按分隔符边界优先、相邻字符优先、间隔越短越优先的规则排序，若仍同分，则以目录顺序和贡献项顺序打破平局。此行为只影响命令发现：space 和 Enter 仍要求命令名精确匹配。原理：[Web 斜杠命令模糊发现](../../../.agents/notes/implemented/feature/2026-08-04-web-slash-command-fuzzy-discovery.zh.md)。
 

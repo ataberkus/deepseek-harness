@@ -1,4 +1,5 @@
 # Login provider picker design
+English | [中文](2026-08-21-login-provider-picker-design.zh.md)
 
 ## Problem
 
