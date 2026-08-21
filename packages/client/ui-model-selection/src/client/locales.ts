@@ -11,6 +11,12 @@
 /** Simplified Chinese dictionary (the key-set source of truth). */
 export const zh = {
   'command.description': '选择本会话使用的模型',
+  'login.openai.label': 'OpenAI Codex',
+  'login.openai.detail': 'ChatGPT 订阅',
+  'login.cursor.label': 'Cursor',
+  'login.cursor.detail': 'Cursor 订阅',
+  'login.antigravity.label': 'Antigravity',
+  'login.antigravity.detail': 'Google Cloud Code Assist 订阅',
   'option.loadError': '目录加载失败：{message}',
   'trigger.fallback': '选择模型',
   'trigger.selectAria': '选择模型',
@@ -38,6 +44,12 @@ export type ModelKey = keyof typeof zh
 /** English dictionary, checked complete against the zh key set. */
 export const en = {
   'command.description': 'Select the model for this conversation',
+  'login.openai.label': 'OpenAI Codex',
+  'login.openai.detail': 'ChatGPT subscription',
+  'login.cursor.label': 'Cursor',
+  'login.cursor.detail': 'Cursor subscription',
+  'login.antigravity.label': 'Antigravity',
+  'login.antigravity.detail': 'Google Cloud Code Assist subscription',
   'option.loadError': 'Catalog failed to load: {message}',
   'trigger.fallback': 'Select model',
   'trigger.selectAria': 'Select model',

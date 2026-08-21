@@ -1,11 +1,12 @@
-// Real Web composition regression: a completed Antigravity OAuth login persists a
-// credential, registers its hosted route, forwards the topology event, and refreshes
-// an already-open model picker. Google and Cloud Code Assist HTTP plus the loopback
-// callback are deterministic; no model request or real credential is used.
+// Real Web composition regression: selecting `/login` opens the hosted OAuth
+// provider picker, commits Antigravity through the real command path, and
+// refreshes an already-open model picker. Google and Cloud Code Assist HTTP
+// plus the loopback callback are deterministic; no model request or real
+// credential is used.
+import { fileURLToPath } from 'node:url'
 import type { Browser, Page } from 'playwright'
 import { chromium } from 'playwright'
 import { afterAll, beforeAll, describe, expect, it, onTestFailed } from 'vitest'
-import { SessionId } from '@deepseek-ai/dsh-session'
 import { settingsNamespace } from '@deepseek-ai/dsh-settings'
 import { RpcId } from '@deepseek-ai/dsh-host-apiproxy/api/rpc'
 import {
@@ -13,12 +14,25 @@ import {
   newEnglishPage,
   saveFailureShot,
 } from './support.ts'
-import { launchWebScaffold, watchConsole, type WebScaffold } from './scaffold.ts'
+import {
+  captureStableAria,
+  compareOrRefreshGolden,
+  launchWebScaffold,
+  watchConsole,
+  webSnapshotMode,
+  type WebScaffold,
+} from './scaffold.ts'
 
 const SEED_PROVIDER = 'oauth-e2e-seed'
 const SEED_MODEL = 'oauth-e2e-model'
 const ACCESS_TOKEN = 'oauth-e2e-access'
 const REFRESH_TOKEN = 'oauth-e2e-refresh'
+const MODE = webSnapshotMode()
+const LOGIN_PICKER_EXPECTED = fileURLToPath(
+  new URL('./snapshots/oauth-model-directory/login-picker.expected.md', import.meta.url),
+)
+
+type ConsoleTripwire = { warnings: string[]; pageErrors: string[] }
 
 function response(body: unknown): Response {
   return new Response(JSON.stringify(body), {
@@ -33,27 +47,15 @@ function requestUrl(input: Parameters<typeof fetch>[0]): string {
   return input.url
 }
 
-describe('web e2e: Antigravity OAuth refreshes an open model directory', () => {
+describe('web e2e: hosted OAuth provider picker refreshes model directory', () => {
   let scaffold: WebScaffold
   let browser: Browser
   let page: Page
-  let tripwire: ReturnType<typeof watchConsole>
+  let tripwire: ConsoleTripwire
   let restoreFetch: (() => void) | undefined
   let stopOpenUrl: (() => void) | undefined
-  let agentHandle: { dispose(): Promise<void> } | undefined
 
   beforeAll(async () => {
-    scaffold = await launchWebScaffold({})
-    await scaffold.ctx.settings.update(settingsNamespace('llm-pi-ai'), {
-      providers: {
-        [SEED_PROVIDER]: {
-          displayName: 'OAuth E2E Seed',
-          api: 'openai-completions',
-          baseURL: 'https://oauth-e2e.invalid/v1',
-          models: [{ id: SEED_MODEL, name: 'OAuth E2E Seed Model' }],
-        },
-      },
-    })
     const originalFetch = globalThis.fetch
     globalThis.fetch = async (input, init) => {
       const url = requestUrl(input)
@@ -73,6 +75,18 @@ describe('web e2e: Antigravity OAuth refreshes an open model directory', () => {
       return originalFetch(input, init)
     }
     restoreFetch = () => { globalThis.fetch = originalFetch }
+
+    scaffold = await launchWebScaffold({})
+    await scaffold.ctx.settings.update(settingsNamespace('llm-pi-ai'), {
+      providers: {
+        [SEED_PROVIDER]: {
+          displayName: 'OAuth E2E Seed',
+          api: 'openai-completions',
+          baseURL: 'https://oauth-e2e.invalid/v1',
+          models: [{ id: SEED_MODEL, name: 'OAuth E2E Seed Model' }],
+        },
+      },
+    })
 
     stopOpenUrl = scaffold.ctx.on('commands/open-url', (authUrl: string) => {
       const authorize = new URL(authUrl)
@@ -95,35 +109,49 @@ describe('web e2e: Antigravity OAuth refreshes an open model directory', () => {
   afterAll(async () => {
     stopOpenUrl?.()
     restoreFetch?.()
-    await agentHandle?.dispose()
     await browser?.close()
     await scaffold?.close()
   })
 
-  it('refreshes the loaded picker after the hosted login commits', async () => {
+  it('selects Antigravity from /login and refreshes the loaded model picker', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-antigravity-oauth-model-directory'))
+
+    const input = page.locator('textarea').first()
+    await input.fill('/')
+    const slashMenu = page.getByRole('listbox', { name: 'Trigger suggestions' })
+    await slashMenu.waitFor({ timeout: 10_000 })
+    await slashMenu.getByRole('option', { name: /login/i }).click()
+
+    const loginPicker = page.getByRole('listbox', { name: '/login matches' })
+    await loginPicker.waitFor({ timeout: 10_000 })
+    expect(await loginPicker.getByRole('option').allTextContents()).toEqual([
+      'OpenAI CodexChatGPT subscription',
+      'CursorCursor subscription',
+      'AntigravityGoogle Cloud Code Assist subscription',
+    ])
+    const aria = await captureStableAria(page, '[role="listbox"]', scaffold.workspaceCwd)
+    await compareOrRefreshGolden(LOGIN_PICKER_EXPECTED, aria, MODE)
+    await loginPicker.getByRole('option', { name: /Antigravity/ }).click()
+
+    await expect.poll(() => {
+      const events = scaffold.ctx.sessions.list().flatMap(session => session.events)
+      const run = events.find(event => event.type === 'command/run' && event.data.name === 'login')
+      if (run?.type !== 'command/run') return undefined
+      const done = events.find(event => event.type === 'command/done' && event.data.commandId === run.data.commandId)
+      if (done?.type !== 'command/done') return undefined
+      if (done.data.kind === 'error') throw new Error(`login command failed: ${done.data.text}`)
+      return done.data
+    }, { timeout: 15_000 }).toMatchObject({ kind: 'success' })
+    await expect.poll(
+      () => scaffold.ctx.llm.listProviders().some(provider => provider.id === 'google-antigravity'),
+      { timeout: 15_000 },
+    ).toBe(true)
 
     const trigger = page.getByRole('button', { name: /Select model/ }).first()
     await trigger.click()
     await page.getByRole('menuitem', { name: /^Model/ }).click()
     await page.getByRole('menuitemradio', { name: 'DeepSeek-V4-Flash', exact: true })
       .waitFor({ state: 'visible', timeout: 15_000 })
-
-    const agent = await scaffold.ctx.agents.create({
-      sessionId: SessionId('oauth-model-directory'),
-      meta: { cwd: scaffold.workspaceCwd },
-    })
-    agentHandle = agent
-    const login = await scaffold.ctx.commands.execute(
-      agent.agent,
-      '/login google-antigravity',
-      [],
-      AbortSignal.timeout(15_000),
-    )
-    expect(login?.result).toEqual({
-      kind: 'success',
-      text: 'Signed in to Antigravity. Select a google-antigravity model to use the Antigravity subscription.',
-    })
 
     const hostModels = await scaffold.ctx.apiProxy.llm.models({
       rpcId: RpcId('oauth-e2e-models'),

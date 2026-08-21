@@ -22,6 +22,7 @@ import { catalogProvider } from './catalog.ts'
 import type { PiAiProviderProfile } from './config.ts'
 import {
   hostedOAuthProvider,
+  OAUTH_COMMAND_HINT,
   OAUTH_LOGIN_IN_PROGRESS,
   OAUTH_LOGIN_UNSUPPORTED,
   OAUTH_LOGOUT_UNSUPPORTED,
@@ -277,6 +278,7 @@ export function registerOAuthCommands(ctx: Context, deps: OAuthCommandDeps): voi
     commandCtx.commands.register({
       name: 'login',
       description: 'Sign in to OpenAI Codex, Cursor, or Antigravity',
+      input: { hint: OAUTH_COMMAND_HINT },
       handler: async ({ rawInput, signal }) => {
         const provider = parseOAuthProvider(rawInput)
         if (provider === undefined) {

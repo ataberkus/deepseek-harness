@@ -64,6 +64,23 @@ describe('parseOAuthProvider', () => {
   })
 })
 
+describe('host command metadata', () => {
+  it('advertises provider input on the host login command', async () => {
+    await isolateDshHome()
+    const ctx = new Context()
+    contexts.push(ctx)
+    await ctx.plugin(LlmRuntime)
+    await ctx.plugin(CommandRuntime)
+    await ctx.plugin(LlmPiAi, {})
+
+    const login = ctx.commands.list(fakeAgent()).find(command => command.name === 'login')
+    expect(login).toMatchObject({
+      name: 'login',
+      input: { hint: oauthHosts.OAUTH_COMMAND_HINT },
+    })
+  })
+})
+
 describe('oauthProviderProfiles', () => {
   it('injects stored hosted oauth credentials and ignores other catalog oauth', () => {
     expect(oauthProviderProfiles([

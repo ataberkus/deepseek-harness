@@ -1,0 +1,4 @@
+- listbox "/login matches":
+  - option "OpenAI Codex ChatGPT subscription" [selected]
+  - option "Cursor Cursor subscription"
+  - option "Antigravity Google Cloud Code Assist subscription"
