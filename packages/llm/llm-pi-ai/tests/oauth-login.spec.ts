@@ -895,6 +895,39 @@ describe('login and logout commands', () => {
     expect(result.finish).toMatchObject({ kind: 'error', failure: { code: 'MISSING_CREDENTIAL' } })
   })
 
+  it('uses the stored OpenAI Codex OAuth credential for a hosted request', async () => {
+    const home = await isolateDshHome()
+    await writeFile(join(home, OAUTH_CREDENTIALS_FILENAME), `${JSON.stringify({
+      'openai-codex': {
+        type: 'oauth',
+        access: 'access-token',
+        refresh: 'refresh-token',
+        expires: Date.now() + 60_000,
+      },
+    }, null, 2)}\n`, { mode: 0o600 })
+    const read = vi.spyOn(FileOAuthStore.prototype, 'read')
+      .mockRejectedValue(new Error('OAuth credential lookup reached'))
+    const model = getBuiltinModels(OPENAI_CODEX_PROVIDER)[0]
+    if (model === undefined) throw new Error('expected openai-codex catalog models')
+    const ctx = new Context()
+    contexts.push(ctx)
+    await ctx.plugin(LlmRuntime)
+    await ctx.plugin(LlmPiAi, { providers: { [OPENAI_CODEX_PROVIDER]: {} } })
+    const result = await assemble(ctx, {
+      provider: OPENAI_CODEX_PROVIDER,
+      model: model.id,
+      messages: [createUserMessage({
+        content: [{ type: 'text', text: 'hi' }],
+        source: { kind: 'plugin', plugin: 'test' },
+      })],
+    })
+    expect(read).toHaveBeenCalledWith(OPENAI_CODEX_PROVIDER)
+    expect(result.finish.kind).toBe('error')
+    if (result.finish.kind !== 'error') throw new Error('expected OAuth lookup to fail the request')
+    expect(result.finish.failure.code).toBe('PI_AI_ERROR')
+    expect(result.finish.failure.message).toContain('OAuth credential lookup reached')
+  })
+
   it('maps a keyless cursor stream without a stored token to MISSING_CREDENTIAL', async () => {
     await isolateDshHome()
     const ctx = new Context()

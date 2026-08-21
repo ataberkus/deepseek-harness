@@ -23,3 +23,5 @@ The web bundle's workspace checkpoint restore treated `processhacker_audit.log` 
 ## Consequences
 
 Checkpoint capture and restore leave the Process Hacker audit log in place, while ordinary workspace files remain subject to strict restore and rollback handling. The deployment regression test prevents the web bundle from removing this exclusion.
+
+`packages/session/workspace-checkpoint-local/tests/restore.spec.ts` also pins restoring older checkpoint manifests without mutating newly excluded files.

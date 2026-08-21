@@ -68,7 +68,7 @@ import { assertUsableApiKey, LlmError } from '@deepseek-ai/dsh-llm'
 import type { AdapterRegistrationHandle, DirectoryRegistrationHandle, LlmConfigurableProvider } from '@deepseek-ai/dsh-llm'
 import { deepEqualJson, installSettingsSection, settingsNamespace } from '@deepseek-ai/dsh-settings'
 import { PiAiAdapter } from './adapter.ts'
-import { authContextFrom, credentialStoreFrom } from './auth.ts'
+import { authContextFrom } from './auth.ts'
 import { catalogProviderIds, catalogProviderTakesApiKey } from './catalog.ts'
 import { assertServiceable, Config, resolveProfiles } from './config.ts'
 import type { ResolvedPiAiProviderProfile } from './config.ts'
@@ -271,7 +271,7 @@ export function apply(ctx: Context, config: Config): void {
   // One store and one ambient context for the whole plugin instance: both read
   // through `ctx` per call, so they stay correct across the collection rebuilds
   // a configuration change causes, and a sign-in survives one.
-  const auth = { credentials: credentialStoreFrom(ctx), authContext: authContextFrom(ctx) }
+  const auth = { credentials: oauthStore, authContext: authContextFrom(ctx) }
   const adapter = new PiAiAdapter({
     profiles,
     resolveApiKey,

@@ -23,7 +23,7 @@ import type {
 import type { StoredCheckpointRecord } from '@deepseek-ai/dsh-workspace-checkpoint'
 import type { Domain } from '@deepseek-ai/dsh-storage-domain'
 import { workspaceCheckpointDomainSpec } from '@deepseek-ai/dsh-workspace-checkpoint'
-import { buildManifest } from './manifest.ts'
+import { buildManifest, isExcluded } from './manifest.ts'
 import { readBlob } from './objects.ts'
 import { canonicalizeCwd, fromManifestPath } from './paths.ts'
 import { SessionId } from '@deepseek-ai/dsh-session'
@@ -161,7 +161,9 @@ async function planOps(
   stored: StoredCheckpointRecord,
   excludeGlobs: readonly string[],
 ): Promise<JournalOp[]> {
-  const wanted = new Set(stored.entries.map(entry => entry.relativePath))
+  const included = stored.entries.filter(entry =>
+    !isExcluded(entry.relativePath, excludeGlobs, entry.kind === 'directory'))
+  const wanted = new Set(included.map(entry => entry.relativePath))
   const current = await buildManifest(cwd, { excludeGlobs })
   const ops: JournalOp[] = []
   const extras = current.entries
@@ -169,7 +171,7 @@ async function planOps(
     .filter(path => !wanted.has(path))
     .sort((left, right) => right.length - left.length)
   for (const relativePath of extras) ops.push({ kind: 'delete', relativePath })
-  for (const entry of stored.entries) {
+  for (const entry of included) {
     if (entry.kind === 'directory') ops.push({ kind: 'mkdir', relativePath: entry.relativePath })
     else if (entry.kind === 'file') ops.push({ kind: 'write', relativePath: entry.relativePath })
     else if (entry.linkTarget !== undefined) {

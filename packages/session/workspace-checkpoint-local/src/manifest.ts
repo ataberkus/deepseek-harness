@@ -73,7 +73,14 @@ async function walk(
   }
 }
 
-function isExcluded(relativePath: string, globs: readonly string[], directory: boolean): boolean {
+/**
+ * Whether a manifest-relative path is excluded by the configured globs.
+ * @param relativePath - slash-separated path relative to the workspace root.
+ * @param globs - configured exclusion patterns.
+ * @param directory - whether the path names a directory.
+ * @returns `true` when the path or its directory form matches an exclusion.
+ */
+export function isExcluded(relativePath: string, globs: readonly string[], directory: boolean): boolean {
   return globs.some(glob =>
     posix.matchesGlob(relativePath, glob)
     || (directory && posix.matchesGlob(`${relativePath}/`, glob)))

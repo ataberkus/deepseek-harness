@@ -23,3 +23,5 @@ Web 组合包的工作区检查点恢复把 `processhacker_audit.log` 当作工�
 ## Consequences
 
 检查点捕获和恢复会保留 Process Hacker 审计日志，而普通工作区文件仍受严格的恢复和回滚处理。部署回归测试防止 Web 组合包删除此排除项。
+
+`packages/session/workspace-checkpoint-local/tests/restore.spec.ts` 还钉住从旧检查点清单恢复时不会修改新排除的文件。

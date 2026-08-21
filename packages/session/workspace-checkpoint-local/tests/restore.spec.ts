@@ -7,8 +7,9 @@ import { SessionId } from '@deepseek-ai/dsh-session'
 import Storage from '@deepseek-ai/dsh-storage'
 import * as StorageDomain from '@deepseek-ai/dsh-storage-domain'
 import * as StorageJson from '@deepseek-ai/dsh-storage-json'
-import LocalWorkspaceCheckpoint, { canonicalizeCwd, restoreInternals } from '../src/index.ts'
+import LocalWorkspaceCheckpoint, { captureInternals, canonicalizeCwd, restoreInternals } from '../src/index.ts'
 import type { Config } from '../src/config.ts'
+import { buildManifest } from '../src/manifest.ts'
 import { rename as fsRename } from 'node:fs/promises'
 
 interface Harness {
@@ -18,7 +19,7 @@ interface Harness {
   dispose(): Promise<void>
 }
 
-async function boot(): Promise<Harness> {
+async function boot(excludeGlobs: string[] = []): Promise<Harness> {
   const parent = await mkdtemp(join(tmpdir(), 'dsh-workspace-checkpoint-restore-'))
   const cwd = await mkdtemp(join(parent, 'cwd-'))
   const storageRoot = join(parent, 'storage')
@@ -29,7 +30,7 @@ async function boot(): Promise<Harness> {
   const config: Config = {
     objectRoot,
     maxTotalBytes: 1024 * 1024,
-    excludeGlobs: [],
+    excludeGlobs,
     captureRetryCount: 2,
     captureRetryDelayMs: 10,
   }
@@ -52,6 +53,7 @@ describe('LocalWorkspaceCheckpoint restore', () => {
   const dispose: Array<() => Promise<void>> = []
 
   afterEach(async () => {
+    captureInternals.buildManifest = buildManifest
     restoreInternals.rename = fsRename
     restoreInternals.rollback = undefined
     await Promise.all(dispose.splice(0).map(fn => fn()))
@@ -76,6 +78,25 @@ describe('LocalWorkspaceCheckpoint restore', () => {
     expect(await readFile(join(harness.cwd, 'a.txt'), 'utf8')).toBe('one')
     expect(await readFile(join(harness.cwd, 'keep.bin'))).toEqual(Buffer.from([1, 2, 3]))
     await expect(stat(join(harness.cwd, 'extra.txt'))).rejects.toMatchObject({ code: 'ENOENT' })
+  })
+
+  it('leaves an excluded file untouched when restoring an older checkpoint', async () => {
+    const excludeGlobs = ['**/processhacker_audit.log']
+    const harness = await boot(excludeGlobs)
+    captureInternals.buildManifest = cwd => buildManifest(cwd, { excludeGlobs: [] })
+    dispose.push(() => harness.dispose())
+    const lockedPath = join(harness.cwd, 'processhacker_audit.log')
+    await writeFile(lockedPath, 'before\n')
+    const cp = await harness.ctx.workspaceCheckpoint.capture({
+      sessionId: SessionId('s-excluded'),
+      cwd: harness.cwd,
+      boundarySeq: -1,
+      role: 'initial',
+      turnOutcome: 'initial',
+    })
+    await writeFile(lockedPath, 'after\n')
+    await harness.ctx.workspaceCheckpoint.restore({ checkpointId: cp.id, cwd: harness.cwd })
+    expect(await readFile(lockedPath, 'utf8')).toBe('after\n')
   })
 
   it('leaves excluded trees in place when the object store lives inside cwd', async () => {

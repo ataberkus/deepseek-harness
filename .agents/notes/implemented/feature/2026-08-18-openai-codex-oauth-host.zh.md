@@ -51,3 +51,5 @@ device-code／SSH 登录、模型页「登录」按钮、`dsh auth login` 启动
 ## 测试
 
 `tests/oauth-store.spec.ts` 钉住永不引用秘密的解析拒绝、属主独占持久化、`modify`／`delete`／`list`、并发写入，以及 POSIX 下拒绝他人可读。`tests/oauth-login.spec.ts` 钉住仅浏览器 interaction、`/login`／`/logout`、重叠 `/login` 拒绝、`commands/open-url` 发出、无目录卡片的 live 路由注入、`listProviders().auth === 'oauth'`、从已存文件启动、冲突路由的包容、无存储 token 的无密钥 Codex 流得到 `MISSING_CREDENTIAL`，以及 opener argv 在 Windows／WSL 上让含 `&` 的 URL 保持为单个参数（`rundll32`）。`packages/host/apiproxy/tests/api-proxy-config.spec.ts` 钉住未声明 OAuth 视图携带 `auth` 与 `connected`。`packages/client/ui-settings-models/tests` 钉住 store join（普通 `settingsNs: ''` 仍隐藏；`auth: oauth` 视为已配置）以及通过 `llm.logout` 退出登录的已登录行。插件 apply 测试会 stub `$DSH_HOME`，避免开发者本机凭据文件注入 live 路由。`tests/catalog.spec.ts` 中的目录不予提供测试保留：除非 settings profile 点名该路由，否则密钥卡片仍不出现。授权 URL 的 stderr 行由该包测试钉住；无密钥的装配快照无法重放 ChatGPT 登录。
+
+`tests/oauth-login.spec.ts` 中的 live 请求回归测试验证已存 OAuth token 会在提供方请求前到达 pi-ai 的 `CredentialStore`。
