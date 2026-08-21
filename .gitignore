@@ -40,3 +40,5 @@ apps/web/dist/
 worktrees/
 .agents/worktrees/
 .typert-*/
+processhacker_audit.log
+.serena/
