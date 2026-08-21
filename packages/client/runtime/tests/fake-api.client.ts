@@ -163,7 +163,7 @@ export class FakeApiClient implements IApiClient {
     attachment: (payload: unknown) => this.record('session.attachment', payload, this.onAttachment(payload)),
     updateQueue: (payload: unknown) => this.record('session.updateQueue', payload, this.onUpdateQueue(payload)),
     cancel: (payload: unknown) => this.record('session.cancel', payload, this.onCancel(payload)),
-    edit: (payload: unknown) => this.record('session.edit', payload, this.onEdit(payload)),
+    edit: (payload: unknown, _signal?: AbortSignal) => this.record('session.edit', payload, this.onEdit(payload)),
     activate: (payload: unknown) => this.record('session.activate', payload, this.onActivate(payload)),
   }
 

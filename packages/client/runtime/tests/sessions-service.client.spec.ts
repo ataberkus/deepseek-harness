@@ -746,4 +746,25 @@ describe('coverage tails (branch duals)', () => {
     expect(b.svc.scope(sid('c'))).toBeUndefined()
   })
 
+  it('session.edit forwards payload and signal to api.sessions.edit', async () => {
+    const b = bench()
+    await feedList(b, [{ id: 's1' }])
+    const session = b.svc.binding(sid('s1'))!.session
+    b.api.onEdit = (_payload) => {
+      return Promise.resolve(ok({ sessionId: sid('s1-child') }))
+    }
+    const controller = new AbortController()
+    const result = await session.edit(2, 'cp-1' as never, 'edited text', controller.signal)
+    expect(result).toEqual({ ok: true, value: { sessionId: 's1-child' } })
+    const editCall = b.api.calls.find(c => c.method === 'session.edit')
+    expect(editCall).toMatchObject({
+      payload: {
+        sessionId: 's1',
+        messageSeq: 2,
+        checkpointId: 'cp-1',
+        text: 'edited text',
+      },
+    })
+  })
+
 })

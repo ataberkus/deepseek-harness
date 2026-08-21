@@ -8,6 +8,7 @@
  * @module dsh-llm-pi-ai/cursor/request
  */
 
+import { createHash } from 'node:crypto'
 import type { Context, SimpleStreamOptions, Tool } from '@earendil-works/pi-ai'
 import {
   concat,
@@ -42,10 +43,14 @@ export interface CursorSelectedImage {
 export interface AgentRunEncodeInput {
   /** Session conversation id; reused across turns when a checkpoint exists. */
   conversationId: string
+  /** Conversation context. */
+  context?: Context
+  /** In-memory blob store for session prompt and turn data. */
+  blobStore?: Map<string, Uint8Array>
   /** Opaque ConversationStateStructure bytes from the last checkpoint, when any. */
   checkpoint?: Uint8Array
   /** Flattened user text for this turn's UserMessageAction. */
-  userText: string
+  userText?: string
   /** Raster images for `UserMessage.selected_context`; omitted when none. */
   images?: readonly CursorSelectedImage[]
   /** Optional system prompt; sent as `custom_system_prompt`. */
@@ -62,6 +67,30 @@ export interface AgentRunEncodeInput {
   thinking?: boolean
   /** Canonical effort sent inside ThinkingDetails when thinking is on. */
   thinkingEffort?: string
+  /** Optional custom system prompt override. */
+  customSystemPrompt?: string
+}
+
+/**
+ * Compute the sha256 blob ID of data.
+ * @param data - raw bytes.
+ * @returns 32-byte hash.
+ */
+export function createBlobId(data: Uint8Array): Uint8Array {
+  return new Uint8Array(createHash('sha256').update(data).digest())
+}
+
+/**
+ * Store data into the session's in-memory blob store and return its blob ID.
+ * @param blobStore - session blob store.
+ * @param data - raw bytes.
+ * @returns 32-byte sha256 blob ID.
+ */
+export function storeBlob(blobStore: Map<string, Uint8Array>, data: Uint8Array): Uint8Array {
+  const blobId = createBlobId(data)
+  const hex = Buffer.from(blobId).toString('hex')
+  blobStore.set(hex, data)
+  return blobId
 }
 
 /**
@@ -70,6 +99,16 @@ export interface AgentRunEncodeInput {
  * @returns protobuf payload (not Connect-framed).
  */
 export function encodeAgentRunRequest(input: AgentRunEncodeInput): Uint8Array {
+  const blobStore = input.blobStore ?? new Map<string, Uint8Array>()
+  const activeUserIndex = input.context !== undefined ? findLastUserMessageIndex(input.context) : -1
+  if (input.context !== undefined) {
+    buildRootPromptMessagesJson(input.context, activeUserIndex, blobStore)
+    buildConversationTurns(input.context, activeUserIndex, blobStore)
+  } else if (input.systemPrompt !== undefined && input.systemPrompt.length > 0) {
+    const systemJson = JSON.stringify({ role: 'system', content: input.systemPrompt })
+    storeBlob(blobStore, new TextEncoder().encode(systemJson))
+  }
+
   const wireModelId = cursorWireModelId(input.modelId, input.thinking, input.thinkingEffort)
   const modelDetails = concat(
     encodeString(1, wireModelId),
@@ -82,17 +121,352 @@ export function encodeAgentRunRequest(input: AgentRunEncodeInput): Uint8Array {
     encodeString(1, wireModelId),
     encodeBool(2, input.maxMode === true),
   )
+
+  const activeMessage = (input.context !== undefined && activeUserIndex >= 0) ? input.context.messages[activeUserIndex] : undefined
+  const activeUserText = input.userText ?? (activeMessage !== undefined ? userContentText(activeMessage.content) : '')
+  const activeImages = input.images ?? (input.context !== undefined ? collectContextImages(input.context, true) : [])
+
+  const action = encodeMessage(1, encodeUserMessage(activeUserText, activeImages))
+
+  const systemPrompt = input.customSystemPrompt ?? input.systemPrompt
   return concat(
     input.checkpoint === undefined ? new Uint8Array() : encodeBytes(1, input.checkpoint),
-    encodeMessage(2, encodeMessage(1, encodeUserMessage(input.userText, input.images ?? []))),
+    encodeMessage(2, action),
     encodeMessage(3, modelDetails),
     encodeMcpTools(input.tools ?? []),
     encodeString(5, input.conversationId),
-    input.systemPrompt === undefined ? new Uint8Array() : encodeString(8, input.systemPrompt),
+    systemPrompt === undefined ? new Uint8Array() : encodeString(8, systemPrompt),
     encodeMessage(9, requestedModel),
   )
 }
 
+/**
+ * Build `rootPromptMessagesJson` entries stored in `blobStore`.
+ * @param context - conversation context.
+ * @param activeUserIndex - index of the active user message (-1 if none).
+ * @param blobStore - in-memory blob store.
+ * @returns array of sha256 blob IDs.
+ */
+export function buildRootPromptMessagesJson(
+  context: Context,
+  activeUserIndex: number,
+  blobStore: Map<string, Uint8Array>,
+): Uint8Array[] {
+  const blobIds: Uint8Array[] = []
+  const systemPrompt = context.systemPrompt?.trim()
+  const systemText = systemPrompt && systemPrompt.length > 0 ? systemPrompt : 'You are a helpful assistant.'
+  const systemJson = JSON.stringify({ role: 'system', content: systemText })
+  blobIds.push(storeBlob(blobStore, new TextEncoder().encode(systemJson)))
+
+  const historyEnd = activeUserIndex >= 0 ? activeUserIndex : context.messages.length
+  for (let i = 0; i < historyEnd; i++) {
+    const msg = context.messages[i]
+    if (msg === undefined) continue
+    if (msg.role === 'user') {
+      const text = userContentText(msg.content)
+      if (text.length === 0) continue
+      const json = JSON.stringify({ role: 'user', content: [{ type: 'text', text }] })
+      blobIds.push(storeBlob(blobStore, new TextEncoder().encode(json)))
+    } else if (msg.role === 'assistant') {
+      const parts: unknown[] = []
+      for (const block of msg.content) {
+        if (block.type === 'text') {
+          if (block.text.length > 0) parts.push({ type: 'text', text: block.text })
+        } else if (block.type === 'thinking') {
+          if (block.thinking.length > 0) parts.push({ type: 'text', text: block.thinking })
+        } else if (block.type === 'toolCall') {
+          parts.push({
+            type: 'tool-call',
+            toolCallId: block.id,
+            toolName: block.name,
+            args: block.arguments,
+          })
+        }
+      }
+      if (parts.length > 0) {
+        const json = JSON.stringify({ role: 'assistant', content: parts })
+        blobIds.push(storeBlob(blobStore, new TextEncoder().encode(json)))
+      }
+    } else if (msg.role === 'toolResult') {
+      const resultText = userContentText(msg.content)
+      const json = JSON.stringify({
+        role: 'tool',
+        id: msg.toolCallId,
+        content: [
+          {
+            type: 'tool-result',
+            toolName: msg.toolName,
+            toolCallId: msg.toolCallId,
+            result: resultText.length === 0 ? '(no output)' : resultText,
+            ...msg.isError ? { isError: true } : {},
+          },
+        ],
+      })
+      blobIds.push(storeBlob(blobStore, new TextEncoder().encode(json)))
+    }
+  }
+
+  return blobIds
+}
+
+/**
+ * Convert context messages into Cursor's `ConversationTurnStructure` blob IDs.
+ * @param context - conversation context.
+ * @param activeUserIndex - index of the active user message (-1 if none).
+ * @param blobStore - in-memory blob store.
+ * @returns array of sha256 blob IDs.
+ */
+export function buildConversationTurns(
+  context: Context,
+  activeUserIndex: number,
+  blobStore: Map<string, Uint8Array>,
+): Uint8Array[] {
+  const turns: Uint8Array[] = []
+  const historyEnd = activeUserIndex >= 0 ? activeUserIndex : context.messages.length
+
+  let i = 0
+  while (i < historyEnd) {
+    const msg = context.messages[i]
+    if (msg === undefined || msg.role !== 'user') {
+      i++
+      continue
+    }
+
+    const userText = userContentText(msg.content)
+    const userMsgBytes = encodeUserMessage(userText, [])
+    const userMsgBlobId = storeBlob(blobStore, userMsgBytes)
+    const stepBlobIds: Uint8Array[] = []
+    i++
+
+    while (i < historyEnd && context.messages[i]?.role !== 'user') {
+      const stepMsg = context.messages[i]
+      if (stepMsg === undefined) {
+        i++
+        continue
+      }
+      if (stepMsg.role === 'assistant') {
+        for (const item of stepMsg.content) {
+          if (item.type === 'text') {
+            if (item.text.length === 0) continue
+            const step = encodeMessage(1, encodeString(1, item.text))
+            stepBlobIds.push(storeBlob(blobStore, step))
+          } else if (item.type === 'thinking') {
+            if (item.thinking.length === 0) continue
+            const step = encodeMessage(3, encodeString(1, item.thinking))
+            stepBlobIds.push(storeBlob(blobStore, step))
+          } else if (item.type === 'toolCall') {
+            const mcpCall = encodeMessage(15, encodeMessage(1, concat(
+              encodeString(1, item.name),
+              encodeMcpArgMap(item.arguments),
+              encodeString(3, item.id),
+              encodeString(4, CURSOR_MCP_PROVIDER),
+              encodeString(5, item.name),
+            )))
+            const step = encodeMessage(2, mcpCall)
+            stepBlobIds.push(storeBlob(blobStore, step))
+          }
+        }
+      } else if (stepMsg.role === 'toolResult') {
+        const text = userContentText(stepMsg.content)
+        const prefix = stepMsg.isError ? '[Tool Error]' : '[Tool Result]'
+        const step = encodeMessage(1, encodeString(1, `${prefix}\n${text}`))
+        stepBlobIds.push(storeBlob(blobStore, step))
+      }
+      i++
+    }
+
+    const agentTurn = concat(
+      encodeBytes(1, userMsgBlobId),
+      ...stepBlobIds.map(stepId => encodeBytes(2, stepId)),
+    )
+    const turn = encodeMessage(1, agentTurn)
+    turns.push(storeBlob(blobStore, turn))
+  }
+
+  return turns
+}
+
+/**
+ * Encode ConversationStateStructure protobuf.
+ * @param rootPromptBlobIds - sha256 blob IDs for rootPromptMessagesJson.
+ * @param turnBlobIds - sha256 blob IDs for turns.
+ * @param cachedCheckpoint - optional previous turn checkpoint.
+ * @returns encoded protobuf bytes.
+ */
+export function encodeConversationState(
+  rootPromptBlobIds: readonly Uint8Array[],
+  turnBlobIds: readonly Uint8Array[],
+  cachedCheckpoint?: Uint8Array,
+): Uint8Array {
+  return concat(
+    ...rootPromptBlobIds.map(id => encodeBytes(1, id)),
+    ...turnBlobIds.map(id => encodeBytes(8, id)),
+    cachedCheckpoint === undefined ? new Uint8Array() : cachedCheckpoint,
+  )
+}
+
+/**
+ * Find the index of the trailing user message.
+ * @param context - conversation context.
+ * @returns index in context.messages, or -1 if trailing message is not a user message.
+ */
+export function findLastUserMessageIndex(context: Context): number {
+  for (let i = context.messages.length - 1; i >= 0; i--) {
+    if (context.messages[i]?.role === 'user') return i
+  }
+  return -1
+}
+
+/**
+ * Encode a GetBlob response for a KvServerMessage.
+ * @param id - server message id.
+ * @param blobData - raw bytes found in blobStore, if any.
+ * @returns AgentClientMessage payload.
+ */
+export function encodeKvGetBlobResponse(id: number, blobData?: Uint8Array): Uint8Array {
+  const getBlobResult = blobData !== undefined && blobData.byteLength > 0
+    ? encodeBytes(1, blobData)
+    : new Uint8Array()
+  const kvClientMessage = concat(
+    encodeVarint((1 << 3) | 0),
+    encodeVarint(id),
+    encodeMessage(2, getBlobResult),
+  )
+  return encodeMessage(3, kvClientMessage)
+}
+
+/**
+ * Encode a SetBlob response for a KvServerMessage.
+ * @param id - server message id.
+ * @returns AgentClientMessage payload.
+ */
+export function encodeKvSetBlobResponse(id: number): Uint8Array {
+  const kvClientMessage = concat(
+    encodeVarint((1 << 3) | 0),
+    encodeVarint(id),
+    encodeEmptyMessage(3),
+  )
+  return encodeMessage(3, kvClientMessage)
+}
+
+/**
+ * Encode a RequestContext response for an ExecServerMessage requestContextArgs frame.
+ * @param id - exec message id.
+ * @param execId - attachable exec id.
+ * @param systemPrompt - system prompt rules.
+ * @param tools - advertised MCP tools.
+ * @returns AgentClientMessage payload.
+ */
+export function encodeRequestContextResponse(
+  id: number,
+  execId: string,
+  systemPrompt: string | undefined,
+  tools: readonly Tool[] | undefined,
+): Uint8Array {
+  const rules = systemPrompt !== undefined && systemPrompt.trim().length > 0
+    ? encodeCursorRule('/dsh/system-prompt/0.mdc', systemPrompt.trim())
+    : new Uint8Array()
+
+  const toolDefs = tools !== undefined && tools.length > 0
+    ? encodeMcpToolDefinitions(tools)
+    : new Uint8Array()
+
+  const requestContext = concat(
+    rules.byteLength === 0 ? new Uint8Array() : encodeMessage(2, rules),
+    toolDefs.byteLength === 0 ? new Uint8Array() : encodeMessage(7, toolDefs),
+  )
+
+  const requestContextSuccess = encodeMessage(1, requestContext)
+  const requestContextResult = encodeMessage(1, requestContextSuccess)
+
+  const execClientMessage = concat(
+    encodeVarint((1 << 3) | 0),
+    encodeVarint(id),
+    execId.length > 0 ? encodeString(15, execId) : new Uint8Array(),
+    encodeMessage(10, requestContextResult),
+  )
+
+  return encodeMessage(2, execClientMessage)
+}
+
+/**
+ * Encode one CursorRule protobuf.
+ * @param fullPath - rule file path.
+ * @param content - rule markdown body.
+ * @returns encoded CursorRule message.
+ */
+export function encodeCursorRule(fullPath: string, content: string): Uint8Array {
+  return concat(
+    encodeString(1, fullPath),
+    encodeString(2, content),
+    encodeMessage(3, encodeEmptyMessage(1)),
+    encodeVarint((4 << 3) | 0),
+    encodeVarint(2),
+  )
+}
+
+/**
+ * Encode definitions for advertised MCP tools.
+ * @param tools - tools to advertise.
+ * @returns concatenated McpToolDefinition messages.
+ */
+export function encodeMcpToolDefinitions(tools: readonly Tool[]): Uint8Array {
+  const definitions = tools.map(tool => concat(
+    encodeString(1, tool.name),
+    encodeString(2, tool.description),
+    encodeBytes(3, encodeProtobufValue(tool.parameters)),
+    encodeString(4, CURSOR_MCP_PROVIDER),
+    encodeString(5, tool.name),
+  ))
+  return concat(...definitions.map(def => encodeMessage(7, def)))
+}
+
+/**
+ * Encode an allowlist precheck response for an ExecServerMessage.
+ * @param id - exec message id.
+ * @param execId - exec id.
+ * @param fieldNo - result field number (41 = shell, 42 = mcp, 43 = webFetch).
+ * @returns AgentClientMessage payload.
+ */
+export function encodeAllowlistPrecheckResponse(id: number, execId: string, fieldNo: number): Uint8Array {
+  const execClientMessage = concat(
+    encodeVarint((1 << 3) | 0),
+    encodeVarint(id),
+    execId.length > 0 ? encodeString(15, execId) : new Uint8Array(),
+    encodeEmptyMessage(fieldNo),
+  )
+  return encodeMessage(2, execClientMessage)
+}
+
+/**
+ * Fail an unhandled exec frame in band.
+ * @param id - exec message id.
+ * @param error - error description.
+ * @param errorCode - optional error code identifier.
+ * @returns AgentClientMessage payload.
+ */
+export function encodeExecThrowResponse(id: number, error: string, errorCode = 'exec_variant_unsupported'): Uint8Array {
+  const execThrow = concat(
+    encodeVarint((1 << 3) | 0),
+    encodeVarint(id),
+    encodeString(2, error),
+    encodeString(4, errorCode),
+  )
+  return encodeMessage(5, encodeMessage(2, execThrow))
+}
+
+/**
+ * Close an exec stream in band.
+ * @param id - exec message id.
+ * @returns AgentClientMessage payload.
+ */
+export function encodeExecStreamClose(id: number): Uint8Array {
+  const streamClose = concat(
+    encodeVarint((1 << 3) | 0),
+    encodeVarint(id),
+  )
+  return encodeMessage(5, encodeMessage(1, streamClose))
+}
 /**
  * Wrap an AgentRunRequest in the current Cursor AgentClientMessage envelope.
  * @param input - conversation, model, and tools for this turn.

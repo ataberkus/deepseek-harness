@@ -84,7 +84,9 @@ describe('FileOAuthStore', () => {
     const store = new FileOAuthStore(filename)
     const stored = await store.modify('openai-codex', async () => OAUTH)
     expect(stored).toMatchObject({ type: 'oauth', accountId: 'acc_test' })
-    expect((await stat(filename)).mode & 0o777).toBe(0o600)
+    if (process.platform !== 'win32') {
+      expect((await stat(filename)).mode & 0o777).toBe(0o600)
+    }
     const text = await readFile(filename, 'utf8')
     expect(text).toContain('refresh-token')
     expect(await store.list()).toEqual([{ providerId: 'openai-codex', type: 'oauth' }])

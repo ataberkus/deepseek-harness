@@ -365,6 +365,7 @@ export class Session implements SessionFace {
     messageSeq: number,
     checkpointId: CheckpointView['id'],
     text: string,
+    signal?: AbortSignal,
   ): Promise<RpcResult<{ sessionId: SessionId }>> {
     try {
       return (await this.api.sessions.edit({
@@ -372,7 +373,7 @@ export class Session implements SessionFace {
         messageSeq,
         checkpointId,
         text,
-      })).result
+      }, signal)).result
     } catch (error) {
       return transportError(error)
     }

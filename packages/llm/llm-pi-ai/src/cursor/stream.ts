@@ -29,7 +29,12 @@ import {
 } from './constants.ts'
 import { connectStream } from './connect.ts'
 import {
+  concat,
   decodeFields,
+  encodeEmptyMessage,
+  encodeMessage,
+  encodeString,
+  encodeVarint,
   fieldMapBytes,
   fieldRepeated,
   fieldString,
@@ -39,8 +44,14 @@ import {
   collectContextImages,
   contextEndsWithToolResult,
   encodeAgentRunClientMessage,
+  encodeAllowlistPrecheckResponse,
   encodeCursorClientHeartbeat,
   encodeCursorInteractionResponse,
+  encodeExecStreamClose,
+  encodeExecThrowResponse,
+  encodeKvGetBlobResponse,
+  encodeKvSetBlobResponse,
+  encodeRequestContextResponse,
   flattenContextText,
   latestTurnText,
   streamMaxMode,
@@ -57,10 +68,10 @@ const ZERO_USAGE: Usage = {
 
 interface SessionState {
   conversationId: string
+  blobStore: Map<string, Uint8Array>
   checkpoint?: Uint8Array
   awaitingTools: boolean
 }
-
 const sessions = new Map<string, SessionState>()
 
 /** Test hook: drop in-process conversation checkpoints. */
@@ -114,6 +125,8 @@ async function runCursorStream(
     const body = encodeAgentRunClientMessage({
       conversationId: session.conversationId,
       ...includeCheckpoint ? { checkpoint: session.checkpoint } : {},
+      context,
+      blobStore: session.blobStore,
       userText,
       ...images.length === 0 ? {} : { images },
       ...context.systemPrompt === undefined ? {} : { systemPrompt: context.systemPrompt },
@@ -150,6 +163,67 @@ async function runCursorStream(
         const message = decodeFields(payload)
         const checkpoint = fieldRepeated(message, 3)[0]
         if (checkpoint !== undefined) session.checkpoint = checkpoint
+
+        for (const kvField of fieldRepeated(message, 4)) {
+          const kvFields = decodeFields(kvField)
+          const id = fieldVarint(kvFields, 1)
+          const idNum = id !== undefined && id <= BigInt(Number.MAX_SAFE_INTEGER) ? Number(id) : undefined
+          if (idNum !== undefined) {
+            const getBlobField = fieldRepeated(kvFields, 2)[0]
+            if (getBlobField !== undefined) {
+              const blobId = fieldRepeated(decodeFields(getBlobField), 1)[0]
+              const hex = blobId !== undefined ? Buffer.from(blobId).toString('hex') : ''
+              const blobData = session.blobStore.get(hex)
+              sendToCursor?.(encodeKvGetBlobResponse(idNum, blobData))
+            }
+            const setBlobField = fieldRepeated(kvFields, 3)[0]
+            if (setBlobField !== undefined) {
+              const setBlobFields = decodeFields(setBlobField)
+              const blobId = fieldRepeated(setBlobFields, 1)[0]
+              const blobData = fieldRepeated(setBlobFields, 2)[0]
+              if (blobId !== undefined && blobData !== undefined) {
+                session.blobStore.set(Buffer.from(blobId).toString('hex'), blobData)
+              }
+              sendToCursor?.(encodeKvSetBlobResponse(idNum))
+            }
+          }
+        }
+
+        for (const execField of fieldRepeated(message, 2)) {
+          const execFields = decodeFields(execField)
+          const id = fieldVarint(execFields, 1)
+          const execId = fieldString(execFields, 15)
+          const idNum = id !== undefined && id <= BigInt(Number.MAX_SAFE_INTEGER) ? Number(id) : undefined
+          if (idNum !== undefined) {
+            if (fieldRepeated(execFields, 10).length > 0) {
+              sendToCursor?.(encodeRequestContextResponse(idNum, execId, context.systemPrompt, context.tools))
+            } else if (fieldRepeated(execFields, 41).length > 0) {
+              sendToCursor?.(encodeAllowlistPrecheckResponse(idNum, execId, 41))
+            } else if (fieldRepeated(execFields, 42).length > 0) {
+              sendToCursor?.(encodeAllowlistPrecheckResponse(idNum, execId, 42))
+            } else if (fieldRepeated(execFields, 43).length > 0) {
+              sendToCursor?.(encodeAllowlistPrecheckResponse(idNum, execId, 43))
+            } else if (fieldRepeated(execFields, 11).length > 0) {
+              const mcpArgsFields = decodeFields(fieldRepeated(execFields, 11)[0] ?? new Uint8Array())
+              const isApproval = fieldVarint(mcpArgsFields, 7) === 1n || fieldRepeated(mcpArgsFields, 6).length > 0
+              if (isApproval) {
+                const execClientMsg = concat(
+                  encodeVarint((1 << 3) | 0),
+                  encodeVarint(idNum),
+                  execId.length > 0 ? encodeString(15, execId) : new Uint8Array(),
+                  encodeEmptyMessage(7),
+                )
+                sendToCursor?.(encodeMessage(2, encodeMessage(11, execClientMsg)))
+              } else {
+                sendToCursor?.(encodeExecThrowResponse(idNum, 'MCP tool not available', 'tool_unavailable'))
+                sendToCursor?.(encodeExecStreamClose(idNum))
+              }
+            } else {
+              sendToCursor?.(encodeExecThrowResponse(idNum, 'Not implemented by this client', 'exec_variant_unsupported'))
+              sendToCursor?.(encodeExecStreamClose(idNum))
+            }
+          }
+        }
         const interactionQuery = fieldRepeated(message, 7)[0]
         if (interactionQuery !== undefined) {
           const query = decodeFields(interactionQuery)
@@ -163,6 +237,7 @@ async function runCursorStream(
             if (response !== undefined) sendToCursor?.(response)
           }
         }
+
         const update = fieldRepeated(message, 1)[0]
         if (update === undefined) continue
         for (const field of decodeFields(update)) {
@@ -256,11 +331,11 @@ async function runCursorStream(
 
 function sessionState(sessionId: string | undefined): SessionState {
   if (sessionId === undefined || sessionId.length === 0) {
-    return { conversationId: crypto.randomUUID(), awaitingTools: false }
+    return { conversationId: crypto.randomUUID(), blobStore: new Map(), awaitingTools: false }
   }
   const existing = sessions.get(sessionId)
   if (existing !== undefined) return existing
-  const created: SessionState = { conversationId: sessionId, awaitingTools: false }
+  const created: SessionState = { conversationId: sessionId, blobStore: new Map(), awaitingTools: false }
   sessions.set(sessionId, created)
   return created
 }

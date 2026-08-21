@@ -177,7 +177,7 @@ export class InputHub implements SessionInputResolver {
       if (imageIds.length > 0) {
         return Promise.resolve({ kind: 'error', text: this.t('message.editImagesUnsupported') })
       }
-      return session.edit(edit.messageSeq, edit.checkpointId, text).then((result) => {
+      return session.edit(edit.messageSeq, edit.checkpointId, text, signal).then((result) => {
         if (!result.ok) return { kind: 'error', text: `${result.error.message} (${result.error.code})` }
         try {
           this.sessions().open(result.value.sessionId)

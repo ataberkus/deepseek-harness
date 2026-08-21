@@ -84,6 +84,7 @@ export interface ISession {
     messageSeq: number,
     checkpointId: CheckpointView['id'],
     text: string,
+    signal?: AbortSignal,
   ): Promise<RpcResult<{ sessionId: SessionId }>>
   /**
    * Restore the latest usable checkpoint for this idle session.

@@ -3240,7 +3240,7 @@ export class FixtureApiClient extends AbstractApiClient {
       case 'session.selectModel': return this.api.sessions.selectModel(request)
       case 'session.rename': return this.api.sessions.rename(request)
       case 'session.fork': return this.api.sessions.fork(request)
-      case 'session.edit': return this.api.sessions.edit(request)
+      case 'session.edit': return this.api.sessions.edit(request, signal)
       case 'session.activate': return this.api.sessions.activate(request)
       case 'session.prompt': return this.api.sessions.prompt(request)
       case 'session.attachment': return this.api.sessions.attachment(request)

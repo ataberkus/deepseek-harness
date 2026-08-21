@@ -51,15 +51,27 @@ import {
   fieldVarint,
 } from '../src/cursor/protobuf.ts'
 import {
-  contextEndsWithToolResult,
+  buildConversationTurns,
+  buildRootPromptMessagesJson,
   collectContextImages,
+  contextEndsWithToolResult,
+  createBlobId,
   encodeAgentRunClientMessage,
   encodeAgentRunRequest,
+  encodeAllowlistPrecheckResponse,
   encodeCursorClientHeartbeat,
   encodeCursorInteractionResponse,
+  encodeCursorRule,
+  encodeExecStreamClose,
+  encodeExecThrowResponse,
+  encodeKvGetBlobResponse,
+  encodeKvSetBlobResponse,
   encodeMcpArgMap,
+  encodeMcpToolDefinitions,
+  encodeRequestContextResponse,
   flattenContextText,
   latestTurnText,
+  storeBlob,
   streamMaxMode,
 } from '../src/cursor/request.ts'
 import { resetCursorSessions, streamCursor } from '../src/cursor/stream.ts'
@@ -1552,6 +1564,199 @@ describe('cursor streamSimple', () => {
       messages: [{ role: 'user', content: 'hi', timestamp: 0 }],
     }, { headers: { authorization: 'Bearer tok' } }))
     expect(types).toContain('toolcall_end')
+  })
+  it('handles kvServerMessage getBlobArgs and setBlobArgs', async () => {
+    const sent: Uint8Array[] = []
+    const testBlob = new TextEncoder().encode(JSON.stringify({ role: 'system', content: 'hello world' }))
+    const blobId = createBlobId(testBlob)
+    const missingBlobId = new Uint8Array(32).fill(1)
+    const newBlob = new TextEncoder().encode('new content')
+    const newBlobId = createBlobId(newBlob)
+
+    cursorConnectInternals.request = async function* (request) {
+      request.onOpen?.((payload) => { sent.push(payload) })
+      // KvServerMessage 1: get existing blob
+      yield frameConnectMessage(encodeMessage(4, concat(
+        encodeVarint((1 << 3) | 0), encodeVarint(1),
+        encodeMessage(2, encodeBytes(1, blobId)),
+      )))
+      // KvServerMessage 2: get missing blob
+      yield frameConnectMessage(encodeMessage(4, concat(
+        encodeVarint((1 << 3) | 0), encodeVarint(2),
+        encodeMessage(2, encodeBytes(1, missingBlobId)),
+      )))
+      // KvServerMessage 3: set blob
+      yield frameConnectMessage(encodeMessage(4, concat(
+        encodeVarint((1 << 3) | 0), encodeVarint(3),
+        encodeMessage(3, concat(encodeBytes(1, newBlobId), encodeBytes(2, newBlob))),
+      )))
+      yield frameConnectMessage(interactionUpdate(14, new Uint8Array()))
+    }
+
+    await collect(streamCursor(MODEL, {
+      messages: [{ role: 'user', content: 'hi', timestamp: 0 }],
+      systemPrompt: 'hello world',
+    }, { headers: { authorization: 'Bearer tok' }, sessionId: 'kv-test' }))
+
+    expect(sent.length).toBeGreaterThanOrEqual(3)
+    // Verify first response is getBlobResult with blob data
+    const getResp = fieldRepeated(decodeFields(sent[0] ?? new Uint8Array()), 3)[0]
+    expect(getResp).toBeDefined()
+    const getFields = decodeFields(getResp ?? new Uint8Array())
+    expect(fieldVarint(getFields, 1)).toBe(1n)
+    const resultField = fieldRepeated(getFields, 2)[0]
+    expect(resultField).toBeDefined()
+    expect(fieldRepeated(decodeFields(resultField ?? new Uint8Array()), 1)[0]).toEqual(testBlob)
+
+    // Verify second response is getBlobResult with empty data (missing)
+    const missingResp = fieldRepeated(decodeFields(sent[1] ?? new Uint8Array()), 3)[0]
+    const missingFields = decodeFields(missingResp ?? new Uint8Array())
+    expect(fieldVarint(missingFields, 1)).toBe(2n)
+
+    // Verify third response is setBlobResult (empty success message)
+    const setResp = fieldRepeated(decodeFields(sent[2] ?? new Uint8Array()), 3)[0]
+    const setFields = decodeFields(setResp ?? new Uint8Array())
+    expect(fieldVarint(setFields, 1)).toBe(3n)
+  })
+
+  it('handles execServerMessage requestContextArgs, allowlists, approvals, and unhandled throws', async () => {
+    const sent: Uint8Array[] = []
+    cursorConnectInternals.request = async function* (request) {
+      request.onOpen?.((payload) => { sent.push(payload) })
+      // requestContextArgs (10)
+      yield frameConnectMessage(encodeMessage(2, concat(
+        encodeVarint((1 << 3) | 0), encodeVarint(100),
+        encodeString(15, 'exec-1'),
+        encodeEmptyMessage(10),
+      )))
+      // shellAllowlistPrecheckArgs (41)
+      yield frameConnectMessage(encodeMessage(2, concat(
+        encodeVarint((1 << 3) | 0), encodeVarint(101),
+        encodeString(15, 'exec-2'),
+        encodeEmptyMessage(41),
+      )))
+      // mcpAllowlistPrecheckArgs (42)
+      yield frameConnectMessage(encodeMessage(2, concat(
+        encodeVarint((1 << 3) | 0), encodeVarint(102),
+        encodeString(15, 'exec-3'),
+        encodeEmptyMessage(42),
+      )))
+      // webFetchAllowlistPrecheckArgs (43)
+      yield frameConnectMessage(encodeMessage(2, concat(
+        encodeVarint((1 << 3) | 0), encodeVarint(103),
+        encodeString(15, 'exec-4'),
+        encodeEmptyMessage(43),
+      )))
+      // mcpArgs approval probe (11 with smart_mode_approval_only = true)
+      yield frameConnectMessage(encodeMessage(2, concat(
+        encodeVarint((1 << 3) | 0), encodeVarint(104),
+        encodeString(15, 'exec-5'),
+        encodeMessage(11, concat(encodeVarint((7 << 3) | 0), encodeVarint(1))),
+      )))
+      // mcpArgs unapproved tool (11 without approval flag)
+      yield frameConnectMessage(encodeMessage(2, concat(
+        encodeVarint((1 << 3) | 0), encodeVarint(105),
+        encodeString(15, 'exec-6'),
+        encodeMessage(11, encodeString(1, 'bash')),
+      )))
+      // unhandled exec variant (99)
+      yield frameConnectMessage(encodeMessage(2, concat(
+        encodeVarint((1 << 3) | 0), encodeVarint(106),
+        encodeString(15, 'exec-7'),
+        encodeEmptyMessage(99),
+      )))
+      yield frameConnectMessage(interactionUpdate(14, new Uint8Array()))
+    }
+
+    await collect(streamCursor(MODEL, {
+      messages: [{ role: 'user', content: 'hi', timestamp: 0 }],
+      systemPrompt: 'sys rule',
+      tools: [{ name: 'bash', description: 'run shell', parameters: { type: 'object' } }],
+    }, { headers: { authorization: 'Bearer tok' }, sessionId: 'exec-test' }))
+
+    expect(sent.length).toBeGreaterThanOrEqual(7)
+    // Check requestContext response
+    const ctxResp = fieldRepeated(decodeFields(sent[0] ?? new Uint8Array()), 2)[0]
+    expect(ctxResp).toBeDefined()
+    const ctxFields = decodeFields(ctxResp ?? new Uint8Array())
+    expect(fieldVarint(ctxFields, 1)).toBe(100n)
+    expect(fieldRepeated(ctxFields, 10)).toHaveLength(1)
+
+    // Check precheck responses
+    const shellPrecheck = fieldRepeated(decodeFields(sent[1] ?? new Uint8Array()), 2)[0]
+    expect(fieldVarint(decodeFields(shellPrecheck ?? new Uint8Array()), 1)).toBe(101n)
+
+    const mcpPrecheck = fieldRepeated(decodeFields(sent[2] ?? new Uint8Array()), 2)[0]
+    expect(fieldVarint(decodeFields(mcpPrecheck ?? new Uint8Array()), 1)).toBe(102n)
+
+    const webPrecheck = fieldRepeated(decodeFields(sent[3] ?? new Uint8Array()), 2)[0]
+    expect(fieldVarint(decodeFields(webPrecheck ?? new Uint8Array()), 1)).toBe(103n)
+  })
+
+  it('builds rootPromptMessagesJson and conversationTurns helper structures', () => {
+    const store = new Map<string, Uint8Array>()
+    const ctx: PiContext = {
+      systemPrompt: 'test prompt',
+      messages: [
+        { role: 'user', content: 'first', timestamp: 0 },
+        {
+          role: 'assistant',
+          content: [
+            { type: 'text', text: 'assistant reply' },
+            { type: 'thinking', thinking: 'thought' },
+            { type: 'toolCall', id: 'call_1', name: 'bash', arguments: { command: 'pwd' } },
+          ],
+          api: CURSOR_API,
+          provider: CURSOR_PROVIDER,
+          model: MODEL.id,
+          usage: ZERO_USAGE,
+          stopReason: 'toolUse',
+          timestamp: 0,
+        },
+        {
+          role: 'toolResult',
+          toolCallId: 'call_1',
+          toolName: 'bash',
+          content: [{ type: 'text', text: '/root' }],
+          isError: false,
+          timestamp: 0,
+        },
+        { role: 'user', content: 'second', timestamp: 0 },
+      ],
+    }
+    const rootPromptIds = buildRootPromptMessagesJson(ctx, 3, store)
+    expect(rootPromptIds.length).toBeGreaterThan(1)
+    expect(store.size).toBeGreaterThan(0)
+
+    const turns = buildConversationTurns(ctx, 3, store)
+    expect(turns.length).toBe(1)
+
+    const rule = encodeCursorRule('/test.mdc', 'rule content')
+    expect(rule.byteLength).toBeGreaterThan(0)
+
+    const toolDefs = encodeMcpToolDefinitions([{ name: 'test', description: 'desc', parameters: {} }])
+    expect(toolDefs.byteLength).toBeGreaterThan(0)
+
+    const testStoredBlob = storeBlob(store, new TextEncoder().encode('stored'))
+    expect(testStoredBlob.byteLength).toBe(32)
+
+    const allowlistResp = encodeAllowlistPrecheckResponse(1, 'exec-1', 41)
+    expect(allowlistResp.byteLength).toBeGreaterThan(0)
+
+    const getBlobResp = encodeKvGetBlobResponse(1, new Uint8Array([1, 2, 3]))
+    expect(getBlobResp.byteLength).toBeGreaterThan(0)
+
+    const setBlobResp = encodeKvSetBlobResponse(1)
+    expect(setBlobResp.byteLength).toBeGreaterThan(0)
+
+    const ctxResp = encodeRequestContextResponse(1, 'exec-1', 'sys', [{ name: 't', description: 'd', parameters: {} }])
+    expect(ctxResp.byteLength).toBeGreaterThan(0)
+
+    const throwMsg = encodeExecThrowResponse(1, 'err')
+    expect(throwMsg.byteLength).toBeGreaterThan(0)
+
+    const closeMsg = encodeExecStreamClose(1)
+    expect(closeMsg.byteLength).toBeGreaterThan(0)
   })
 })
 
