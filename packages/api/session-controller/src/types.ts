@@ -11,7 +11,7 @@ import type { SessionHeader, SessionId, SurfaceOp } from '@deepseek-ai/dsh-sessi
 import type { SessionProjectionMap } from '@deepseek-ai/dsh-session-projection/types'
 import type { JobId } from '@deepseek-ai/dsh-jobs/brand'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
-import type { CheckpointOperationView, CheckpointView } from '@deepseek-ai/dsh-workspace-checkpoint'
+import type { CheckpointOperationView, CheckpointView } from '@deepseek-ai/dsh-workspace-checkpoint/types'
 import type { WorkspaceId } from '@deepseek-ai/dsh-workspace/types'
 
 declare module '@deepseek-ai/dsh-session-projection/types' {

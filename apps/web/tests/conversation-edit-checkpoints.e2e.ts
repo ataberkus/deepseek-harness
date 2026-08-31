@@ -9,8 +9,8 @@ import type { Browser, Page } from 'playwright'
 import { chromium } from 'playwright'
 import { afterAll, beforeAll, describe, expect, it, onTestFailed, vi } from 'vitest'
 import { SessionId } from '@deepseek-ai/dsh-session'
-import { CheckpointId } from '@deepseek-ai/dsh-workspace-checkpoint'
-import type {} from '@deepseek-ai/dsh-workspace-checkpoint'
+import { CheckpointId } from '@deepseek-ai/dsh-workspace-checkpoint/types'
+import type {} from '@deepseek-ai/dsh-workspace-checkpoint/types'
 import {
   assertFixtureInventory, captureStableAria, compareOrRefreshGolden, launchWebScaffold,
   seedSession, watchConsole, webSnapshotMode, type WebScaffold,

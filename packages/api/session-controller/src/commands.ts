@@ -905,10 +905,10 @@ function checkpointUnavailable(
 
 function editedContent(message: UserMessage, text: string): ContentBlock[] {
   let replaced = false
-  const content = message.content.map((block) => {
+  const content: ContentBlock[] = message.content.map((block) => {
     if (block.type !== 'text' || replaced) return block
     replaced = true
-    return { type: 'text', text }
+    return { type: 'text' as const, text }
   })
-  return replaced ? content : [{ type: 'text', text }, ...content]
+  return replaced ? content : [{ type: 'text' as const, text }, ...content]
 }

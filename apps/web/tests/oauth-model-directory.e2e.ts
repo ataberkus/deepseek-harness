@@ -76,7 +76,7 @@ describe('web e2e: hosted OAuth provider picker refreshes model directory', () =
     restoreFetch = () => { globalThis.fetch = originalFetch }
 
     scaffold = await launchWebScaffold({})
-    await scaffold.ctx.settings.update(settingsNamespace('llm-pi-ai'), {
+    await scaffold.ctx.settings.update('llm-pi-ai', {
       providers: {
         [SEED_PROVIDER]: {
           displayName: 'OAuth E2E Seed',

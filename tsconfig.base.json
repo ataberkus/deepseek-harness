@@ -72,7 +72,6 @@
       "@deepseek-ai/dsh-session-projection/types": ["./packages/session/session-projection/src/types.ts"],
       "@deepseek-ai/dsh-workspace": ["./packages/workspace/workspace/src/index.ts"],
       "@deepseek-ai/dsh-workspace/*": ["./packages/workspace/workspace/src/*"],
-      "@deepseek-ai/dsh-workspace-checkpoint": ["./packages/session/workspace-checkpoint/src/index.ts"],
       "@deepseek-ai/dsh-workspace-checkpoint/types": ["./packages/session/workspace-checkpoint/src/types.ts"],
       "@deepseek-ai/dsh-tool-todo/types": ["./packages/todo/tool-todo/src/types.ts"],
       "@deepseek-ai/dsh-tool-todo/client": ["./packages/todo/tool-todo/src/client.ts"],
