@@ -147,6 +147,7 @@ async function composed(enabled = true): Promise<{
       release: vi.fn(),
     })),
     recordEdit: vi.fn(async () => undefined),
+    sessionIndex: vi.fn(() => undefined),
     recoveryRequired: vi.fn(async () => undefined),
     markRecoveryRequired: vi.fn(async () => undefined),
     clearRecoveryRequired: vi.fn(async () => undefined),
