@@ -10,6 +10,7 @@ import type { ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
 import {
   ReasoningEffortId, createUserMessage, freezeMessage,
 } from '@deepseek-ai/dsh-llm'
+import type { ContentBlock, MessageSource } from '@deepseek-ai/dsh-llm'
 import { isAppendSurfaceEvent } from '@deepseek-ai/dsh-session'
 import type { SessionEvent, SessionHeader, SessionId, UserMessage } from '@deepseek-ai/dsh-session'
 import { SessionQueryError, type SessionObservation } from '@deepseek-ai/dsh-session-query'
@@ -312,11 +313,7 @@ export class SessionCommandController {
         { provider: selection.provider, model: selection.model },
       )
     }
-    const source: MessageSource = {
-      kind: 'user',
-      rpcId: request.requestId,
-      ...(clientTimeZone === undefined ? {} : { clientTimeZone }),
-    }
+    const source: MessageSource = { kind: 'user' }
     const hasImage = request.content.some(part => part.type === 'image')
     const admit = async (): Promise<SessionPromptValue> => {
       try {
@@ -588,7 +585,11 @@ export class SessionCommandController {
       operation('failed', undefined, String(error))
       if (emergency !== undefined) {
         try {
-          await checkpoint.restore({ checkpointId: emergency.id, cwd, lease })
+          await checkpoint.restore({
+            checkpointId: emergency.id,
+            cwd,
+            ...lease === undefined ? {} : { lease },
+          })
           await checkpoint.clearRecoveryRequired(workspaceKey)
         } catch (rollbackError) {
           const reason = `checkpoint rollback failed: ${String(rollbackError)}`
@@ -674,13 +675,21 @@ export class SessionCommandController {
         turnOutcome: 'failed',
         lease,
       })
-      await checkpoint.restore({ checkpointId: selected.id, cwd, lease })
+      await checkpoint.restore({
+        checkpointId: selected.id,
+        cwd,
+        ...lease === undefined ? {} : { lease },
+      })
       await checkpoint.clearRecoveryRequired(workspaceKey)
       return { restored: true, checkpointId: selected.id }
     } catch (error) {
       if (emergency !== undefined) {
         try {
-          await checkpoint.restore({ checkpointId: emergency.id, cwd, lease })
+          await checkpoint.restore({
+            checkpointId: emergency.id,
+            cwd,
+            ...lease === undefined ? {} : { lease },
+          })
         } catch (rollbackError) {
           const reason = `checkpoint rollback failed: ${String(rollbackError)}`
           await checkpoint.markRecoveryRequired(workspaceKey, reason)

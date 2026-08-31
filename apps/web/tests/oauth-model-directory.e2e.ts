@@ -7,8 +7,7 @@ import { fileURLToPath } from 'node:url'
 import type { Browser, Page } from 'playwright'
 import { chromium } from 'playwright'
 import { afterAll, beforeAll, describe, expect, it, onTestFailed } from 'vitest'
-import { settingsNamespace } from '@deepseek-ai/dsh-settings'
-import { RpcId } from '@deepseek-ai/dsh-host-apiproxy/api/rpc'
+
 import {
   connectFreshWorkspace,
   newEnglishPage,
@@ -153,13 +152,10 @@ describe('web e2e: hosted OAuth provider picker refreshes model directory', () =
     await page.getByRole('menuitemradio', { name: 'DeepSeek-V4-Flash', exact: true })
       .waitFor({ state: 'visible', timeout: 15_000 })
 
-    const hostModels = await scaffold.ctx.apiProxy.llm.models({
-      rpcId: RpcId('oauth-e2e-models'),
-      payload: {},
-    })
-    if (!hostModels.result.ok) throw new Error(`llm.models failed: ${hostModels.result.error.message}`)
-    expect(hostModels.result.value.groups.find(group => group.id === 'google-antigravity')?.models)
-      .toEqual(expect.arrayContaining([expect.objectContaining({ id: 'gemini-3.7-flash' })]))
+    const antigravityModels = await scaffold.ctx.llm.listModels('google-antigravity')
+    expect(antigravityModels).toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: 'gemini-3.7-flash' })]),
+    )
 
     await page.getByRole('menuitemradio', { name: 'Gemini 3.7 Flash', exact: true })
       .waitFor({ state: 'visible', timeout: 15_000 })

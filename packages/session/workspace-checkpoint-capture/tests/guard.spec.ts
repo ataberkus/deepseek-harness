@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
-import LlmRuntime, { CallId } from '@deepseek-ai/dsh-llm'
+import LlmRuntime, { ToolCallId } from '@deepseek-ai/dsh-llm'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
@@ -53,7 +53,7 @@ describe('workspace-checkpoint-capture recovery guard', () => {
     })
 
     await ctx.tools.execute({
-      callId: CallId('guard-disabled-call'),
+      callId: ToolCallId('guard-disabled-call'),
       name: 'write-disabled',
       arguments: {},
       agent: { session } as Agent,
@@ -95,7 +95,7 @@ describe('workspace-checkpoint-capture recovery guard', () => {
     })
 
     const result = await ctx.tools.execute({
-      callId: CallId('guard-tool-call'),
+      callId: ToolCallId('guard-tool-call'),
       name: 'write',
       arguments: {},
       agent: { session } as Agent,
@@ -131,7 +131,7 @@ describe('workspace-checkpoint-capture recovery guard', () => {
     })
 
     await ctx.tools.execute({
-      callId: CallId('guard-nested-call'),
+      callId: ToolCallId('guard-nested-call'),
       name: 'nested',
       arguments: {},
       agent: { session } as Agent,

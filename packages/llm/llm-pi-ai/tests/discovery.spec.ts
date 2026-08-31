@@ -128,8 +128,7 @@ describe('catalog-route model discovery', () => {
     await expect(ctx.llm.discoverModels('llm-pi-ai', {
       provider: 'openrouter',
       baseURL: 'http://127.0.0.1:9/v1',
-      signal: aborted,
-    })).rejects.toMatchObject({ code: 'ABORTED' })
+    }, aborted)).rejects.toMatchObject({ code: 'ABORTED' })
 
     const named = await listingServer({
       body: JSON.stringify({ data: [{ id: 'vendor/via-api', supported_parameters: ['tools'] }] }),

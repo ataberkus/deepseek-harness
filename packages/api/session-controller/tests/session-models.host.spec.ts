@@ -296,16 +296,16 @@ describe('Web session model selection', () => {
     await ctx.fiber.dispose()
   })
   it('preserves a Harness catalog failure code for clients', async () => {
-    const { ctx, sessionId } = await harness()
+    const { ctx } = await harness()
     ctx.llm.registerAdapter(['coded'], new CatalogAdapter(
       'Coded Provider',
       new LlmError('Cursor GetUsableModels returned no usable models', 'CURSOR_NO_USABLE_MODELS'),
     ))
-    const api = createApiProxy(ctx, {
+    const remote = createSessionTestRemote(ctx, {
       defaultModelSelection: () => ({ provider: 'deepseek-official', model: 'deepseek-chat' }),
       cwd: '/tmp',
     })
-    const catalog = expectValue(await api.sessions.models(request({ sessionId })))
+    const catalog = expectValue(await remote.modelCatalog())
     expect(catalog.failures).toContainEqual({
       id: 'coded',
       name: 'Coded Provider',

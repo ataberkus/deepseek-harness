@@ -7,7 +7,7 @@
 
 import { Context, Service } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
-import { settingsNamespace } from '@deepseek-ai/dsh-settings'
+
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type {
   CaptureRequest,
@@ -22,7 +22,7 @@ import type {
 import type { StoredSessionCheckpointIndex } from './spec.ts'
 
 /** Settings namespace used by the local provider and Web Plugins card. */
-export const WORKSPACE_CHECKPOINT_SETTINGS_NAMESPACE = settingsNamespace('workspace-checkpoint')
+export const WORKSPACE_CHECKPOINT_SETTINGS_NAMESPACE = 'workspace-checkpoint'
 
 /** User-owned settings for workspace conversation checkpoints. */
 export interface WorkspaceCheckpointSettings {

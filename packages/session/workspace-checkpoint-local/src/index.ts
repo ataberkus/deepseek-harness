@@ -6,7 +6,7 @@
 
 import { Context, Service } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
-import { installSettingsSection } from '@deepseek-ai/dsh-settings'
+import type {} from '@deepseek-ai/dsh-settings'
 import { resolve } from 'node:path'
 import {
   CheckpointId,
@@ -79,9 +79,17 @@ export class LocalWorkspaceCheckpoint extends WorkspaceCheckpoint {
     this.objectRoot = resolveObjectRoot(config)
     const entry: WorkspaceCheckpointSettings = { enabled: config.enabled ?? false }
     this.enabledSource = () => entry
-    installSettingsSection(ctx, WORKSPACE_CHECKPOINT_SETTINGS_NAMESPACE, WORKSPACE_CHECKPOINT_SETTINGS_SCHEMA, entry, {
-      setSource: (current) => { this.enabledSource = current },
-      onChange: () => {},
+    ctx.inject(['settings'], (settingsCtx) => {
+      settingsCtx.settings.installSection(
+        ctx,
+        WORKSPACE_CHECKPOINT_SETTINGS_NAMESPACE,
+        WORKSPACE_CHECKPOINT_SETTINGS_SCHEMA,
+        entry,
+        {
+          setSource: (current) => { this.enabledSource = current },
+          onChange: () => {},
+        },
+      )
     })
   }
 
