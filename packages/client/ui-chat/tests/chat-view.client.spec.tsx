@@ -518,7 +518,7 @@ describe('ChatView', () => {
           status: { kind: 'ready' }, restoreEligible: true, fileCount: 1, createdAt: 0,
         }],
         workspaceResumable: true,
-      } as NonNullable<SessionSnapshot['checkpoints']>,
+      } as never,
     })
     const beginEdit = vi.fn()
     h.props.inputActions.beginEdit = beginEdit
@@ -544,7 +544,7 @@ describe('ChatView', () => {
           id: 'later', sessionId: SID, boundarySeq: 5, labelIndex: 1, role: 'turn',
           status: { kind: 'ready' }, restoreEligible: true, fileCount: 1, createdAt: 1,
         }],
-      } as NonNullable<SessionSnapshot['checkpoints']>,
+      } as never,
     })
     const beginEdit = vi.fn()
     h.props.inputActions.beginEdit = beginEdit
@@ -570,7 +570,7 @@ describe('ChatView', () => {
           id: 'too-late', sessionId: SID, boundarySeq: 8, labelIndex: 1, role: 'turn',
           status: { kind: 'ready' }, restoreEligible: true, fileCount: 1, createdAt: 0,
         }],
-      } as NonNullable<SessionSnapshot['checkpoints']>,
+      } as never,
     })
     h.props.inputActions.beginEdit = vi.fn()
 
@@ -593,7 +593,7 @@ describe('ChatView', () => {
           status: { kind: 'ready' }, restoreEligible: true, fileCount: 1, createdAt: 1,
         },
         workspaceResumable: true,
-      } as NonNullable<SessionSnapshot['checkpoints']>,
+      } as never,
     })
     const beginEdit = vi.fn()
     h.props.inputActions.beginEdit = beginEdit

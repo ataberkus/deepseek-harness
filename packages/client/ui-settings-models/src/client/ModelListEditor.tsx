@@ -452,7 +452,7 @@ export function ModelListEditor(props: ModelListEditorProps): ReactNode {
       >
         <div className={styles['candidateActions']}>
           <Button variant="ghost" size="sm" onClick={toggleAllCandidates}>
-            {t(allCandidatesPicked ? 'fetchDeselectAll' : 'fetchSelectAll')}
+            {t(allCandidatesPicked ? 'fetchSelectNone' : 'fetchSelectAll')}
           </Button>
         </div>
         <ul className={styles['candidateList']}>

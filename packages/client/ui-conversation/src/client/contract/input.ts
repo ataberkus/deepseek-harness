@@ -7,6 +7,7 @@
  * here is the submit plane (phase, claim, attempt) alone.
  */
 import type { Context } from '@deepseek-ai/cordis'
+import type { CheckpointView } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { ObservableSnapshot, SnapshotStore } from '@deepseek-ai/dsh-client-store'
 import type { Branded } from '@deepseek-ai/dsh-brand'
 import type { LexicalEditor } from 'lexical'
@@ -229,6 +230,23 @@ export interface InputActions {
   pruneImages(ids: readonly DraftAttachmentId[]): void
   /** Enter submission (adjudication / claim transaction / default sink inside). */
   submit(): void
+  /** Enter composer edit mode for one durable user message. */
+  beginEdit?(target: ConversationEditDraft): void
+  /** Leave composer edit mode and restore the captured prior draft. */
+  cancelEdit?(): void
+
+}
+
+/** Composer target for a Host-owned conversation edit through a workspace checkpoint. */
+export interface ConversationEditDraft {
+  /** Durable sequence of the direct user message being replaced. */
+  readonly messageSeq: number
+  /** Usable checkpoint immediately before that message's turn. */
+  readonly checkpointId: CheckpointView['id']
+  /** Original message text loaded into the composer. */
+  readonly originalText: string
+  /** Composer draft captured on entering edit mode; restored on cancel. */
+  readonly previousDraft?: string
 }
 
 /** One surfaced notice (command results, adjudication failures). seq keys re-render of repeats. */
@@ -332,6 +350,9 @@ export interface InputState {
   readonly occurrences: readonly Occurrence[]
   /** Read-only transient inbox projection from Session control, including pending steering. */
   readonly queue: readonly QueuedMessage[]
+  /** Present while the composer is editing a durable user message. */
+  readonly edit?: ConversationEditDraft
+
 }
 
 /**

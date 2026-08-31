@@ -21,6 +21,7 @@
     { "path": "../../jobs/jobs" },
     { "path": "../../llm/llm" },
     { "path": "../../session/session-projection" },
+    { "path": "../../session/workspace-checkpoint" },
     { "path": "../../session/session-title" },
     { "path": "../../subagent/subagent" },
     { "path": "../../util/brand" },

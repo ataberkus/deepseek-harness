@@ -839,11 +839,11 @@ describe('openai-codex login tab', () => {
     const open = vi.fn(() => tab)
     vi.stubGlobal('window', { open })
     let finish!: (value: ExecuteValue) => void
-    const { ctx, source, warm } = await loginBench(() => new Promise((resolve) => { finish = resolve }))
+    const { remote, source, warm } = await loginBench(() => new Promise((resolve) => { finish = resolve }))
     await warm(proj('s1'))
     const pending = submitLogin(source, 'openai-codex')
     expect(open).toHaveBeenCalledWith('about:blank', 'dsh-oauth-login')
-    ctx.remote.$dispatch('commands/open-url', [CODEX_AUTH_URL])
+    remote.emit('commands/open-url', [CODEX_AUTH_URL])
     expect(tab.location.href).toBe(CODEX_AUTH_URL)
     expect(open).toHaveBeenCalledTimes(1)
     finish({ matched: true })
@@ -855,12 +855,12 @@ describe('openai-codex login tab', () => {
     const open = vi.fn(() => tab)
     vi.stubGlobal('window', { open })
     const gate = Promise.withResolvers<ExecuteValue>()
-    const { ctx, command, warm } = await loginBench(() => gate.promise)
+    const { remote, command, warm } = await loginBench(() => gate.promise)
     await warm(proj('s1'))
 
     const pending = command.execute(proj('s1'), '/login cursor')
     expect(open).toHaveBeenCalledWith('about:blank', 'dsh-oauth-login')
-    ctx.remote.$dispatch('commands/open-url', [CODEX_AUTH_URL])
+    remote.emit('commands/open-url', [CODEX_AUTH_URL])
     expect(tab.location.href).toBe(CODEX_AUTH_URL)
     gate.resolve({ matched: true })
     await expect(pending).resolves.toEqual({ kind: 'success' })
@@ -914,12 +914,12 @@ describe('openai-codex login tab', () => {
     const tab = { closed: false, location: { href: 'about:blank' } }
     vi.stubGlobal('window', { open: vi.fn(() => tab) })
     let finish!: (value: ExecuteValue) => void
-    const { ctx, source, warm } = await loginBench(() => new Promise((resolve) => { finish = resolve }))
+    const { remote, source, warm } = await loginBench(() => new Promise((resolve) => { finish = resolve }))
     await warm(proj('s1'))
     const pending = submitLogin(source, '')
-    ctx.remote.$dispatch('commands/open-url', ['http://localhost:1455/auth/callback'])
-    ctx.remote.$dispatch('commands/open-url', ['javascript:alert(1)'])
-    ctx.remote.$dispatch('commands/open-url', ['not a url'])
+    remote.emit('commands/open-url', ['http://localhost:1455/auth/callback'])
+    remote.emit('commands/open-url', ['javascript:alert(1)'])
+    remote.emit('commands/open-url', ['not a url'])
     expect(tab.location.href).toBe('about:blank')
     finish({ matched: true })
     await pending
@@ -929,11 +929,11 @@ describe('openai-codex login tab', () => {
     const open = vi.fn(() => null)
     vi.stubGlobal('window', { open })
     let finish!: (value: ExecuteValue) => void
-    const { ctx, source, warm } = await loginBench(() => new Promise((resolve) => { finish = resolve }))
+    const { remote, source, warm } = await loginBench(() => new Promise((resolve) => { finish = resolve }))
     await warm(proj('s1'))
     const pending = submitLogin(source, 'openai-codex')
     expect(open).toHaveBeenCalledWith('about:blank', 'dsh-oauth-login')
-    ctx.remote.$dispatch('commands/open-url', [CODEX_AUTH_URL])
+    remote.emit('commands/open-url', [CODEX_AUTH_URL])
     expect(open).toHaveBeenLastCalledWith(CODEX_AUTH_URL, 'dsh-oauth-login')
     finish({ matched: true })
     await pending
@@ -944,11 +944,11 @@ describe('openai-codex login tab', () => {
     const open = vi.fn(() => tab)
     vi.stubGlobal('window', { open })
     let finish!: (value: ExecuteValue) => void
-    const { ctx, source, warm } = await loginBench(() => new Promise((resolve) => { finish = resolve }))
+    const { remote, source, warm } = await loginBench(() => new Promise((resolve) => { finish = resolve }))
     await warm(proj('s1'))
     const pending = submitLogin(source, 'openai-codex')
     tab.closed = true
-    ctx.remote.$dispatch('commands/open-url', [CODEX_AUTH_URL])
+    remote.emit('commands/open-url', [CODEX_AUTH_URL])
     expect(open).toHaveBeenLastCalledWith(CODEX_AUTH_URL, 'dsh-oauth-login')
     finish({ matched: true })
     await pending
@@ -972,10 +972,10 @@ describe('openai-codex login tab', () => {
 
   it('does not throw when /login runs without a window', async () => {
     let finish!: (value: ExecuteValue) => void
-    const { ctx, source, warm } = await loginBench(() => new Promise((resolve) => { finish = resolve }))
+    const { remote, source, warm } = await loginBench(() => new Promise((resolve) => { finish = resolve }))
     await warm(proj('s1'))
     const pending = submitLogin(source, 'openai-codex')
-    ctx.remote.$dispatch('commands/open-url', [CODEX_AUTH_URL])
+    remote.emit('commands/open-url', [CODEX_AUTH_URL])
     finish({ matched: true })
     await expect(pending).resolves.toEqual({ kind: 'success' })
   })

@@ -673,13 +673,13 @@ describe('endpoint interrogation', () => {
     const boxes = [...dialog.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')]
     expect(boxes.map(box => box.checked)).toEqual([true, true, true])
 
-    fireEvent.click(within_(dialog, en.fetchDeselectAll))
+    fireEvent.click(within_(dialog, en.fetchSelectNone))
     expect(boxes.map(box => box.checked)).toEqual([false, false, false])
     expect(within_(dialog, en.fetchSelectAll)).toBeTruthy()
 
     fireEvent.click(within_(dialog, en.fetchSelectAll))
     expect(boxes.map(box => box.checked)).toEqual([true, true, true])
-    expect(within_(dialog, en.fetchDeselectAll)).toBeTruthy()
+    expect(within_(dialog, en.fetchSelectNone)).toBeTruthy()
   })
 })
 

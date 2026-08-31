@@ -1,14 +1,14 @@
 /** Browser-owned projection of Host workspace-checkpoint metadata and progress. */
 
-import type { MuxFrame } from '@deepseek-ai/dsh-api-remotes/client'
-import type { ObservableSnapshot } from '../contract/store.ts'
+import type { ObservableSnapshot } from '@deepseek-ai/dsh-client-store'
+import type { SessionCheckpointFrame } from '../../types.ts'
 import { Notifier } from './notifier.ts'
 
 /** One client-safe checkpoint row from a `session/checkpoints` frame. */
-export type CheckpointView = Extract<MuxFrame, { type: 'session/checkpoints' }>['checkpoints'][number]
+export type CheckpointView = SessionCheckpointFrame['checkpoints'][number]
 
 /** One Host-owned edit or activation operation. */
-export type CheckpointOperation = NonNullable<Extract<MuxFrame, { type: 'session/checkpoints' }>['operation']>
+export type CheckpointOperation = NonNullable<SessionCheckpointFrame['operation']>
 
 /** Complete control-plane state for one session's workspace checkpoints. */
 export interface CheckpointSnapshot {
@@ -65,7 +65,7 @@ export class CheckpointSnapshotStore implements ObservableSnapshot<CheckpointSna
    * Install one complete Host frame.
    * @param frame - validated `session/checkpoints` payload.
    */
-  replace(frame: Extract<MuxFrame, { type: 'session/checkpoints' }>): void {
+  replace(frame: SessionCheckpointFrame): void {
     this.snapshot = {
       enabled: frame.enabled,
       checkpoints: frame.checkpoints,

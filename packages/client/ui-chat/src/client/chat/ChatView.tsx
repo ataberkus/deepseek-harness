@@ -5,9 +5,10 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import type {
   ConversationTimelineSnapshot, RenderMessageImages,
 } from '@deepseek-ai/dsh-client-ui-conversation/client'
-import type { CheckpointSnapshot } from '@deepseek-ai/dsh-session-controller/client'
+import type { CheckpointSnapshot } from '@deepseek-ai/dsh-api-session-controller/client'
 import { Button, IconChevronDownOutline14, Modal } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { ChatNode } from '../contract/chat-nodes.ts'
+import '../conversation-nodes/message.ts'
 import type { ChatViewSlotProps } from '../contract/slots.ts'
 import type { ChatSnapshot, TurnNavigationItem } from '../contract/snapshot.ts'
 import { PendingSteeringBubble, PendingSubmissionBubble } from './MessageItem.tsx'
@@ -18,10 +19,17 @@ import css from './ChatView.module.css'
 
 const FOLLOW_THRESHOLD = 24
 
+function userMessageSeq(candidate: { kind: string; data?: unknown }): number | undefined {
+  if (candidate.kind !== 'user') return undefined
+  const data = candidate.data as { seq?: number } | undefined
+  return typeof data?.seq === 'number' ? data.seq : undefined
+}
+
 /** Active column host when present; otherwise the view-local scroller. */
 function scrollerOf(from: HTMLElement): HTMLElement {
   return (from.closest('[data-conversation-scroll]')) ?? from
 }
+
 
 interface PagingAnchor {
   /** Stable node/call identity, independent of boundary-spanning group keys. */
@@ -252,10 +260,7 @@ export function ChatView({
   const selectedCallId = useStore(s => s.selection?.callId)
   const checkpointSnapshot = useSession(s => s.checkpoints)
   const editMessage = useCallback((messageSeq: number, text: string): void => {
-    const node = nodeStore.values().find((candidate) => {
-      if (candidate.kind !== 'user') return false
-      return candidate.data.seq === messageSeq
-    }) as ChatNode<'user'> | undefined
+    const node = nodeStore.values().find(candidate => userMessageSeq(candidate) === messageSeq) as ChatNode<'user'> | undefined
     const checkpoint = node === undefined
       ? undefined
       : checkpointBeforeUserMessage(node, checkpointSnapshot)
@@ -267,10 +272,7 @@ export function ChatView({
     })
   }, [checkpointSnapshot, inputActions, nodeStore])
   const editCheckpointFor = useCallback((messageSeq: number): boolean => {
-    const node = nodeStore.values().find((candidate) => {
-      if (candidate.kind !== 'user') return false
-      return candidate.data.seq === messageSeq
-    }) as ChatNode<'user'> | undefined
+    const node = nodeStore.values().find(candidate => userMessageSeq(candidate) === messageSeq) as ChatNode<'user'> | undefined
     return node !== undefined && checkpointBeforeUserMessage(node, checkpointSnapshot) !== undefined
   }, [checkpointSnapshot, nodeStore])
   // Host session.edit cancels a running source before restoring the selected

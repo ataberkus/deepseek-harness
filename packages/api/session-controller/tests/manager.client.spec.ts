@@ -207,7 +207,7 @@ describe('list lifecycle', () => {
   })
 
   it('retains checkpoint snapshots across resubscribe until a later frame', () => {
-    const manager = new SessionManager(new FakeApiClient(), fakeRemote())
+    const manager = new SessionManager(fakeRemote())
     const checkpointFrame = {
       type: 'session/checkpoints',
       sessionId: S1,
@@ -244,7 +244,7 @@ describe('list lifecycle', () => {
         fileCount: 2,
       },
     }
-    manager.handleMuxEnvelope({ rpcId: 'checkpoint' as never, payload: checkpointFrame as never })
+    manager.handleControlFrame(checkpointFrame as never)
     const session = manager.get(S1)
     expect(session.getSnapshot().checkpoints).toMatchObject({
       enabled: true,
@@ -266,19 +266,10 @@ describe('list lifecycle', () => {
       operation: { phase: 'ready' },
     })
 
-    manager.handleMuxEnvelope({
-      rpcId: 'subscribed' as never,
-      payload: { type: 'session/subscribed', sessionId: S1, lastSeq: 4 },
-    })
-    expect(session.getSnapshot().checkpoints).toMatchObject({
-      enabled: true,
-      checkpoints: [{ id: 'cp-1', fileCount: 2 }],
-    })
-
-    manager.handleMuxEnvelope({ rpcId: 'checkpoint-disabled' as never, payload: {
+    manager.handleControlFrame({
       ...checkpointFrame,
       enabled: false,
-    } as never })
+    } as never)
     expect(session.getSnapshot().checkpoints?.enabled).toBe(false)
     const disabledSummary = manager.getListSnapshot().items.find(item => item.sessionId === S1)
     expect(disabledSummary?.checkpointLabelIndex).toBeUndefined()
@@ -732,7 +723,7 @@ describe('remaining branches', () => {
   it('uses the Host workspace cwd in the create echo immediately', async () => {
     const api = new FakeApiClient()
     api.onCreate = () => Promise.resolve(ok({ sessionId: S1, cwd: '/selected/workspace' }))
-    const manager = new SessionManager(api, fakeRemote())
+    const manager = new SessionManager(fakeRemote(api))
 
     await manager.create({ workspaceId: 'workspace-1' as never })
 

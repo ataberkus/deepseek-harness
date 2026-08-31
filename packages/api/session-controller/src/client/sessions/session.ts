@@ -33,6 +33,9 @@ import type { SessionRemotes } from './remotes.ts'
 import { SessionQueueMirror } from './queue-mirror.ts'
 import { CheckpointSnapshotStore } from './checkpoint-store.ts'
 import type { CheckpointView } from './checkpoint-store.ts'
+import { ProjectionValueStore } from './projection-store.ts'
+import type { ProjectionsBaseline } from './projection-store.ts'
+import { resolvedClientTimeZone } from '../time-zone.ts'
 
 /** Messages requested per history page. */
 export const PAGE_MESSAGES = 50
@@ -413,8 +416,14 @@ export class Session implements SessionFace {
     await this.open()
   }
 
-  // ---- Subscription API (useSyncExternalStore direct wiring) ----
-
+  /**
+   * Subscribe to Session snapshot replacement.
+   * @param listener - callback invoked after a flush.
+   * @returns the unsubscribe function.
+   */
+  subscribe(listener: () => void): () => void {
+    return this.notifier.subscribe(listener)
+  }
 
   /**
    * Cached Session snapshot (rebuilt lazily when dirty with no listeners).

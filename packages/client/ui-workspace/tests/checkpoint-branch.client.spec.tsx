@@ -2,7 +2,7 @@
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, render, screen } from '@testing-library/react'
-import type { SessionId } from '@deepseek-ai/dsh-client-runtime/client'
+import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import { zh as commonZh } from '@deepseek-ai/dsh-client-locale/src/locales/zh.ts'
 import { zh } from '../src/client/locales.ts'
@@ -22,6 +22,7 @@ function node(overrides: Partial<SessionNode> = {}): SessionNode {
     running: false,
     runningSubagentCount: 0,
     completed: false,
+    hasActiveSchedule: false,
     updatedAt: 0,
     ...overrides,
   }
