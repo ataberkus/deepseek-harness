@@ -1,15 +1,12 @@
 /**
  * Models settings section: the provider rows joined from the configurable
  * directory, settings namespaces, and credential states, with one editor
- * card at a time. Rows expose confirmed API-key state through accessible
- * solid configured or missing dots, and an OAuth live route as a read-only
- * signed-in row (name plus connected dot, Sign out to delete the stored login,
- * no editor). A whole-section provider without a
+ * card at a time. Rows expose only confirmed API-key state through accessible
+ * solid configured or missing dots. A whole-section provider without a
  * configured key renders as its open setup card instead of a row, but only in
  * the first-run posture — no provider on the page can serve requests yet — and
  * only until the user closes that card; the add flow is a card carrying the
- * dormant-provider select; directory entries may also carry setup defaults
- * for named presets such as LM Studio. Each card kind owns its own open state, so closing
+ * dormant-provider select. Each card kind owns its own open state, so closing
  * one never discards a draft in another. Every mutation writes through the
  * wire, while a provider removal first requires confirmation; the page
  * re-renders from pushed invalidations or the post-apply reload.
@@ -17,12 +14,14 @@
 
 import { useState } from 'react'
 import type { ReactNode } from 'react'
-import type { IApiClient } from '@deepseek-ai/dsh-api-remotes/client'
 import { Button, IconPlusOutline16, Modal } from '@deepseek-ai/dsh-client-ui-primitives'
-import type { InjectFace } from '@deepseek-ai/dsh-client-ui-slots'
+import type { InjectFace, PropsRenderSlots } from '@deepseek-ai/dsh-client-ui-slots'
+// Type-only: pulls this package's SlotMap merge (the two Models child slots).
+import type {} from './slot-contract.ts'
 import { CustomProviderCard } from './CustomProviderCard.tsx'
-import { deriveKeyRef, messageOf, protocolChoices, providerUsable } from './store.ts'
+import { deriveKeyRef, protocolChoices, providerUsable } from './store.ts'
 import type { ModelsSettingsStore, ProviderRow } from './store.ts'
+import type { ModelsOperations } from './operations.ts'
 import type { SettingsSchemaOperations } from './schema-operations.ts'
 import { ProviderEditor, type ProviderEditorProps } from './ProviderEditor.tsx'
 import type { en } from './locales.ts'
@@ -36,19 +35,28 @@ export interface ModelsSectionInjected {
     /** Page snapshot bound by the UI renderer as useSnapshot. */
     snapshot: ModelsSettingsStore['store']
   }
-  /** Wire faces the editor writes through. */
-  api: Pick<IApiClient, 'settings' | 'credentials' | 'llm'>
+  /** The Host operations the section and its cards invoke. */
+  operations: ModelsOperations
   /** Settings schema and immutable path callbacks. */
   schema: SettingsSchemaOperations
   /** Section copy. */
   t: (key: keyof typeof en) => string
 }
 
+/** The child slots this section declares and dispatches (see ./slot-contract.ts). */
+type ModelsChildSlots = 'settings.models.provider-card' | 'settings.models.footer'
+
+/** The child-slot dispatch function the renderer binds for the section. */
+type ModelsRenderSlot = PropsRenderSlots<ModelsChildSlots>['renderSlot']
+
 /**
  * Props delivered by the slot outlet: the inject face spread flat (the
- * renderer erases the share boundary at the render call).
+ * renderer erases the share boundary at the render call) plus the child-slot
+ * dispatch seat. The seat is required: the renderer binds it at the render
+ * call itself — unlike the inject face it is never absent at runtime — and a
+ * direct render that forgets it fails to compile instead of mounting nothing.
  */
-export type ModelsSectionProps = Partial<InjectFace<ModelsSectionInjected>>
+export type ModelsSectionProps = Partial<InjectFace<ModelsSectionInjected>> & PropsRenderSlots<ModelsChildSlots>
 
 type ModelsSectionFace = InjectFace<ModelsSectionInjected>
 
@@ -64,14 +72,13 @@ export interface ProviderIdentity {
 interface EditorTarget extends ProviderIdentity {
   settingsNs: string
   settingsPath: readonly string[]
-  /** Values a settings surface may seed when creating this provider's profile. */
-  defaults?: ProviderEditorProps['defaults']
   /** Writable credential identified under this page's conventional reference. */
   credentialRef?: string
   /** The adapter reports this route as one it does not ship (see {@link ProviderEditorProps.declared}). */
   declared?: boolean
+  /** Values a settings surface may seed when creating this provider's profile. */
+  defaults?: ProviderEditorProps['defaults']
 }
-
 /** Confirmed destructive action: a settings profile, or an OAuth live-route logout. */
 interface DeleteTarget extends EditorTarget {
   /** Present when Delete signs out a hosted OAuth route instead of unsetting a profile. */
@@ -81,7 +88,7 @@ interface DeleteTarget extends EditorTarget {
 /** Values that vary around the shared provider-editor rendering. */
 interface ProviderEditorRenderProps extends Pick<
   ProviderEditorProps,
-  'namespace' | 'schema' | 'api' | 't' | 'readOnly' | 'onClose'
+  'namespace' | 'schema' | 'operations' | 't' | 'readOnly' | 'onClose'
 > {
   target: EditorTarget
 }
@@ -106,55 +113,46 @@ function renderProviderEditor({ target, ...props }: ProviderEditorRenderProps): 
  * and the whole operation safely retryable; both unsets are idempotent.
  * The settings removal names the profile rather than rebuilding its whole
  * namespace from a partial view.
- * @param api - settings and credential wire faces.
+ * @param operations - the page's Host operations.
  * @param controller - the page store to refresh.
  * @param target - the provider's settings address and optional managed credential.
  * @returns the failure message, or undefined once the write and reload landed.
  */
 export async function removeProviderProfile(
-  api: Pick<IApiClient, 'settings' | 'credentials'>,
+  operations: ModelsOperations,
   controller: ModelsSettingsStore,
   target: { settingsNs: string; settingsPath: readonly string[]; credentialRef?: string },
 ): Promise<string | undefined> {
-  try {
-    if (target.credentialRef !== undefined) {
-      const credential = await api.credentials.unset({ ref: target.credentialRef })
-      if (!credential.result.ok) return credential.result.error.message
-    }
-    const response = await api.settings.mutate({
-      ns: target.settingsNs,
-      ops: [{ op: 'unset', path: [...target.settingsPath] }],
-    })
-    if (!response.result.ok) return response.result.error.message
-  } catch (error) {
-    // The transport rejected rather than answering; the caller must be able
-    // to retry the idempotent operation instead of the row silently staying.
-    return messageOf(error)
+  if (target.credentialRef !== undefined) {
+    const credential = await operations.removeCredential(target.credentialRef)
+    if (credential !== undefined) return credential
   }
+  const written = await operations.writeSettings(
+    target.settingsNs,
+    [{ op: 'unset', path: [...target.settingsPath] }],
+    undefined,
+  )
+  if (written.kind !== 'written') return written.message
   await controller.load()
   return undefined
 }
-
 /**
  * Sign out of a hosted OAuth live route. The call deletes the stored login
  * and unregisters the route; it does not mutate settings.
- * @param api - the llm wire face.
+ * @param api - the narrow LLM logout face.
  * @param controller - the page store to refresh.
- * @param provider - live route id (`openai-codex`, `cursor`, or `google-antigravity`).
+ * @param provider - live route id.
  * @returns the failure message, or undefined once logout and reload landed.
  */
 export async function logoutOAuthProvider(
-  api: Pick<IApiClient, 'llm'>,
+  api: { logout(provider: string): Promise<void> },
   controller: ModelsSettingsStore,
   provider: string,
 ): Promise<string | undefined> {
   try {
-    const response = await api.llm.logout({ provider })
-    if (!response.result.ok) return response.result.error.message
+    await api.logout(provider)
   } catch (error) {
-    // The transport rejected rather than answering; the caller must be able
-    // to retry instead of the row silently staying signed in.
-    return messageOf(error)
+    return error instanceof Error ? error.message : String(error)
   }
   await controller.load()
   return undefined
@@ -175,6 +173,19 @@ export function needsSetup(row: ProviderRow, anyUsable: boolean): boolean {
   return row.credential?.configured !== true
 }
 
+/**
+ * The provider-card seat's credential fact: the reference this page would use
+ * for the row — the profile's `apiKeyEnv`, or the page's derived
+ * `<ROUTE>_API_KEY` while the profile names none — confirmed configured. The
+ * derived half is what keeps the seat consistent with the editor on the
+ * add-provider draft, whose dormant row names no reference yet.
+ */
+function keyConfiguredOf(row: ProviderRow): boolean {
+  return row.apiKeyEnv !== undefined
+    ? row.credential?.configured === true
+    : row.derivedCredential?.configured === true
+}
+
 function targetOf(row: ProviderRow): EditorTarget {
   const managedRef = deriveKeyRef(row.entry.provider)
   const credentialRef = row.apiKeyEnv === managedRef
@@ -189,9 +200,7 @@ function targetOf(row: ProviderRow): EditorTarget {
     settingsPath: row.entry.settingsPath,
     ...row.entry.defaults === undefined ? {} : { defaults: { ...row.entry.defaults } },
     ...credentialRef === undefined ? {} : { credentialRef },
-    // Absent is not "shipped": an adapter that answers nothing leaves the
-    // route-level fields only a declared route owns off the card, exactly as
-    // it leaves the custom tag off the row.
+    // Only declared routes may expose route-owned fields.
     ...row.entry.declared === true ? { declared: true } : {},
   }
 }
@@ -214,16 +223,16 @@ export function providerCopy(template: string, target: ProviderIdentity): string
  * @returns the section, or null while the shell has not injected yet.
  */
 export function ModelsSection(props: ModelsSectionProps): ReactNode {
-  const { controller, useSnapshot, api, schema, t } = props
+  const { controller, useSnapshot, operations, schema, t, renderSlot } = props
   if (
-    controller === undefined || useSnapshot === undefined || api === undefined
+    controller === undefined || useSnapshot === undefined || operations === undefined
     || schema === undefined || t === undefined
   ) return null
-  return <Loaded injected={{ controller, useSnapshot, api, schema, t }} />
+  return <Loaded injected={{ controller, useSnapshot, operations, schema, t }} renderSlot={renderSlot} />
 }
 
-function Loaded({ injected }: { injected: ModelsSectionFace }): ReactNode {
-  const { controller, api, schema, t } = injected
+function Loaded({ injected, renderSlot }: { injected: ModelsSectionFace; renderSlot: ModelsRenderSlot }): ReactNode {
+  const { controller, operations, schema, t } = injected
   const state = injected.useSnapshot(snapshot => snapshot)
   const [editing, setEditing] = useState<EditorTarget | undefined>(undefined)
   const [adding, setAdding] = useState(false)
@@ -272,8 +281,8 @@ function Loaded({ injected }: { injected: ModelsSectionFace }): ReactNode {
     setDeleting(true)
     setDeleteFailure(undefined)
     void (deleteTarget.oauth === true
-      ? logoutOAuthProvider(api, controller, deleteTarget.provider)
-      : removeProviderProfile(api, controller, deleteTarget))
+      ? logoutOAuthProvider(controller, controller, deleteTarget.provider)
+      : removeProviderProfile(operations, controller, deleteTarget))
       .then((failure) => {
         if (failure !== undefined) {
           setDeleteFailure(failure)
@@ -316,6 +325,12 @@ function Loaded({ injected }: { injected: ModelsSectionFace }): ReactNode {
   const addable = state.rows.filter(row => !row.configured && row.entry.settingsNs !== '')
   const addTarget = adding ? editing : undefined
   const addNamespace = addTarget === undefined ? undefined : state.namespaces.get(addTarget.settingsNs)
+  // The draft's directory row, for the card extension seat. A refresh can drop
+  // the row mid-draft (the route was adopted or withdrawn elsewhere); the
+  // draft card stays while the seat simply has no row to dispatch.
+  const addRow = addTarget === undefined
+    ? undefined
+    : state.rows.find(row => row.entry.provider === addTarget.provider)
   // Hand-declared routes live in the pi-ai namespace, which is also the only
   // one whose schema names the protocols one may speak; without it mounted
   // there is nothing to declare and the entry point stays disabled.
@@ -391,11 +406,16 @@ function Loaded({ injected }: { injected: ModelsSectionFace }): ReactNode {
                   target,
                   namespace,
                   schema,
-                  api,
+                  operations,
                   t,
                   readOnly: !state.writable,
                   onClose: (changed) => { closeSetup(changed, target) },
                 })}
+                {renderSlot(
+                  'settings.models.provider-card',
+                  { provider: row.entry, configured: row.configured, keyConfigured: keyConfiguredOf(row) },
+                  { entryKey: row.entry.settingsNs },
+                )}
               </li>
             )
           }
@@ -471,12 +491,17 @@ function Loaded({ injected }: { injected: ModelsSectionFace }): ReactNode {
                     : null}
                 </span>
               </div>
+              {renderSlot(
+                'settings.models.provider-card',
+                { provider: row.entry, configured: row.configured, keyConfigured: keyConfiguredOf(row) },
+                { entryKey: row.entry.settingsNs },
+              )}
               {open
                 ? renderProviderEditor({
                   target,
                   namespace,
                   schema,
-                  api,
+                  operations,
                   t,
                   readOnly: !state.writable,
                   onClose: (changed) => { closeEditor(changed, target) },
@@ -517,12 +542,18 @@ function Loaded({ injected }: { injected: ModelsSectionFace }): ReactNode {
                 schema={schema}
                 settingsPath={addTarget.settingsPath}
                 {...addTarget.defaults === undefined ? {} : { defaults: addTarget.defaults }}
-                {...addTarget.declared === true ? { declared: true } : {}}
-                api={api}
+                operations={operations}
                 t={t}
                 readOnly={!state.writable}
                 onClose={(changed) => { closeEditor(changed, addTarget) }}
               />
+              {addRow === undefined
+                ? null
+                : renderSlot(
+                  'settings.models.provider-card',
+                  { provider: addRow.entry, configured: addRow.configured, keyConfigured: keyConfiguredOf(addRow) },
+                  { entryKey: addRow.entry.settingsNs },
+                )}
             </div>
           )
           : declaring
@@ -533,7 +564,7 @@ function Loaded({ injected }: { injected: ModelsSectionFace }): ReactNode {
                   protocols={protocols}
                   /* v8 ignore next -- the card only opens from a button disabled without this namespace */
                   revision={state.namespaces.get('llm-pi-ai')?.revision ?? 0}
-                  api={api}
+                  operations={operations}
                   t={t}
                   readOnly={!state.writable}
                   onClose={(changed) => {
@@ -563,7 +594,6 @@ function Loaded({ injected }: { injected: ModelsSectionFace }): ReactNode {
                     setEditing(targetOf(first))
                   }}
                 >
-                  {/* Same glyph as the composer's attach button. */}
                   <IconPlusOutline16 size={14} />
                   {t('add')}
                 </button>
@@ -584,6 +614,7 @@ function Loaded({ injected }: { injected: ModelsSectionFace }): ReactNode {
               </div>
             )}
       </div>
+      {renderSlot('settings.models.footer', {})}
       <Modal
         open={deleteTarget !== undefined}
         onClose={closeDelete}

@@ -9,11 +9,14 @@
  */
 import { Service } from '@deepseek-ai/cordis'
 import type { Context } from '@deepseek-ai/cordis'
-// Type-only: pulls the ctx.remote merge and the forwarded-event key face
-// (`commands/change` and `commands/open-url` ride the allowlist) into this program.
+// Type-only: pulls the ctx.remote merge and the forwarded-event keys
+// (`commands/change` and `commands/open-url` ride the allowlist) into this
+// program.
 import type {} from '@deepseek-ai/dsh-api-remotes/client'
 import type { CommandResult } from '@deepseek-ai/dsh-commands/types'
-import type { ClientContext, ISessions, SessionId } from '@deepseek-ai/dsh-client-runtime/client'
+import type { Context as ClientContext } from '@deepseek-ai/cordis'
+import type { ISessions } from '@deepseek-ai/dsh-api-session-controller/client'
+import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-locale/client'
 import type {
   CandidateRequest, ClientSessionContext, CommandClaim, PickOutcome, InputTriggerCandidate, InputTriggerPick,
@@ -40,15 +43,14 @@ declare module '@deepseek-ai/cordis' {
   }
 }
 
-/** Named tab reused for hosted OAuth so a second `/login` does not blank an in-progress authorize page. */
-const HOSTED_OAUTH_LOGIN_WINDOW = 'dsh-oauth-login'
-
 /** Recover the command name from a line the Host confirmed as executed. */
 function submittedCommandName(line: string): string {
   const trimmed = line.trim()
   const separator = trimmed.search(/\s/u)
   return (separator === -1 ? trimmed : trimmed.slice(0, separator)).slice(1)
 }
+/** Named tab reused for hosted OAuth so a second `/login` does not blank an in-progress authorize page. */
+const HOSTED_OAUTH_LOGIN_WINDOW = 'dsh-oauth-login'
 
 /**
  * `/login`, `/login openai-codex`, `/login cursor`, and
@@ -83,6 +85,7 @@ function openBrowserWindow(url: string, name: string): Window | null {
   if (typeof globalThis.window === 'undefined') return null
   return globalThis.window.open(url, name)
 }
+
 
 /** Live mutable state in one holder (service methods run behind the caller-ctx tracker). */
 interface LiveState {
@@ -164,7 +167,6 @@ export class CommandUiRuntime extends Service implements CommandUiContract {
   private readonly live: LiveState = { contributions: new Map(), decorations: new Map(), popups: new Map() }
   /** `command`-namespace translator (composer refusal notices). */
   private readonly t: TranslateNS<'command'>
-
   /**
    * @param ctx - owning root context (plugin fiber; the service registers
    * itself as `command` and follows that fiber's lifetime).
@@ -195,10 +197,9 @@ export class CommandUiRuntime extends Service implements CommandUiContract {
     ctx.remote.$on('commands/change', () => { this.directory.invalidateAll() })
     ctx.remote.$on('commands/open-url', (url) => { this.navigateLoginTab(url) })
     // A preset switch changes which commands one session's agent resolves and
-    // registers nothing globally, so the registry-wide signal above never
-    // fires for it: repull that key alone, soft, so the old snapshot serves
-    // the menu until the new one lands.
-    ctx.remote.$on('agent-preset/selected', (sessionId) => { void this.directory.refresh(sessionId) })
+    // registers nothing globally. Drop that key's old composition before
+    // prewarming so a newly opened menu waits for the replacement catalog.
+    ctx.remote.$on('agent-preset/selected', (sessionId) => { this.directory.resetSession(sessionId) })
     ctx.on('connection/reset', () => { this.directory.resetConnected() })
   }
 
@@ -235,6 +236,7 @@ export class CommandUiRuntime extends Service implements CommandUiContract {
       decorations.set(decoration.name, decoration)
       return () => { decorations.delete(decoration.name) }
     }, 'command.decorate()')
+
     return () => { void dispose() }
   }
 
@@ -272,7 +274,6 @@ export class CommandUiRuntime extends Service implements CommandUiContract {
 
   /** Composer focus hooks by session (the overlay wiring binds the textarea focus here). */
   private readonly focusHooks = new Map<SessionId, () => void>()
-
   /**
    * Tab opened during the `/login` keystroke. Kept until the user closes it so a
    * second `/login` reuses it instead of replacing an in-progress authorize page
@@ -303,6 +304,7 @@ export class CommandUiRuntime extends Service implements CommandUiContract {
     }
     this.pendingLoginTab = openBrowserWindow(url, HOSTED_OAUTH_LOGIN_WINDOW)
   }
+
 
   /**
    * Bind one session's composer-focus hook (overlay slot wiring; unbind on unmount).
@@ -458,17 +460,15 @@ export class CommandUiRuntime extends Service implements CommandUiContract {
   }
 
   /**
-   * Execute one complete command line for the session. An unmatched line
-   * returns an error outcome; an admitted command returns plain success
-   * regardless of handler outcome because the host logs the lifecycle and
-   * renders the result as a persistent flow node. Image-carrying handler
-   * errors return an error outcome so the composer retains the attachments.
-   * Hosted OAuth lines prepare the named browser tab before remote execution.
-   * Transport failures throw.
-   * @param session - receiving client session projection.
-   * @param line - complete command line, including the leading slash.
-   * @param images - serialized composer images accompanying the command.
-   * @returns the command submission outcome.
+   * The command.execute transaction, addressed to the session's agent — pure
+   * admission semantics. An unmatched line reports an error outcome (the
+   * composer's immediate admission feedback); an admitted command reports
+   * plain success regardless of its handler outcome, because the host
+   * executor durably logged the lifecycle (`command/run`/`command/done`) and
+   * the outcome renders as a persistent flow node — the composer never
+   * echoes it. A handler error result reports an error outcome so the
+   * composer keeps the submission (draft and images) for correction.
+   * A refused call throws.
    */
   async execute(
     session: ClientSessionContext,
@@ -515,9 +515,9 @@ export class CommandUiRuntime extends Service implements CommandUiContract {
    * Fire-and-forget execute for the internal ('handled') paths. Outcomes are
    * NOT surfaced here: the host executor durably logs the command lifecycle
    * (`command/run`/`command/done`), and the mux-broadcast events render as a
-   * persistent flow node on every tab. Only a transport/admission failure —
-   * which never entered a handler and therefore never logged — falls back to
-   * the composer notice as immediate feedback.
+   * persistent flow node on every tab. Only an admission failure — which never
+   * entered a handler and therefore never logged — falls back to the composer
+   * notice as immediate feedback.
    */
   private runDetached(desc: CommandDescriptor, session: ClientSessionContext, line: string): void {
     void this.execute(session, line).then(
@@ -542,7 +542,7 @@ export class CommandUiRuntime extends Service implements CommandUiContract {
     })
   }
 
-  /** Route an admission/transport failure to the session's composer notice channel (scope gone = attempt died with it). */
+  /** Route an admission failure to the session's composer notice channel (scope gone = attempt died with it). */
   private noticeFor(id: SessionId, level: 'info' | 'error', text: string): void {
     const actx = this.scopeFor(id)
     if (actx === undefined) return

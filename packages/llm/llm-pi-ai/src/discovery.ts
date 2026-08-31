@@ -26,7 +26,7 @@
  */
 
 import { INVALID_CREDENTIAL_CODE, LlmError, normalizeApiKey } from '@deepseek-ai/dsh-llm'
-import type { LlmDiscoveredModel, LlmModelDiscoveryRequest } from '@deepseek-ai/dsh-llm'
+import type { LlmDiscoveredModel, LlmModelDiscoveryOperation } from '@deepseek-ai/dsh-llm'
 import { catalogModels, catalogProvider } from './catalog.ts'
 import {
   catalogListingTarget,
@@ -79,7 +79,7 @@ function catalogDiscoveryRows(provider: string): LlmDiscoveredModel[] {
  *   endpoint refuses or fails the request, or the reply is not a model listing.
  */
 export async function discoverModels(
-  request: LlmModelDiscoveryRequest,
+  request: LlmModelDiscoveryOperation,
   storedApiKey?: () => Promise<string | undefined>,
 ): Promise<readonly LlmDiscoveredModel[]> {
   const installed = request.provider === undefined ? [] : catalogDiscoveryRows(request.provider)

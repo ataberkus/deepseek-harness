@@ -1,13 +1,11 @@
 /**
  * Frozen contract of the client command surface. Types only. The
  * CommandUiRuntime (`ctx.commandUi`) implements this face; business packages
- * consume command registration, popup decoration, and shared execution.
+ * consume `register` alone.
  */
-import type { ClientContext } from '@deepseek-ai/dsh-client-runtime/client'
+import type { Context as ClientContext } from '@deepseek-ai/cordis'
 import type {
-  ClientSessionContext,
-  SubmitImageAttachment,
-  SubmitOutcome,
+  SubmitImageAttachment, SubmitOutcome, ClientSessionContext,
 } from '@deepseek-ai/dsh-client-ui-input-trigger/client'
 
 /** Copy for an option that must be acknowledged before onSelect can run. */
@@ -89,19 +87,16 @@ export interface CommandUiContract {
    */
   decorate(decoration: CommandDecoration): () => void
   /**
-   * Execute one complete host command line through the shared admission path.
-   * Login lines prepare the named OAuth tab before remote execution; transport
-   * failures reject, while admitted handler outcomes follow `SubmitOutcome`.
-   * @param session - receiving client session projection.
-   * @param line - complete slash command line, including the leading slash.
-   * @param images - optional serialized composer images for image-aware commands.
-   * @returns the shared command submission outcome.
+   * Execute one slash command through the Host command dispatcher.
+   *
+   * This is the shared submission seam for client decorations that need to
+   * turn a popup choice into a normal command line.
    */
   execute(
     session: ClientSessionContext,
     line: string,
     images?: readonly SubmitImageAttachment[],
   ): Promise<SubmitOutcome>
-  /** Resolve the per-session popup controller (wiring/overlay layer). */
+  /** Resolve the per-session popup controller for one session scope (wiring/overlay layer). */
   popupFor(actx: ClientContext): unknown
 }

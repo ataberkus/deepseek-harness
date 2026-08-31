@@ -16,13 +16,12 @@
  * A route naming a credential reference still resolves it through the harness
  * seam and passes it as the request's `apiKey` option, which pi-ai treats as
  * the highest-priority auth override — that is what keeps the fail-loud
- * reference semantics; the named LM Studio route uses a non-secret placeholder
- * only when no explicit reference is configured. Everything that override does
- * not cover reaches pi-ai through the collection's own auth: the credential
- * store holds the records a login wrote and a refresh rotates, and the auth
- * context answers the ambient questions a provider asks while resolving. Both
- * are stable across snapshots, so a configuration change rebuilds the
- * collection without forgetting who is signed in.
+ * reference semantics. Everything that override does not cover reaches pi-ai
+ * through the collection's own auth: the credential store holds the records a
+ * login wrote and a refresh rotates, and the auth context answers the ambient
+ * questions a provider asks while resolving. Both are stable across snapshots,
+ * so a configuration change rebuilds the collection without forgetting who is
+ * signed in.
  *
  * @module dsh-llm-pi-ai/adapter
  */
@@ -48,14 +47,16 @@ import {
 } from '@deepseek-ai/dsh-llm'
 import type {
   GenerateOptions,
+  ImageAttachmentAccess,
   LlmModelInfo,
   LlmProviderInfo,
   LlmResolvedModelInfo,
+  PreparedAdapterCall,
   ReasoningEffortId as ReasoningEffortIdType,
   ResolvedRetryPolicy,
   StreamChunk,
 } from '@deepseek-ai/dsh-llm'
-import type { AttachmentStore } from '@deepseek-ai/dsh-attachment'
+import type { AttachmentStore, ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
 import { idleWatchdog, timeoutOf } from '@deepseek-ai/dsh-timeout'
 import {
   DEFAULT_CONTEXT_WINDOW,
@@ -80,9 +81,8 @@ interface PiAiSnapshot {
   /** Providers for exactly those profiles; never mutated once published. */
   models: Models
   /**
-   * Overlay (or installed catalog) for one route, memoized for this snapshot.
-   * `session.models` resolves every advertised id; without this, each
-   * `resolveModel` rebuilds the live listing overlay.
+   * Served model lists memoized for this immutable snapshot. Live listing
+   * overlays are asynchronous, so each route shares one in-flight resolution.
    */
   served: Map<string, Promise<readonly Model<Api>[]>>
 }
@@ -95,8 +95,7 @@ export interface PiAiAdapterOptions {
    * Resolve the credential for one already-resolved profile; called once per
    * stream call and frozen for that call. `undefined` defers to the route's own
    * pi-ai auth, which for an installed catalog route is its provider-native
-   * ambient discovery; the named LM Studio route returns a non-secret placeholder
-   * instead. The plugin allows ambient discovery only for a profile naming no
+   * ambient discovery; the plugin allows that only for a profile naming no
    * credential at all, because a named reference that misses throws `LlmError`
    * `MISSING_CREDENTIAL` rather than falling back.
    */
@@ -109,22 +108,18 @@ export interface PiAiAdapterOptions {
    * route whose only method is a login would report itself unconfigured on
    * every request no matter how often the human signed in.
    */
-  auth?: PiAiAuthInjection
+  auth: PiAiAuthInjection
   /**
-   * Live routes this adapter registered only because an OAuth credential is
-   * stored, not because settings named them. `providerInfo` reports `auth:
-   * 'oauth'` for these so configuration surfaces can show a connected row
-   * without a key field.
+   * Hosted OAuth routes injected solely by stored credentials, not settings.
+   * Provider metadata reports these routes as OAuth-backed to selectors.
    */
   oauthInjected?: () => ReadonlySet<string>
-  /**
-   * Delete the hosted OAuth credential for one route and refresh live
-   * registration. Absent on adapters that do not host OAuth.
-   * @param provider Hosted OAuth route id (`openai-codex`, `cursor`, or `google-antigravity`).
-   */
+  /** Delete a hosted OAuth credential and refresh the adapter's route set. */
   logoutOAuth?: (provider: string) => Promise<void>
   /** Resolve the optional durable attachment service at request time. */
   resolveAttachments?: () => AttachmentStore | undefined
+  /** Bridge one attachment reference into the current model-tool execution world. */
+  resolveImageAccess?: (attachments: AttachmentStore, ref: ImageAttachmentRef) => ImageAttachmentAccess | undefined
   /**
    * Observe one assistant history message degrading to provider-neutral
    * conversion because its stored replay state is unusable by this build.
@@ -263,7 +258,7 @@ export class PiAiAdapter extends LlmAdapter {
   private current(): PiAiSnapshot {
     const profiles = this.config.profiles()
     if (this.snapshot?.profiles === profiles) return this.snapshot
-    const models: MutableModels = createModels(this.config.auth ?? {})
+    const models: MutableModels = createModels(this.config.auth)
     for (const profile of profiles.values()) models.setProvider(profile.piProvider)
     this.snapshot = { profiles, models, served: new Map() }
     return this.snapshot
@@ -279,12 +274,9 @@ export class PiAiAdapter extends LlmAdapter {
   }
 
   /**
-   * Models this route currently serves: the installed catalog plus a live
-   * OpenRouter listing overlay when the profile has no explicit `models` list,
-   * or a Cursor GetUsableModels overlay for the hosted `cursor` route.
-   * An explicit list is left untouched. Transport failure returns the
-   * installed set; a successful empty Cursor listing fails instead of
-   * advertising unconfirmed models.
+   * Resolve the model list currently served by one route. Explicit profile
+   * lists stay authoritative; catalog OpenRouter routes use a bounded live
+   * listing, while hosted Cursor uses its OAuth-backed model listing.
    */
   private async servedModels(snapshot: PiAiSnapshot, provider: string): Promise<readonly Model<Api>[]> {
     const cached = snapshot.served.get(provider)
@@ -299,19 +291,12 @@ export class PiAiAdapter extends LlmAdapter {
     }
   }
 
-  /**
-   * Compute {@link servedModels} for one route. Transport listing failure
-   * returns the installed set; a successful empty Cursor listing fails.
-   * @param snapshot Frozen profiles and collection.
-   * @param provider Route id.
-   * @returns Models this route currently serves.
-   */
   private async loadServedModels(snapshot: PiAiSnapshot, provider: string): Promise<readonly Model<Api>[]> {
     const profile = this.profileOf(snapshot, provider)
     const installed = snapshot.models.getModels(provider)
     if (!profile.servesInstalledCatalog) return installed
     if (provider === CURSOR_PROVIDER) {
-      const token = await cursorAccessToken(this.config.auth?.credentials)
+      const token = await cursorAccessToken(this.config.auth.credentials)
       if (token === undefined) return installed
       return listCursorModels(token)
     }
@@ -338,9 +323,7 @@ export class PiAiAdapter extends LlmAdapter {
         contextWindow: profile.defaultContextWindow ?? DEFAULT_CONTEXT_WINDOW,
         maxTokens: profile.defaultMaxTokens ?? DEFAULT_MAX_TOKENS,
       })
-    } catch (_listingFailure) {
-      // Picker and resolve must not fail because a listing was slow, unreachable,
-      // or cancelled; the installed catalog still serves.
+    } catch {
       return installed
     }
   }
@@ -397,7 +380,14 @@ export class PiAiAdapter extends LlmAdapter {
     model: string,
     _signal?: AbortSignal,
   ): Promise<LlmResolvedModelInfo> {
-    const snapshot = this.current()
+    return this.modelInfo(this.current(), provider, model)
+  }
+
+  private async modelInfo(
+    snapshot: PiAiSnapshot,
+    provider: string,
+    model: string,
+  ): Promise<LlmResolvedModelInfo> {
     const profile = this.profileOf(snapshot, provider)
     const resolvedModel = await this.modelOf(snapshot, provider, model)
     const defaultLevel = describableReasoningLevel(resolvedModel, profile.reasoning)
@@ -415,7 +405,26 @@ export class PiAiAdapter extends LlmAdapter {
     }
   }
 
+  override async prepareCall(
+    provider: string,
+    model: string,
+    _signal?: AbortSignal,
+  ): Promise<PreparedAdapterCall> {
+    const snapshot = this.current()
+    return {
+      model: await this.modelInfo(snapshot, provider, model),
+      stream: options => this.streamWithSnapshot(options, snapshot),
+    }
+  }
+
   async * stream(options: GenerateOptions): AsyncIterable<StreamChunk> {
+    yield* this.streamWithSnapshot(options, this.current())
+  }
+
+  private async * streamWithSnapshot(
+    options: GenerateOptions,
+    snapshot: PiAiSnapshot,
+  ): AsyncIterable<StreamChunk> {
     if (options.stop !== undefined) {
       throw new LlmError('llm-pi-ai does not support GenerateOptions.stop', 'UNSUPPORTED_OPTION')
     }
@@ -424,7 +433,6 @@ export class PiAiAdapter extends LlmAdapter {
     // snapshot, and the credential freezes with them. A configuration change
     // mid-request builds a separate snapshot, so this request finishes under
     // the one it started with and the next call picks up the new one.
-    const snapshot = this.current()
     const profile = this.profileOf(snapshot, options.provider)
     const model = await this.modelOf(snapshot, options.provider, options.model)
     const reasoning = resolveReasoningLevel(
@@ -432,7 +440,6 @@ export class PiAiAdapter extends LlmAdapter {
       options.reasoningEffort ?? profile.reasoning,
     )
     const apiKey = await this.config.resolveApiKey(options.provider, profile)
-
     const consumer = new AbortController()
     const upstream = options.signal === undefined
       ? consumer.signal
@@ -454,7 +461,15 @@ export class PiAiAdapter extends LlmAdapter {
       }
       const context = attachments === undefined
         ? toPiContext(options, undefined, onReplayDegrade)
-        : await toPiContext(options, attachments, onReplayDegrade, profile.maxRequestImageBytes)
+        : await toPiContext({ ...options, signal: watchdog.signal }, {
+          attachments,
+          resolveImageAccess: ref => this.config.resolveImageAccess?.(attachments, ref),
+          maxRequestImageBytes: profile.maxRequestImageBytes,
+          requestImagePolicy: {
+            maxPixels: profile.requestImagePixelBudget,
+            maxBytes: profile.requestImageMaxBytes,
+          },
+        }, onReplayDegrade)
       const events = snapshot.models.streamSimple(model, context, {
         ...profileOptions(profile, reasoning, apiKey),
         ...options.temperature === undefined ? {} : { temperature: options.temperature },
@@ -465,7 +480,7 @@ export class PiAiAdapter extends LlmAdapter {
         // Harness-owned and therefore win collisions.
         headers: requestHeaders(profile.headers),
       })
-      const iterator = toStreamChunks(events, model.contextWindow)[Symbol.asyncIterator]()
+      const iterator = toStreamChunks(events, model.contextWindow, options.signal)[Symbol.asyncIterator]()
       let exhausted = false
       try {
         while (true) {
@@ -483,7 +498,7 @@ export class PiAiAdapter extends LlmAdapter {
           consumer.abort('pi-ai stream consumer stopped')
           try {
             await iterator.return(undefined)
-          } catch (_abortedSdkTeardown) {
+          } catch {
             // The stable signal already owns SDK termination; return-time abort cannot add an outcome.
           }
         }
@@ -503,15 +518,14 @@ export class PiAiAdapter extends LlmAdapter {
 }
 
 /**
- * Access token for a hosted Cursor OAuth credential, when the collection store
- * has one. Never logs the token.
- * @param store - optional collection credential store.
- * @returns the access token, or `undefined` when none is stored.
+ * Read a hosted Cursor access token from the collection credential store.
+ * @param store - durable pi-ai credential store.
+ * @returns a non-empty access token, or `undefined` when no OAuth record exists.
  */
-async function cursorAccessToken(store: CredentialStore | undefined): Promise<string | undefined> {
-  if (store === undefined) return undefined
+async function cursorAccessToken(store: CredentialStore): Promise<string | undefined> {
   const credential = await store.read(CURSOR_PROVIDER)
   if (credential?.type !== 'oauth') return undefined
   const access = credential.access.trim()
   return access.length === 0 ? undefined : access
+
 }

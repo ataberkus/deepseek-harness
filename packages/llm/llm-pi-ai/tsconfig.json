@@ -21,6 +21,9 @@
       "path": "../../interaction/commands"
     },
     {
+      "path": "../../util/brand"
+    },
+    {
       "path": "../../../vendor/cosmokit"
     },
     {
@@ -34,6 +37,9 @@
     },
     {
       "path": "../../attachment/attachment"
+    },
+    {
+      "path": "../../fs/fs"
     },
     {
       "path": "../../credentials/credentials"

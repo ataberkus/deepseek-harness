@@ -4,13 +4,19 @@
 export type PluginsSettingsLocaleKey =
   | 'nav' | 'title' | 'intro' | 'tabs' | 'configurableTab' | 'empty'
   | 'overridden' | 'reset' | 'readOnly' | 'expand' | 'collapse'
-  | 'save' | 'saving' | 'discard' | 'unsaved' | 'saveFailed' | 'invalidNumber' | 'invalidBoolean'
+  | 'save' | 'saving' | 'discard' | 'unsaved' | 'saveFailed' | 'invalidNumber'
   | 'bashTitle' | 'bashDescription' | 'bashTimeoutMs' | 'bashTimeoutMsHint'
   | 'bashMaxOutputBytes' | 'bashMaxOutputBytesHint'
   | 'agentLoopTitle' | 'agentLoopDescription' | 'agentLoopMaxParallel' | 'agentLoopMaxParallelHint'
   | 'webSearchTitle' | 'webSearchDescription'
   | 'webSearchApiKey' | 'webSearchApiKeyHint' | 'webSearchApiKeySet' | 'webSearchApiKeyUnset'
   | 'webSearchBaseUrl' | 'webSearchBaseUrlHint' | 'webSearchMaxUses' | 'webSearchMaxUsesHint'
+  | 'subagentModelSelectionTitle' | 'subagentModelSelectionDescription'
+  | 'subagentModelSelectionToggle' | 'subagentModelSelectionChoose' | 'subagentModelSelectionAllowed'
+  | 'subagentModelSelectionLoading' | 'subagentModelSelectionLoadFailed' | 'subagentModelSelectionRetry'
+  | 'subagentModelSelectionPartial' | 'subagentModelSelectionUnavailable'
+  | 'subagentModelSelectionUnavailableGroup' | 'subagentModelSelectionEmpty'
+  | 'subagentModelSelectionRequired' | 'subagentModelSelectionConflict' | 'subagentModelSelectionOff'
   | 'workspaceCheckpointTitle' | 'workspaceCheckpointDescription'
   | 'workspaceCheckpointEnabled' | 'workspaceCheckpointEnabledHint'
 
@@ -33,7 +39,6 @@ export const en: Record<PluginsSettingsLocaleKey, string> = {
   unsaved: 'Unsaved',
   saveFailed: 'The deployment did not accept these values; they were left for you to correct.',
   invalidNumber: 'Enter a number, or leave blank to use the default.',
-  invalidBoolean: 'Choose true or false.',
   bashTitle: 'Shell',
   bashDescription: 'Limits every command the agent runs.',
   bashTimeoutMs: 'Command timeout (ms)',
@@ -54,10 +59,25 @@ export const en: Record<PluginsSettingsLocaleKey, string> = {
   webSearchBaseUrlHint: 'Leave blank to use the provider default.',
   webSearchMaxUses: 'Max searches per request',
   webSearchMaxUsesHint: 'How many times one request may search before it must answer.',
+  subagentModelSelectionTitle: 'Subagent',
+  subagentModelSelectionDescription: 'Control which models agents may choose for subagents.',
+  subagentModelSelectionToggle: 'Allow agents to choose models for subagents',
+  subagentModelSelectionChoose: 'When enabled, agents can choose a provider, model, and reasoning effort for each subagent from the authorized models below. Applies only to new sessions.',
+  subagentModelSelectionAllowed: 'Models agents may choose',
+  subagentModelSelectionLoading: 'Loading models…',
+  subagentModelSelectionLoadFailed: 'Models could not be loaded.',
+  subagentModelSelectionRetry: 'Retry',
+  subagentModelSelectionPartial: 'Some model providers could not be loaded; saved choices remain removable.',
+  subagentModelSelectionUnavailable: 'Currently unavailable',
+  subagentModelSelectionUnavailableGroup: 'Saved but currently unavailable',
+  subagentModelSelectionEmpty: 'No model provider currently advertises a model.',
+  subagentModelSelectionRequired: 'Select at least one model before saving.',
   workspaceCheckpointTitle: 'Workspace checkpoints',
-  workspaceCheckpointDescription: 'Capture workspace state so conversation edits can restore files safely.',
-  workspaceCheckpointEnabled: 'Enable conversation checkpoints',
-  workspaceCheckpointEnabledHint: 'When enabled, saves workspace snapshots after turns and unlocks edit and recovery safeguards.',
+  workspaceCheckpointDescription: 'Keep a recoverable snapshot of workspace files alongside conversation checkpoints.',
+  workspaceCheckpointEnabled: 'Enable workspace checkpoints',
+  workspaceCheckpointEnabledHint: 'When enabled, the host captures workspace files at session and turn boundaries.',
+  subagentModelSelectionConflict: 'Settings changed elsewhere. Discard your draft and try again.',
+  subagentModelSelectionOff: 'Subagents use configured defaults or inherit the parent agent\'s model. Saved model choices are retained.',
 }
 
 /** Simplified Chinese copy. */
@@ -78,8 +98,7 @@ export const zh: Record<PluginsSettingsLocaleKey, string> = {
   discard: '放弃修改',
   unsaved: '未保存',
   saveFailed: '本部署没有接受这些值，已保留供你修改。',
-  invalidNumber: '请输入数字；留空表示使用默认值。',
-  invalidBoolean: '请选择 true 或 false。',
+  invalidNumber: '请填数字；留空表示使用默认值。',
   bashTitle: '终端',
   bashDescription: '限制 agent 运行的每一条命令。',
   bashTimeoutMs: '命令超时（毫秒）',
@@ -100,8 +119,23 @@ export const zh: Record<PluginsSettingsLocaleKey, string> = {
   webSearchBaseUrlHint: '留空则使用提供方默认地址。',
   webSearchMaxUses: '单次请求最多搜索次数',
   webSearchMaxUsesHint: '一次请求在必须作答前最多可以搜索多少次。',
+  subagentModelSelectionTitle: 'Subagent',
+  subagentModelSelectionDescription: '控制 Agent 为 Subagent 选择模型的权限。',
+  subagentModelSelectionToggle: '允许 Agent 为 Subagent 选择模型',
+  subagentModelSelectionChoose: '开启后，Agent 可以从下方授权模型中，为每个 Subagent 选择提供方、模型和推理强度。仅影响新会话。',
+  subagentModelSelectionAllowed: 'Agent 可选择的模型',
+  subagentModelSelectionLoading: '正在加载模型…',
+  subagentModelSelectionLoadFailed: '无法加载模型。',
+  subagentModelSelectionRetry: '重试',
+  subagentModelSelectionPartial: '部分模型提供方暂时无法加载；已保存的选择仍可移除。',
+  subagentModelSelectionUnavailable: '当前不可用',
+  subagentModelSelectionUnavailableGroup: '已保存但当前不可用',
+  subagentModelSelectionEmpty: '当前没有模型提供方公布模型。',
+  subagentModelSelectionRequired: '保存前请至少选择一个模型。',
+  subagentModelSelectionConflict: '设置已在其他位置更新。请放弃修改后重试。',
+  subagentModelSelectionOff: '关闭后，Subagent 使用配置的默认模型或继承父 Agent 的模型；已选模型会保留。',
   workspaceCheckpointTitle: '工作区检查点',
-  workspaceCheckpointDescription: '保存工作区状态，让对话编辑可以安全恢复文件。',
-  workspaceCheckpointEnabled: '启用对话检查点',
-  workspaceCheckpointEnabledHint: '启用后会在每轮结束保存工作区快照，并开启编辑和恢复保护。',
+  workspaceCheckpointDescription: '在对话检查点旁保存可恢复的工作区文件快照。',
+  workspaceCheckpointEnabled: '启用工作区检查点',
+  workspaceCheckpointEnabledHint: '启用后，主机会在会话和回合边界捕获工作区文件。',
 }

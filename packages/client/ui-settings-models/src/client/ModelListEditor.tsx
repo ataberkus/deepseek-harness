@@ -16,19 +16,17 @@
 
 import { useState } from 'react'
 import type { ReactNode } from 'react'
-import type { DiscoveredModelView, IApiClient } from '@deepseek-ai/dsh-api-remotes/client'
+import type { LlmDiscoveredModel } from '@deepseek-ai/dsh-api-remotes/client'
 import { Button, Modal } from '@deepseek-ai/dsh-client-ui-primitives'
 import { formatCapacity, parseCapacity } from './DeepSeekModelsEditor.tsx'
+import type { ModelsOperations } from './operations.ts'
 import type { DeepSeekModelDraft } from './DeepSeekModelsEditor.tsx'
-import { messageOf } from './store.ts'
 import type { en } from './locales.ts'
 import styles from './ModelsSection.module.css'
 
 /**
- * One configured model row. Structurally open, exactly like the DeepSeek
- * catalog editor's rows: a profile field this card does not edit — one a future
- * schema adds, or one hand-written in `settings.yaml` — has to survive being
- * edited here rather than being dropped by a rebuild.
+ * One configured model row. Fields this card does not edit must survive an
+ * edit rather than being dropped by a rebuild.
  */
 export type ModelDraft = DeepSeekModelDraft
 
@@ -81,8 +79,8 @@ export interface ModelListEditorProps {
    * told what the field already says.
    */
   probeBlocked?: keyof typeof en | undefined
-  /** Wire face the fetch action calls. */
-  api: Pick<IApiClient, 'llm'>
+  /** The Host operations whose interrogation answers the fetch action. */
+  operations: ModelsOperations
   /** Section copy. */
   t: (key: keyof typeof en) => string
   /** Disable every control (read-only deployment or a pending write). */
@@ -144,7 +142,7 @@ function capacitySpelling(value: number | undefined): string {
 }
 
 /** Adopt a candidate, keeping whatever capacities the provider disclosed. */
-function adopt(candidate: DiscoveredModelView): ModelDraft {
+function adopt(candidate: LlmDiscoveredModel): ModelDraft {
   return {
     id: candidate.id,
     ...candidate.name === undefined ? {} : { name: candidate.name },
@@ -159,12 +157,11 @@ function adopt(candidate: DiscoveredModelView): ModelDraft {
  * @returns the model-list editor.
  */
 export function ModelListEditor(props: ModelListEditorProps): ReactNode {
-  const { models, onChange, probe, api, t, disabled } = props
+  const { models, onChange, probe, operations, t, disabled } = props
   const [busy, setBusy] = useState(false)
   const [failure, setFailure] = useState<string | undefined>(undefined)
-  const [candidates, setCandidates] = useState<readonly DiscoveredModelView[] | undefined>(undefined)
+  const [candidates, setCandidates] = useState<readonly LlmDiscoveredModel[] | undefined>(undefined)
   const [picked, setPicked] = useState<ReadonlySet<string>>(new Set())
-  const [search, setSearch] = useState('')
   // Rows carry an id and a name; capacities are the exception, so they stay
   // folded until asked for rather than crowding every row with four inputs.
   const [expanded, setExpanded] = useState<ReadonlySet<number>>(new Set())
@@ -232,18 +229,17 @@ export function ModelListEditor(props: ModelListEditorProps): ReactNode {
     setBusy(true)
     setFailure(undefined)
     try {
-      const response = await api.llm.discoverModels({
-        settingsNs: probe.settingsNs,
+      const answer = await operations.discoverModels(probe.settingsNs, {
         ...probe.provider === undefined ? {} : { provider: probe.provider },
         ...probe.baseURL === undefined || probe.baseURL.length === 0 ? {} : { baseURL: probe.baseURL },
         ...probe.api === undefined ? {} : { api: probe.api },
         ...probe.apiKey === undefined ? {} : { apiKey: probe.apiKey },
       })
-      if (!response.result.ok) {
-        setFailure(response.result.error.message)
+      if (answer.kind === 'refused') {
+        setFailure(answer.message)
         return
       }
-      const found = response.result.value.models
+      const found = answer.models
       if (found.length === 0) {
         setFailure(t('fetchEmpty'))
         return
@@ -253,11 +249,6 @@ export function ModelListEditor(props: ModelListEditorProps): ReactNode {
       const known = new Set(models.map(model => textOf(model, 'id')))
       setCandidates(found)
       setPicked(new Set(found.filter(model => !known.has(model.id)).map(model => model.id)))
-      setSearch('')
-    } catch (error) {
-      // The transport rejected rather than answering; without this the button
-      // would stay busy with nothing shown.
-      setFailure(messageOf(error))
     } finally {
       setBusy(false)
     }
@@ -266,7 +257,6 @@ export function ModelListEditor(props: ModelListEditorProps): ReactNode {
   const closePicker = (): void => {
     setCandidates(undefined)
     setPicked(new Set())
-    setSearch('')
   }
 
   const adoptPicked = (): void => {
@@ -293,21 +283,15 @@ export function ModelListEditor(props: ModelListEditorProps): ReactNode {
     })
   }
 
-  const visibleCandidates = (candidates ?? []).filter((candidate) => {
-    const query = search.trim().toLowerCase()
-    if (query.length === 0) return true
-    if (candidate.id.toLowerCase().includes(query)) return true
-    return candidate.name !== undefined && candidate.name.toLowerCase().includes(query)
-  })
+  const activeCandidates = candidates ?? []
+  const allCandidatesPicked = activeCandidates.length > 0
+    && activeCandidates.every(candidate => picked.has(candidate.id))
 
-  const selectVisible = (selected: boolean): void => {
+  const toggleAllCandidates = (): void => {
     setPicked((current) => {
-      const next = new Set(current)
-      for (const candidate of visibleCandidates) {
-        if (selected) next.add(candidate.id)
-        else next.delete(candidate.id)
-      }
-      return next
+      return activeCandidates.every(candidate => current.has(candidate.id))
+        ? new Set()
+        : new Set(activeCandidates.map(candidate => candidate.id))
     })
   }
 
@@ -466,55 +450,28 @@ export function ModelListEditor(props: ModelListEditorProps): ReactNode {
           </>
         )}
       >
-        <div className={styles['fetchToolbar']}>
-          <input
-            className={styles['input']}
-            type="search"
-            value={search}
-            placeholder={t('fetchSearch')}
-            aria-label={t('fetchSearch')}
-            onChange={(event) => { setSearch(event.target.value) }}
-          />
-          <div className={styles['fetchBulk']}>
-            <button
-              type="button"
-              className={styles['linkButton']}
-              disabled={visibleCandidates.length === 0}
-              onClick={() => { selectVisible(true) }}
-            >
-              {t('fetchSelectAll')}
-            </button>
-            <button
-              type="button"
-              className={styles['linkButton']}
-              disabled={visibleCandidates.length === 0}
-              onClick={() => { selectVisible(false) }}
-            >
-              {t('fetchSelectNone')}
-            </button>
-          </div>
+        <div className={styles['candidateActions']}>
+          <Button variant="ghost" size="sm" onClick={toggleAllCandidates}>
+            {t(allCandidatesPicked ? 'fetchDeselectAll' : 'fetchSelectAll')}
+          </Button>
         </div>
-        {visibleCandidates.length === 0
-          ? <p className={styles['fetchNoneMatch']}>{t('fetchNoneMatch')}</p>
-          : (
-            <ul className={styles['candidateList']}>
-              {visibleCandidates.map(candidate => (
-                <li key={candidate.id} className={styles['candidate']}>
-                  <label className={styles['candidateLabel']}>
-                    <input
-                      type="checkbox"
-                      checked={picked.has(candidate.id)}
-                      onChange={() => { toggle(candidate.id) }}
-                    />
-                    {/* The id alone: it is the string adoption writes, and the
-                        capacities the endpoint reported are adopted with it and
-                        editable in the row that appears. */}
-                    <span className={styles['candidateId']}>{candidate.id}</span>
-                  </label>
-                </li>
-              ))}
-            </ul>
-          )}
+        <ul className={styles['candidateList']}>
+          {(candidates ?? []).map(candidate => (
+            <li key={candidate.id} className={styles['candidate']}>
+              <label className={styles['candidateLabel']}>
+                <input
+                  type="checkbox"
+                  checked={picked.has(candidate.id)}
+                  onChange={() => { toggle(candidate.id) }}
+                />
+                {/* The id alone: it is the string adoption writes, and the
+                    capacities the endpoint reported are adopted with it and
+                    editable in the row that appears. */}
+                <span className={styles['candidateId']}>{candidate.id}</span>
+              </label>
+            </li>
+          ))}
+        </ul>
       </Modal>
     </section>
   )

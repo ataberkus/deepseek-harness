@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/llm/token-meter/README.md
-README.md: d92e09d8e8247f7fc0d7596b39edd9a6403c2e62
-README.zh.md: 7dc970e300d90ecfc4e6b6385a2ebc0f5abe60b0
+README.md: 4df0c4d4f9f64f70299efb54bf21595c71b4eb0c
+README.zh.md: 3937e68d1739b752c589de03e04eb6597232505b

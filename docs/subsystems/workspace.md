@@ -117,13 +117,13 @@ Ownership truth is the record's ordered `sessionIds`, never derived from session
 
 ## The registry: `ctx.workspaceRegistry`
 
-`WorkspaceRegistry` ([signatures](#ctxworkspaceregistry--workspaceregistry)) owns registration and resolution. `create(path, title?)` canonicalizes the path, rejects a nonexistent path (the original `ENOENT`) or a non-directory, returns the existing entity unchanged when the canonical path is already owned, and otherwise creates a record with `title ?? basename(path)` prepended to the durable registry order — a new record cannot duplicate an existing display title (`WorkspaceNameConflictError`). `get(id)` and the ordered `list()` are synchronous cache reads; `resolveByPath(path)` applies the same realpath canon without creating. `delete(id)` removes only the registration, order entry, and session account — the directory, user files, live sessions, and persisted logs are never touched, so those sessions become Ungrouped ([decision](../../.agents/notes/implemented/feature/2026-07-27-workspace-registration-deletion.md)); unknown ids return `false`. Create and delete persist a pending-mutation marker before their two writes (record + order) can diverge; startup resolves exactly the marked mutation — by deleting the marked table row, which completes an interrupted delete and rolls back an interrupted create (the registration is re-creatable, so rollback is the safe direction) — and an unmarked order/table mismatch fails loud as corruption.
+`WorkspaceRegistry` ([signatures](#ctxworkspaceregistry--workspaceregistry)) owns registration and resolution. `create(path, title?)` canonicalizes the path, rejects a nonexistent path (the original `ENOENT`) or a non-directory, returns the existing entity unchanged when the canonical path is already owned, and otherwise creates a record with `title ?? basename(path)` prepended to the durable registry order (different canonical paths may share a display title). `get(id)` and the ordered `list()` are synchronous cache reads; `resolveByPath(path)` applies the same realpath canon without creating. `delete(id)` removes only the registration, order entry, and session account — the directory, user files, live sessions, and persisted logs are never touched, so those sessions become Ungrouped ([decision](../../.agents/notes/implemented/feature/2026-07-27-workspace-registration-deletion.md)); unknown ids return `false`. Create and delete persist a pending-mutation marker before their two writes (record + order) can diverge; startup resolves exactly the marked mutation — by deleting the marked table row, which completes an interrupted delete and rolls back an interrupted create (the registration is re-creatable, so rollback is the safe direction) — and an unmarked order/table mismatch fails loud as corruption.
 
 Sessions get their cwd at create time from whoever creates them, not from this registry — the API gateway resolves a new session's cwd from the chosen workspace's `path` (falling back to an explicit or default cwd), creates the session so the cwd lands in its immutable [`SessionHeader`](persistence.md#sessionheader--metadata-beside-the-log), then calls `attachSession`, which re-validates that stored header cwd against the workspace path. On the first successful start, the registry bootstraps history from persisted headers alone (`id`, `cwd`, `createdAt` — never event bodies), grouping sessions with a valid canonical cwd into per-directory workspaces, newest first; the initialized marker is written last so an interrupted bootstrap resumes safely. The bootstrap is one-time: cwd-less legacy sessions stay Ungrouped, and sessions created afterwards join a workspace only through `attachSession`.
 
 ## Consumers
 
-[dsh-host-apiproxy](../../packages/host/apiproxy) is the product consumer: it serves workspace CRUD to GUI clients over `ctx.workspaceRegistry` and performs the create-session-then-attach flow above. The same Host also consumes `ctx.workspaceCheckpoint`: `session.edit` restores the selected tree and publishes a child branch, and `session.activate` restores the latest usable checkpoint when a session is selected; both are refused with `checkpoint-disabled` while the provider's live setting is off. [dsh-workspace-checkpoint-capture](../../packages/session/workspace-checkpoint-capture) records Checkpoint 0 and settled-turn snapshots and blocks model and top-level tool work while recovery is required, but bypasses those actions when disabled. [dsh-agent-instructions](../../packages/context/agent-instructions) is **not** a consumer despite the name: it discovers AGENTS.md-style instruction files under an agent's own cwd and never touches `ctx.workspaceRegistry` — the shared word refers to the user's working directory, not to this registry's entities.
+[`dsh-workspace-controller`](../../packages/api/workspace-controller) serves workspace CRUD to GUI clients over `ctx.workspaceRegistry`, and [`dsh-session-controller`](../../packages/api/session-controller) performs the create-session-then-attach flow above. [dsh-agent-instructions](../../packages/context/agent-instructions) is **not** a consumer despite the name: it discovers AGENTS.md-style instruction files under an agent's own cwd and never touches `ctx.workspaceRegistry` — the shared word refers to the user's working directory, not to this registry's entities.
 
 <!-- BEGIN GENERATED cordis-surface (gen-cordis-catalog.ts) — do not edit between markers -->
 
@@ -149,94 +149,98 @@ abstract capability(): DirectoryPickerCapability
 
 Source: [`packages/host/directory-picker/src/index.ts`](../../packages/host/directory-picker/src/index.ts)
 
-<a id="ctxworkspacecheckpoint--workspacecheckpoint-abstract-seam"></a>
+<a id="ctxdirectorypickercontroller--directorypickercontroller"></a>
 
-### `ctx.workspaceCheckpoint` — `WorkspaceCheckpoint` (abstract seam)
+### `ctx.directoryPickerController` — `DirectoryPickerController`
 
-Abstract workspace-checkpoint service. Subclass, implement the abstract methods, and load the subclass as a plugin — it registers as `ctx.workspaceCheckpoint`.
+Host service backing the generated `ctx.remote.directoryPicker` namespace. The seam it exports is abstract and therefore never a Loader entry of its own, so this controller carries the wire verbs: one composed backend serves either the native chooser or the browse primitives, and a verb the composition cannot serve is refused rather than approximated.
 
 ```ts cordis-catalog
 /**
- * Capture the session cwd into a durable checkpoint record.
- * @param request - session, cwd, boundary, role, optional parent, and lease.
- * @returns the stored record; `status.kind` may be `unavailable` on fail-soft capture.
+ * Open the host's OS chooser for a Remote caller.
+ * @param signal - caller lifetime; abort terminates the chooser.
+ * @returns the chosen absolute path, or null when the operator cancels.
  */
-abstract capture(request: CaptureRequest): Promise<CheckpointRecord>
+@Remote('pick') async pick(signal: AbortSignal): Promise<string | null>
 
 /**
- * Read one durable checkpoint.
- * @param id - opaque checkpoint id.
- * @returns the stored record.
+ * List one directory level for a Remote caller's in-app browser.
+ * @param path - absolute directory to list; absent lists the home directory.
+ * @param signal - caller lifetime; abort stops the backend's scan instead of
+ *   letting it outlive a disconnected caller.
+ * @returns the level's listing with its ancestry.
  */
-abstract inspect(id: CheckpointId): Promise<CheckpointRecord>
+@Remote('list') async list(path: string | undefined, signal: AbortSignal): Promise<DirectoryListing>
 
 /**
- * List checkpoints for one session in label order.
- * @param sessionId - owning session.
- * @returns client-safe views with no blob internals.
+ * Create one child directory for a Remote caller's in-app browser.
+ * @param path - absolute existing parent directory.
+ * @param name - single non-blank path segment.
+ * @returns the created directory's absolute path.
  */
-abstract list(sessionId: SessionId): Promise<readonly CheckpointView[]>
-
-/**
- * Read the durable session sidecar used by Host activation and projections.
- * Providers without a metadata index may return `undefined`.
- * @param _sessionId - owning session.
- * @returns the index row, when present.
- */
-sessionIndex(_sessionId: SessionId): StoredSessionCheckpointIndex | undefined
-
-/**
- * Make `request.cwd` match the checkpoint manifest, or roll back.
- * @param request - checkpoint id, target cwd, optional lease, and abort signal.
- * @returns the restored checkpoint id and restored file count.
- */
-abstract restore(request: RestoreRequest): Promise<RestoreResult>
-
-/**
- * Persist the source/child relationship for a successful conversation edit.
- * @param link - selected, emergency, source, boundary, and child ids.
- * @returns fulfillment after the sidecar is durable.
- */
-abstract recordEdit(link: CheckpointEditLink): Promise<void>
-
-/**
- * Acquire an exclusive in-process lease for one canonical workspace path.
- * Throws `CHECKPOINT_LEASE_HELD` when another holder already owns it.
- * @param workspaceKey - canonical workspace path.
- * @returns a lease whose `release()` is idempotent.
- */
-abstract acquireLease(workspaceKey: string): Promise<WorkspaceLease>
-
-/**
- * Read the recovery-required diagnostic for a workspace, if any.
- * @param workspaceKey - canonical workspace path.
- * @returns the diagnostic string, or `undefined` when the workspace is writable.
- */
-abstract recoveryRequired(workspaceKey: string): Promise<string | undefined>
-
-/**
- * Mark a workspace as requiring recovery and block new model work.
- * @param workspaceKey - canonical workspace path.
- * @param reason - durable diagnostic presented to the user.
- */
-abstract markRecoveryRequired(workspaceKey: string, reason: string): Promise<void>
-
-/**
- * Clear the recovery-required diagnostic after a successful restore.
- * @param workspaceKey - canonical workspace path.
- */
-abstract clearRecoveryRequired(workspaceKey: string): Promise<void>
-
-/**
- * Apply configured retention: evict unreferenced blobs without silently
- * dropping an applied branch's required objects.
- */
-abstract evict(): Promise<void>
+@Remote('createDirectory') async createDirectory(path: string, name: string): Promise<string>
 ```
 
-Types: [SessionId](core.md)
+Source: [`packages/api/workspace-controller/src/directory-picker.ts`](../../packages/api/workspace-controller/src/directory-picker.ts)
 
-Source: [`packages/session/workspace-checkpoint/src/index.ts`](../../packages/session/workspace-checkpoint/src/index.ts)
+<a id="ctxworkspacecontroller--workspacecontroller"></a>
+
+### `ctx.workspaceController` — `WorkspaceController`
+
+Host service backing the generated `ctx.remote.workspace` namespace.
+
+```ts cordis-catalog
+/**
+ * Create or idempotently resolve one Workspace over an existing directory.
+ * @param request - directory path to register.
+ * @returns the Workspace and whether this call created it.
+ */
+@Remote('create') create(request: WorkspaceCreateRequest): Promise<WorkspaceCreateValue>
+
+/**
+ * Rename one Workspace to a unique non-blank title.
+ * @param request - Workspace identity and proposed title.
+ * @returns the updated Workspace projection.
+ */
+@Remote('rename') rename(request: WorkspaceRenameRequest): Promise<WorkspaceValue>
+
+/**
+ * Remove one Workspace registration while retaining files and Sessions.
+ * @param request - Workspace identity to remove.
+ * @returns deletion confirmation.
+ */
+@Remote('delete') delete(request: WorkspaceDeleteRequest): Promise<WorkspaceDeleteValue>
+
+/**
+ * Move one Workspace within the registry display order.
+ * @param request - moved Workspace and optional anchor.
+ * @returns the complete resulting Workspace order.
+ */
+@Remote('insertBefore') insertBefore(request: WorkspaceInsertBeforeRequest): Promise<WorkspaceOrderValue>
+
+/**
+ * Move one accounted Session within a Workspace.
+ * @param request - Workspace, Session, and optional anchor identities.
+ * @returns the updated Workspace projection.
+ */
+@Remote('insertSessionBefore') insertSessionBefore(request: WorkspaceInsertSessionBeforeRequest): Promise<WorkspaceValue>
+
+/**
+ * Hide one known Session from Workspace grouping surfaces.
+ * @param request - Session identity to archive.
+ * @returns the complete resulting archive set.
+ */
+@Remote('archiveSession') archiveSession(request: WorkspaceArchiveSessionRequest): Promise<WorkspaceArchiveValue>
+
+/**
+ * Stream a complete Workspace baseline followed by ordered increments.
+ * @param signal - generation cancellation.
+ * @returns baseline followed by ordered Workspace increments.
+ */
+@Remote({ mode: 'stream' }) follow(signal: AbortSignal): AsyncIterable<WorkspaceFollowFrame>
+```
+
+Source: [`packages/api/workspace-controller/src/index.ts`](../../packages/api/workspace-controller/src/index.ts)
 
 <a id="ctxworkspaceregistry--workspaceregistry"></a>
 
@@ -314,27 +318,4 @@ async resolveByPath(path: string): Promise<Workspace | undefined>
 Types: [SessionId](core.md)
 
 Source: [`packages/workspace/workspace/src/index.ts`](../../packages/workspace/workspace/src/index.ts)
-
-<a id="workspace-checkpoint-events"></a>
-
-### `workspace-checkpoint/*` events
-
-<a id="workspace-checkpointchanged--emit"></a>
-
-#### `workspace-checkpoint/changed` — emit
-
-Durable checkpoint metadata or workspace association changed.
-
-```ts cordis-catalog
-/**
- * Durable checkpoint metadata or workspace association changed.
- * @param sessionId - session whose index or records changed.
- * @mode emit
- */
-'workspace-checkpoint/changed'(sessionId: SessionId): void
-```
-
-Types: [SessionId](core.md)
-
-Source: [`packages/session/workspace-checkpoint/src/index.ts`](../../packages/session/workspace-checkpoint/src/index.ts)
 <!-- END GENERATED cordis-surface -->

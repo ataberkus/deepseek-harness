@@ -1,8 +1,8 @@
 /**
  * `model` namespace dictionaries.
  *
- * `trigger.selectAria` reads identically to `trigger.fallback` today and is
- * still a separate key: the visible fallback label and the accessible name of
+ * `trigger.selectAria` intentionally matches `trigger.fallback` but remains a
+ * separate key: the visible fallback label and the accessible name of
  * an unset trigger are free to diverge per locale, and folding it into
  * `trigger.aria` would announce the degenerate "Select model, current Select
  * model".
@@ -19,6 +19,7 @@ export const zh = {
   'login.antigravity.detail': 'Google Cloud Code Assist 订阅',
   'option.loadError': '目录加载失败：{message}',
   'trigger.fallback': '选择模型',
+  'trigger.loading': '正在加载模型…',
   'trigger.selectAria': '选择模型',
   'trigger.aria': '选择模型，当前 {model}',
   'trigger.ariaEffort': '选择模型，当前 {model}，推理等级 {effort}',
@@ -52,6 +53,7 @@ export const en = {
   'login.antigravity.detail': 'Google Cloud Code Assist subscription',
   'option.loadError': 'Catalog failed to load: {message}',
   'trigger.fallback': 'Select model',
+  'trigger.loading': 'Loading models…',
   'trigger.selectAria': 'Select model',
   'trigger.aria': 'Select model, current {model}',
   'trigger.ariaEffort': 'Select model, current {model}, reasoning effort {effort}',
