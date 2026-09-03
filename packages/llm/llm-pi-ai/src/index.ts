@@ -75,15 +75,7 @@ import { catalogProviderIds, catalogProviderTakesApiKey } from './catalog.ts'
 import { assertServiceable, Config, resolveProfiles } from './config.ts'
 import type { ResolvedPiAiProviderProfile } from './config.ts'
 import { discoverModels } from './discovery.ts'
-import { logoutHostedOAuth, oauthProviderProfiles, registerOAuthCommands } from './oauth-login.ts'
-import { FileOAuthStore, OAUTH_CREDENTIALS_FILENAME } from './oauth-store.ts'
-import {
-  LM_STUDIO_API,
-  LM_STUDIO_BASE_URL,
-  LM_STUDIO_DISPLAY_NAME,
-  LM_STUDIO_PLACEHOLDER_API_KEY,
-  LM_STUDIO_PROVIDER,
-} from './lmstudio.ts'
+import type { StoredModelDiscoveryProfile } from './discovery.ts'
 import { registerPiAiFlows } from './login.ts'
 
 export { PiAiAdapter } from './adapter.ts'
@@ -323,28 +315,27 @@ export function apply(ctx: Context, config: Config): void {
     directoryFacts = entries
   }
   ensureDirectory()
-  /**
-   * The credential a named route already resolves for an interrogation whose
-   * draft carries none. A route being declared for the first time has no stored
-   * profile, so discovery is unauthenticated. A stored profile follows the same
-   * resolver as requests: provider-native discovery when no credential is named,
-   * LM Studio's non-secret placeholder, or the explicitly referenced credential.
-   */
-  const storedApiKey = async (provider: string | undefined): Promise<string | undefined> => {
+  /** Host-owned request inputs for discovery of one configured route. */
+  const storedDiscoveryProfile = (
+    provider: string | undefined,
+  ): StoredModelDiscoveryProfile | undefined => {
     if (provider === undefined) return undefined
     const profile = profiles().get(provider)
     if (profile === undefined) return undefined
-    return resolveApiKey(provider, profile)
+    return {
+      headers: profile.headers,
+      resolveApiKey: () => resolveApiKey(provider, profile),
+    }
   }
   // Interrogating an endpoint is a configuration-time action over a draft, so
   // it is offered for the whole namespace rather than per route: the provider
   // a surface is adding does not exist yet. The draft is the whole request
-  // except the credential: a configuration surface edits a redacted descriptor
-  // and never holds a stored secret, so an already-configured route supplies
-  // its own here rather than being interrogated unauthenticated.
+  // except the stored credential and deployment-owned headers: the curated UI
+  // accepts neither, so an already-configured route supplies both inside the
+  // Host rather than widening the discovery request.
   ctx.llm.registerModelDiscovery(NS, (request, signal) => discoverModels(
     { ...request, ...signal === undefined ? {} : { signal } },
-    () => storedApiKey(request.provider),
+    () => storedDiscoveryProfile(request.provider),
   ))
   // Route effects bind to this apply fiber via the stable `ctx` reference,
   // even when a swap runs inside the scoped settings callback below. A bare
