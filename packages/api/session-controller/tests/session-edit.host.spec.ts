@@ -59,10 +59,11 @@ async function composed(enabled = true): Promise<{
       const session = ctx.sessions.create(options.sessionId, {
         ...options.seed === undefined ? {} : { seed: [...options.seed] },
         ...options.meta === undefined ? {} : { meta: options.meta },
+        ...options.inheritedEventCount === undefined ? {} : { inheritedEventCount: options.inheritedEventCount },
       })
       const agent = {} as Agent
       const followup = (message: UserMessage): void => {
-        const turn = session.events.filter(event => event.type === 'turn/start').length + 1
+        const turn = session.snapshotEvents().filter(event => event.type === 'turn/start').length + 1
         session.append('turn/start', { turn })
         session.append('user/message', message, { surfaceOp: 'append' })
         session.append('turn/end', { turn, reason: { kind: 'completed' } })
@@ -196,13 +197,13 @@ describe('session.edit and session.activate', () => {
       const checkpointAfterTurn1 = await checkpoint.capture({
         sessionId: parent.id,
         cwd,
-        boundarySeq: parent.events.at(-1)?.seq ?? -1,
+        boundarySeq: parent.snapshotEvents().at(-1)?.seq ?? -1,
         role: 'turn',
         turnOutcome: 'completed',
       })
       addTurn(parent, 2, 'B')
       await writeFile(join(cwd, 'note.txt'), 'after-turn-2')
-      const messageB = parent.events.find(event => event.type === 'user/message' && messageText(event) === 'B')
+      const messageB = parent.snapshotEvents().find(event => event.type === 'user/message' && messageText(event) === 'B')
       if (messageB === undefined) throw new Error('test message B was not appended')
       ctx.agents.register({
         id: parent.id,
@@ -221,10 +222,10 @@ describe('session.edit and session.activate', () => {
       const child = ctx.sessions.get(value.sessionId)
       if (child === undefined) throw new Error('edit did not publish a child')
       expect(child.header.parentSession).toBe(parent.id)
-      expect(child.events.some(event => event.type === 'user/message' && messageText(event) === 'edited B')).toBe(true)
-      expect(child.events.some(event => messageText(event) === 'B')).toBe(false)
+      expect(child.snapshotEvents().some(event => event.type === 'user/message' && messageText(event) === 'edited B')).toBe(true)
+      expect(child.snapshotEvents().some(event => messageText(event) === 'B')).toBe(false)
       expect(await readFile(join(cwd, 'note.txt'), 'utf8')).toBe('after-turn-1')
-      expect(parent.events.some(event => messageText(event) === 'B')).toBe(true)
+      expect(parent.snapshotEvents().some(event => messageText(event) === 'B')).toBe(true)
       expect(capture).toHaveBeenCalledWith(expect.objectContaining({ role: 'emergency' }))
       expect(capture).toHaveBeenCalledWith(expect.objectContaining({
         sessionId: child.id,
@@ -247,7 +248,7 @@ describe('session.edit and session.activate', () => {
       const checkpointAfterTurn1 = await checkpoint.capture({
         sessionId: parent.id,
         cwd,
-        boundarySeq: parent.events.at(-1)?.seq ?? -1,
+        boundarySeq: parent.snapshotEvents().at(-1)?.seq ?? -1,
         role: 'turn',
         turnOutcome: 'completed',
       })
@@ -284,9 +285,9 @@ describe('session.edit and session.activate', () => {
       expect(whenIdle).toHaveBeenCalledOnce()
       const child = ctx.sessions.get(value.sessionId)
       if (child === undefined) throw new Error('edit did not publish a child')
-      expect(parent.events.at(-1)?.type).toBe('turn/end')
+      expect(parent.snapshotEvents().at(-1)?.type).toBe('turn/end')
       expect(await readFile(join(cwd, 'note.txt'), 'utf8')).toBe('after-turn-1')
-      expect(child.events.some(event => event.type === 'user/message' && messageText(event) === 'edited B')).toBe(true)
+      expect(child.snapshotEvents().some(event => event.type === 'user/message' && messageText(event) === 'edited B')).toBe(true)
       expect(capture).toHaveBeenCalledWith(expect.objectContaining({
         sessionId: parent.id,
         role: 'emergency',
@@ -307,7 +308,7 @@ describe('session.edit and session.activate', () => {
       const record = await checkpoint.capture({
         sessionId: session.id,
         cwd,
-        boundarySeq: session.events.at(-1)?.seq ?? -1,
+        boundarySeq: session.snapshotEvents().at(-1)?.seq ?? -1,
         role: 'turn',
         turnOutcome: 'completed',
       })
@@ -315,7 +316,7 @@ describe('session.edit and session.activate', () => {
       const value = await host(ctx, cwd).activate({ sessionId: session.id }, abort())
       expect(value).toMatchObject({ restored: true, checkpointId: record.id })
       expect(await readFile(join(cwd, 'note.txt'), 'utf8')).toBe('after-turn-1')
-      expect(session.events.some(event => event.type === 'user/message' && messageText(event) === 'A')).toBe(true)
+      expect(session.snapshotEvents().some(event => event.type === 'user/message' && messageText(event) === 'A')).toBe(true)
     } finally {
       await ctx.fiber.dispose()
       await rm(cwd, { recursive: true, force: true })

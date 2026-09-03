@@ -133,7 +133,7 @@ describe('web e2e: hosted OAuth provider picker refreshes model directory', () =
     await loginPicker.getByRole('option', { name: /Antigravity/ }).click()
 
     await expect.poll(() => {
-      const events = scaffold.ctx.sessions.list().flatMap(session => session.events)
+      const events = scaffold.ctx.sessions.list().flatMap(session => session.snapshotEvents())
       const run = events.find(event => event.type === 'command/run' && event.data.name === 'login')
       if (run?.type !== 'command/run') return undefined
       const done = events.find(event => event.type === 'command/done' && event.data.commandId === run.data.commandId)

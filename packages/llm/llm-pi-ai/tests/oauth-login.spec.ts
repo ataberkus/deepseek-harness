@@ -921,7 +921,7 @@ describe('login and logout commands', () => {
         source: { kind: 'plugin', plugin: 'test' },
       })],
     })
-    expect(read).toHaveBeenCalledWith(OPENAI_CODEX_PROVIDER)
+    expect(read).toHaveBeenCalledWith(OPENAI_CODEX_PROVIDER, expect.objectContaining({ signal: expect.any(AbortSignal) }))
     expect(result.finish.kind).toBe('error')
     if (result.finish.kind !== 'error') throw new Error('expected OAuth lookup to fail the request')
     expect(result.finish.failure.code).toBe('PI_AI_ERROR')

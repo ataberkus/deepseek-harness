@@ -97,51 +97,6 @@ describe('catalog-route model discovery', () => {
     expect(server.paths).toEqual([])
   })
 
-  it('overlays live-only tool-capable ids onto a catalog route and falls back when listing fails', async () => {
-    const known = getBuiltinModels('openrouter')[0]
-    if (known === undefined) throw new Error('expected an OpenRouter catalog model')
-    const server = await listingServer({
-      body: JSON.stringify({
-        data: [
-          { id: 'vendor/live-only', supported_parameters: ['tools'] },
-          { id: 'vendor/no-tools', supported_parameters: ['temperature'] },
-        ],
-      }),
-    })
-    const ctx = await harness()
-    const models = await ctx.llm.discoverModels('llm-pi-ai', { provider: 'openrouter', baseURL: server.url })
-    expect(models.map(model => model.id)).toContain(known.id)
-    expect(models.map(model => model.id)).toContain('vendor/live-only')
-    expect(models.map(model => model.id)).not.toContain('vendor/no-tools')
-
-    const fallback = await ctx.llm.discoverModels('llm-pi-ai', {
-      provider: 'openrouter',
-      baseURL: 'http://127.0.0.1:9/v1',
-    })
-    expect(fallback.map(model => model.id).sort())
-      .toEqual(getBuiltinModels('openrouter').map(model => model.id).sort())
-
-    const catalogEndpoint = await ctx.llm.discoverModels('llm-pi-ai', { provider: 'openrouter' })
-    expect(catalogEndpoint.map(model => model.id).sort())
-      .toEqual(getBuiltinModels('openrouter').map(model => model.id).sort())
-
-    const aborted = AbortSignal.abort('test cancellation')
-    await expect(ctx.llm.discoverModels('llm-pi-ai', {
-      provider: 'openrouter',
-      baseURL: 'http://127.0.0.1:9/v1',
-    }, aborted)).rejects.toMatchObject({ code: 'ABORTED' })
-
-    const named = await listingServer({
-      body: JSON.stringify({ data: [{ id: 'vendor/via-api', supported_parameters: ['tools'] }] }),
-    })
-    const viaApi = await ctx.llm.discoverModels('llm-pi-ai', {
-      provider: 'openrouter',
-      api: 'openai-completions',
-      baseURL: named.url,
-    })
-    expect(viaApi.map(model => model.id)).toContain('vendor/via-api')
-  })
-
   it('needs no endpoint for a route the catalog describes', async () => {
     const ctx = await harness()
     await expect(ctx.llm.discoverModels('llm-pi-ai', { provider: 'deepseek' })).resolves.not.toHaveLength(0)

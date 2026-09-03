@@ -285,9 +285,6 @@ export const UserMessageNodeView = memo(function UserMessageNodeView({
           text={text}
           time={data.time}
           clock="start"
-          onEdit={canEdit && editCheckpointFor?.(data.seq) === true
-            ? () => { editMessage(data.seq, parts.text) }
-            : undefined}
           className={css.actions}
           t={t}
         />

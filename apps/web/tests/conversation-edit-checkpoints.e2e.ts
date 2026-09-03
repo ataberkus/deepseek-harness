@@ -75,7 +75,7 @@ describe.skipIf(MODE === 'record')('web e2e: conversation edit checkpoints', () 
     const checkpoint = await scaffold.ctx.workspaceCheckpoint.capture({
       sessionId: sourceSession.id,
       cwd: sessionCwd,
-      boundarySeq: sourceSession.session.events
+      boundarySeq: sourceSession.session.snapshotEvents()
         .findLast(event => event.type === 'turn/end')?.seq ?? -1,
       role: 'initial',
       turnOutcome: 'initial',
@@ -88,7 +88,7 @@ describe.skipIf(MODE === 'record')('web e2e: conversation edit checkpoints', () 
     await input.fill(ORIGINAL_TEXT)
     await input.press('Enter')
     expect(await sourceTurn).toBe(SessionId(SOURCE_ID))
-    expect(sourceSession.session.events.some(event =>
+    expect(sourceSession.session.snapshotEvents().some(event =>
       event.type === 'assistant/chunk'
       && event.data.chunk.type === 'text-delta'
       && event.data.chunk.text === 'EDIT_SOURCE_OK',
@@ -143,14 +143,14 @@ describe.skipIf(MODE === 'record')('web e2e: conversation edit checkpoints', () 
         result: editReceipt.result,
         selectedBoundary: selected?.boundarySeq,
         messageSeq: payload.payload?.messageSeq,
-        sourceTail: scaffold.ctx.agents.get(SessionId(SOURCE_ID))?.session.events
+        sourceTail: scaffold.ctx.agents.get(SessionId(SOURCE_ID))?.session.snapshotEvents()
           .filter(event => event.type === 'turn/end').map(event => event.seq),
       }))
     }
     childId = SessionId(editReceipt.result.value.sessionId)
     expect(childId).not.toBe(SessionId(SOURCE_ID))
     await expect.poll(
-      () => scaffold.ctx.agents.get(childId!)?.session.events.some(event => event.type === 'turn/end') ?? false,
+      () => scaffold.ctx.agents.get(childId!)?.session.snapshotEvents().some(event => event.type === 'turn/end') ?? false,
       { timeout: 30_000 },
     ).toBe(true)
     const childAgent = scaffold.ctx.agents.get(childId)
@@ -205,7 +205,7 @@ describe.skipIf(MODE === 'record')('web e2e: conversation edit checkpoints', () 
     if (!secondReceipt.result.ok) return
     const grandchildId = SessionId(secondReceipt.result.value.sessionId)
     await expect.poll(
-      () => scaffold.ctx.agents.get(grandchildId)?.session.events.some(event => event.type === 'turn/end') ?? false,
+      () => scaffold.ctx.agents.get(grandchildId)?.session.snapshotEvents().some(event => event.type === 'turn/end') ?? false,
       { timeout: 30_000 },
     ).toBe(true)
     await expect.poll(() => page.getByText(SECOND_REPLACEMENT_TEXT, { exact: true }).count(), { timeout: 15_000 })

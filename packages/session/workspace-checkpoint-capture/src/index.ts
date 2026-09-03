@@ -130,7 +130,7 @@ export function apply(ctx: Context): void {
     // Seeded sessions are resumed or forked logs. Their existing checkpoint
     // lineage owns boundary -1; capturing the current tree again would attach
     // a post-history tree to Checkpoint 0.
-    if (cwd === undefined || session.firstLiveSeq > 0 || session.events.at(-1)?.type === 'session/end-seed') return
+    if (cwd === undefined || session.firstLiveSeq > 0 || session.snapshotEvents().at(-1)?.type === 'session/end-seed') return
     scheduleCapture(ctx, tails, session, () => captureBoundary(ctx, {
       sessionId: session.id,
       cwd,

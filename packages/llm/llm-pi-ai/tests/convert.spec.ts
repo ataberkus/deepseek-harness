@@ -915,11 +915,11 @@ describe('mapStopReason / mapUsage', () => {
     expect(mapUsage({
       ...usage(10, 5),
       cost: { input: 0.1, output: 0.1, cacheRead: 0, cacheWrite: 0, total: 0.2 },
-    })).toEqual({ inputTokens: 10, outputTokens: 5, costUsd: 0.2 })
+    })).toEqual({ inputTokens: 10, outputTokens: 5, totalTokens: 15, costUsd: 0.2 })
   })
 
   it('omits a zero pi-ai cost total', () => {
-    expect(mapUsage(usage(10, 5))).toEqual({ inputTokens: 10, outputTokens: 5 })
+    expect(mapUsage(usage(10, 5))).toEqual({ inputTokens: 10, outputTokens: 5, totalTokens: 15 })
   })
 })
 

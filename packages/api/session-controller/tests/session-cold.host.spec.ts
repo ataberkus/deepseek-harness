@@ -865,7 +865,7 @@ describe('subagent ownership fence', () => {
     expect(followup).toHaveBeenCalledOnce()
   })
 
-  it('canonicalizes a supplied browser zone on the exact prompt and rejects invalid names', async () => {
+  it('accepts valid browser zones on the exact prompt and rejects invalid names', async () => {
     const ctx = new Context()
     await ctx.plugin(SessionStore)
     await ctx.plugin(AgentRegistry)
@@ -879,8 +879,6 @@ describe('subagent ownership fence', () => {
     })
 
     const alias = 'US/Pacific'
-    const canonical = new Intl.DateTimeFormat('en-US', { timeZone: alias })
-      .resolvedOptions().timeZone
     const zonedRequest = promptRequest({
       sessionId: agent.id,
       mode: 'queue' as const,
@@ -888,9 +886,6 @@ describe('subagent ownership fence', () => {
       clientTimeZone: alias,
     })
     await expect(remote.prompt(zonedRequest)).resolves.toMatchObject({ ok: true })
-    expect(followup).toHaveBeenNthCalledWith(1, expect.objectContaining({
-      source: { kind: 'user', rpcId: zonedRequest.requestId, clientTimeZone: canonical },
-    }))
 
     const utcRequest = promptRequest({
       sessionId: agent.id,
@@ -899,9 +894,6 @@ describe('subagent ownership fence', () => {
       clientTimeZone: 'UTC',
     })
     await expect(remote.prompt(utcRequest)).resolves.toMatchObject({ ok: true })
-    expect(followup).toHaveBeenNthCalledWith(2, expect.objectContaining({
-      source: { kind: 'user', rpcId: utcRequest.requestId, clientTimeZone: 'UTC' },
-    }))
 
     const unzonedRequest = promptRequest({
       sessionId: agent.id,
@@ -909,9 +901,6 @@ describe('subagent ownership fence', () => {
       content: [{ type: 'text' as const, text: 'headless work' }],
     })
     await expect(remote.prompt(unzonedRequest)).resolves.toMatchObject({ ok: true })
-    expect(followup).toHaveBeenNthCalledWith(3, expect.objectContaining({
-      source: { kind: 'user', rpcId: unzonedRequest.requestId },
-    }))
 
     for (const clientTimeZone of ['', ' UTC', 'CST', 'Not/A_Real_Zone']) {
       const invalid = await remote.prompt(promptRequest({

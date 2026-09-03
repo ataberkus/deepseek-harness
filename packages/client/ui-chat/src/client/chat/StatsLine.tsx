@@ -215,7 +215,7 @@ const StatsLineContent = memo(function StatsLineContent({
   )
 })
 
-export const StatsLine = memo(function StatsLine({ useChat, useProjection, t }: StatsLineProps) {
+export const StatsLine = memo(function StatsLine({ useChat, useProjection, useSessions, sessionId, t }: StatsLineProps) {
   const settledNodes = useChat(s => s.legacy.nodes)
   const usage = useProjection('tokenUsage')
   // Every figure rides the durable sessionStats projection, so paging and

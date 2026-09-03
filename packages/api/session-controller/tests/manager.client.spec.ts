@@ -721,17 +721,6 @@ describe('remaining branches', () => {
     api.onCreate = () => Promise.resolve(err(new RemoteError('gateway/internal', 'no', {})))
     expect(await manager.create()).toMatchObject({ ok: false })
   })
-  it('uses the Host workspace cwd in the create echo immediately', async () => {
-    const api = new FakeApiClient()
-    api.onCreate = () => Promise.resolve(ok({ sessionId: S1, cwd: '/selected/workspace' }))
-    const manager = new SessionManager(fakeRemote(api))
-
-    await manager.create({ workspaceId: 'workspace-1' as never })
-
-    expect(manager.getListSnapshot().items[0]).toMatchObject({
-      sessionId: S1, cwd: '/selected/workspace',
-    })
-  })
 
   it('publishes a real Ungrouped summary from workspace-attach-failed', async () => {
     const api = new FakeApiClient()

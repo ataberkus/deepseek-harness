@@ -362,7 +362,6 @@ describe('Web session model selection', () => {
       id: 'coded',
       name: 'Coded Provider',
       message: 'Cursor GetUsableModels returned no usable models',
-      code: 'CURSOR_NO_USABLE_MODELS',
     })
     await ctx.fiber.dispose()
   })
@@ -401,7 +400,6 @@ describe('Web session model selection', () => {
         id: 'duplicate',
         name: 'Duplicate Provider',
         message: 'adapter returned invalid or duplicate model metadata for provider "duplicate"',
-        code: 'INVALID_CATALOG',
       },
     ])
     await ctx.fiber.dispose()

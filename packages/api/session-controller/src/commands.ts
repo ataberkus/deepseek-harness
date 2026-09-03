@@ -10,8 +10,8 @@ import type { ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
 import {
   ReasoningEffortId, createUserMessage, freezeMessage,
 } from '@deepseek-ai/dsh-llm'
-import type { MessageSource } from '@deepseek-ai/dsh-llm'
-import { SessionLogOffset, SessionSeq } from '@deepseek-ai/dsh-session'
+import type { ContentBlock, MessageSource } from '@deepseek-ai/dsh-llm'
+import { isAppendSurfaceEvent, SessionLogOffset, SessionSeq } from '@deepseek-ai/dsh-session'
 import type { SessionEvent, SessionHeader, SessionId, UserMessage } from '@deepseek-ai/dsh-session'
 import { SessionQueryError, type SessionObservation } from '@deepseek-ai/dsh-session-query'
 import { SessionTitleInvalidError } from '@deepseek-ai/dsh-session-title'
@@ -549,10 +549,11 @@ export class SessionCommandController {
       await this.ctx.agents.create({
         sessionId: childId,
         seed: source.events.slice(0, turnStartIndex),
+        inheritedEventCount: SessionLogOffset(turnStartIndex),
         meta: {
           cwd,
           parentSession: request.sessionId,
-          seedLength: turnStartIndex,
+          isSeeded: true,
           ...(composition.agentPreset === undefined ? {} : { agentPreset: composition.agentPreset }),
         },
         agentOptions: { provider, model },

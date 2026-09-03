@@ -316,7 +316,8 @@ export const InputBar = memo(function InputBar({
   // An ordinary running session keeps Stop while the composer is empty or
   // owner-blocked; an actionable draft gets the existing Queue action. A
   // continuable child keeps Send primary and exposes Stop independently.
-  const primaryStops = running && subagent === null && editTarget === undefined
+  // An edit in flight always sends: the staged replacement, not a new turn.
+  const primaryStops = running && subagent === null && editTarget === undefined && (empty || blocked !== undefined)
   const interruptible = running && continuable
   const primaryLabel = primaryStops ? t('input.stop') : t('input.send')
   const onPrimary = (): void => {

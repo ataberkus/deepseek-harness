@@ -282,7 +282,7 @@ describe('provider-routed retry policy', () => {
       textResponse('recovered'),
     ])
     ;({ ctx: context } = await harness(adapter))
-    const agent = context.agentLoop.create(SessionId('retry-cursor-empty-stream'), {
+    const agent = await context.agentLoop.create(SessionId('retry-cursor-empty-stream'), {
       provider: 'mock',
       model: 'composer-2.5',
     })
@@ -292,7 +292,7 @@ describe('provider-routed retry policy', () => {
     await agent.whenIdle()
 
     expect(adapter.requests).toHaveLength(2)
-    expect(agent.session.events.find(event => event.type === 'llm/retry')?.data.failure).toEqual({
+    expect(agent.session.snapshotEvents().find(event => event.type === 'llm/retry')?.data.failure).toEqual({
       message: 'Cursor backend returned a heartbeat-only response with no content for model "composer-2.5"',
       code: 'CURSOR_EMPTY_STREAM',
     })

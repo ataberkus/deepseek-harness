@@ -76,6 +76,15 @@ import { assertServiceable, Config, resolveProfiles } from './config.ts'
 import type { ResolvedPiAiProviderProfile } from './config.ts'
 import { discoverModels } from './discovery.ts'
 import type { StoredModelDiscoveryProfile } from './discovery.ts'
+import { logoutHostedOAuth, oauthProviderProfiles, registerOAuthCommands } from './oauth-login.ts'
+import { FileOAuthStore, OAUTH_CREDENTIALS_FILENAME } from './oauth-store.ts'
+import {
+  LM_STUDIO_API,
+  LM_STUDIO_BASE_URL,
+  LM_STUDIO_DISPLAY_NAME,
+  LM_STUDIO_PLACEHOLDER_API_KEY,
+  LM_STUDIO_PROVIDER,
+} from './lmstudio.ts'
 import { registerPiAiFlows } from './login.ts'
 
 export { PiAiAdapter } from './adapter.ts'

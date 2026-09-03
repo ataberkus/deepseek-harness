@@ -207,6 +207,7 @@ describe('tokenUsage session projection', () => {
       outputTokens: 7,
       cacheReadTokens: 11,
       cacheWriteTokens: 1,
+      costUsd: 0,
     })
   })
 

@@ -135,7 +135,7 @@ describe('formatters', () => {
 
   it('formats provider spend with useful precision for sub-cent values', () => {
     expect(formatCost(0.005)).toBe('$0.0050')
-    expect(formatCost(0.125)).toBe('$0.13')
+    expect(formatCost(0.125)).toBe('$0.1250')
   })
   it('formats durations under and over a minute', () => {
     expect(formatDuration(45_230, tEn)).toBe('45.2s')

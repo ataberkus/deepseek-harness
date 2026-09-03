@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
-import { SessionId, Session, type SessionEvent } from '@deepseek-ai/dsh-session'
+import { SessionId, Session, SessionSeq, type SessionEvent } from '@deepseek-ai/dsh-session'
 import { CheckpointId } from '@deepseek-ai/dsh-workspace-checkpoint'
 import type {
   CaptureRequest,
@@ -128,7 +128,7 @@ describe('workspace-checkpoint-capture', () => {
     ctx.sessions.create(SessionId('capture-resume'), {
       seed: [{
         type: 'session/end-seed',
-        seq: 0,
+        seq: SessionSeq(0),
         time: 1,
         data: {},
       }],
@@ -170,7 +170,7 @@ describe('workspace-checkpoint-capture', () => {
     await waitFor(() => probe.records.length, 2)
 
     expect(flushes).toContain(session)
-    expect(session.events.some(event => event.type === 'turn/end' && event.seq === end.seq)).toBe(true)
+    expect(session.snapshotEvents().some(event => event.type === 'turn/end' && event.seq === end.seq)).toBe(true)
     expect(probe.records[1]).toMatchObject({
       boundarySeq: end.seq,
       status: { kind: 'unavailable' },
