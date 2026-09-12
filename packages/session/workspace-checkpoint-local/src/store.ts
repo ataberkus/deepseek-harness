@@ -3,7 +3,7 @@
  * @module @deepseek-ai/dsh-workspace-checkpoint-local/src/store
  */
 
-import { randomUUID } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import { readFile } from 'node:fs/promises'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import type { Domain, KvTable } from '@deepseek-ai/dsh-storage-domain'
@@ -220,6 +220,12 @@ async function admitBlobs(
   for (const entry of files) {
     const path = fromManifestPath(cwd, entry.relativePath)
     const bytes = await readFile(path)
+    if (createHash('sha256').update(bytes).digest('hex') !== entry.hash) {
+      throw new WorkspaceCheckpointError(
+        `file changed while capturing: ${entry.relativePath}`,
+        'CHECKPOINT_CONCURRENT_WRITE',
+      )
+    }
     await putBlob(objectRoot, entry.hash, bytes)
   }
   return undefined

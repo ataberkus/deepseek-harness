@@ -189,6 +189,37 @@ describe('LocalWorkspaceCheckpoint capture', () => {
     }
   })
 
+  it('persists unavailable when a file changes between manifest and blob admission', async () => {
+    const harness = await boot()
+    dispose.push(() => harness.dispose())
+    await writeFile(join(harness.cwd, 'note.txt'), 'stale-content')
+    const original = captureInternals.buildManifest
+    captureInternals.buildManifest = (async (cwd: string, options: Parameters<typeof original>[1]) => {
+      const manifest = await original(cwd, options)
+      return {
+        ...manifest,
+        entries: manifest.entries.map(entry => entry.kind === 'file'
+          ? { ...entry, hash: '0'.repeat(64) }
+          : entry),
+      }
+    }) as typeof original
+    try {
+      const record = await harness.ctx.workspaceCheckpoint.capture({
+        sessionId: SessionId('s1'),
+        cwd: harness.cwd,
+        boundarySeq: -1,
+        role: 'initial',
+        turnOutcome: 'initial',
+      })
+      expect(record.status.kind).toBe('unavailable')
+      expect(record.restoreEligible).toBe(false)
+      const objects = await readdir(harness.objectRoot, { recursive: true })
+      expect(blobNames(objects)).toHaveLength(0)
+    } finally {
+      captureInternals.buildManifest = original
+    }
+  })
+
   it('persists unavailable when a capture read fails', async () => {
     const harness = await boot()
     dispose.push(() => harness.dispose())
