@@ -92,6 +92,22 @@ function openBrowserWindow(url: string, name: string): Window | null {
   return globalThis.window.open(url, name)
 }
 
+/**
+ * Whether this renderer runs inside the desktop Electron shell. The shell
+ * denies every `window.open` while running its host locally, so the host's
+ * own system-browser opener serves sign-ins there: subscribing to the
+ * authorize URL here would consume it with nowhere to navigate. The shell
+ * exposes only a version carrier to application documents, so its presence
+ * (not its shape) is the signal; the web client and Node tests set no such
+ * global.
+ */
+function runsInDesktopShell(): boolean {
+  if (typeof globalThis.window === 'undefined') return false
+  const scope: unknown = globalThis.window
+  if (typeof scope !== 'object' || scope === null || !('dshDesktop' in scope)) return false
+  const bridge: unknown = scope.dshDesktop
+  return bridge !== undefined && bridge !== null
+}
 
 /** Live mutable state in one holder (service methods run behind the caller-ctx tracker). */
 interface LiveState {
@@ -138,7 +154,11 @@ export class CommandUiRuntime extends Service implements CommandUiContract {
       warm: (session) => { this.directory.warm(session.sessionId) },
     }), 'command: slash source')
     ctx.remote.$on('commands/change', () => { this.directory.invalidateAll() })
-    ctx.remote.$on('commands/open-url', (url) => { this.navigateLoginTab(url) })
+    // The desktop shell denies every window.open while running its host
+    // locally: leaving the authorize URL unconsumed lets the host opener
+    // serve the sign-in in the system browser instead of dropping it in a
+    // denied tab.
+    if (!runsInDesktopShell()) ctx.remote.$on('commands/open-url', (url) => { this.navigateLoginTab(url) })
     // A preset switch changes which commands one session's agent resolves and
     // registers nothing globally. Drop that key's old composition before
     // prewarming so a newly opened menu waits for the replacement catalog.

@@ -1208,4 +1208,12 @@ describe('openai-codex login tab', () => {
     expect(tab.location.href).toBe(CODEX_AUTH_URL)
     expect(open).toHaveBeenCalledTimes(1)
   })
+
+  it('leaves commands/open-url unconsumed inside the desktop shell so the host opener serves it', async () => {
+    const open = vi.fn(() => null)
+    vi.stubGlobal('window', { open, dshDesktop: { protocolVersion: 1 } })
+    const { remote } = await loginBench()
+    remote.emit('commands/open-url', [CODEX_AUTH_URL])
+    expect(open).not.toHaveBeenCalled()
+  })
 })

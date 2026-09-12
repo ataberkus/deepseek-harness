@@ -32,4 +32,4 @@ OpenCode Go 走独立的命名空间级 `llm/loginApiKey` Remote，因此秘密�
 
 ## Consequences
 
-`/login` 与 `/logout` 行为与之前完全一致，包括进行中的 OAuth 拒绝文本。Models 页面无需 composer 即可连接和断开 OAuth 与 OpenCode Go。API 密钥校验不会在诊断中包含提交的密钥，浏览器也会在 Remote 完成前清除自身副本。页签交接、秘密持久化、拒绝信息展示、目录收回／恢复生命周期分别覆盖于 `catalog.spec.ts`、`oauth-login.spec.ts`、`topology.spec.ts`、Models store/component spec 与 ui-commands service spec。`session/checkpoints` JSDoc 违规及依赖它的 `api-catalog.ts` 重新生成仍未解决，且与本变更无关。
+`/login` 与 `/logout` 行为与之前完全一致，包括进行中的 OAuth 拒绝文本。Models 页面无需 composer 即可连接和断开 OAuth 与 OpenCode Go。API 密钥校验不会在诊断中包含提交的密钥，浏览器也会在 Remote 完成前清除自身副本。页签交接、秘密持久化、拒绝信息展示、目录收回／恢复生命周期分别覆盖于 `catalog.spec.ts`、`oauth-login.spec.ts`、`topology.spec.ts`、Models store/component spec 与 ui-commands service spec。在拒绝一切 `window.open` 的桌面壳中，客户端不再消费 `commands/open-url`，改由宿主打开器在系统浏览器中完成登录。`session/checkpoints` JSDoc 违规及依赖它的 `api-catalog.ts` 重新生成仍未解决，且与本变更无关。

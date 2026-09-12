@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-09-12-models-page-oauth-connect.md
-2026-09-12-models-page-oauth-connect.md: 24aec219ed4a946c74c0ff0bf8c58a0032621620
-2026-09-12-models-page-oauth-connect.zh.md: ba3ba785dc33c3475bf2ad49d2ad5bcf8294fd17
+2026-09-12-models-page-oauth-connect.md: 0802f17fb433b1220172c662e7b9a0b323b5e18c
+2026-09-12-models-page-oauth-connect.zh.md: c2991f5edb6d3f248d4a6bb53e1cd1cfb04a5024
