@@ -32,6 +32,7 @@ export interface ProviderDirectoryEntry {
   readonly declared?: boolean
   readonly auth?: 'oauth'
   readonly defaults?: LlmConfigurableProvider['defaults']
+  readonly error?: string
 }
 
 /**
@@ -57,6 +58,7 @@ export function joinProviderDirectory(
       active: active.has(entry.provider),
       ...entry.declared === undefined ? {} : { declared: entry.declared },
       ...live?.auth === undefined ? {} : { auth: live.auth },
+      ...entry.error === undefined ? {} : { error: entry.error },
       ...entry.defaults === undefined ? {} : { defaults: entry.defaults },
     }
   })

@@ -18,7 +18,7 @@ Gemini 路由注入和内置模型解析已经通过单元测试，但 OAuth 登
 
 `PiAiAdapter` 会在当前 snapshot 中移除被拒绝的 served-model promise，然后重新抛出错误。模型目录的重试因此会重新执行 Cursor 列举，而成功的 snapshot 仍会缓存。
 
-`mapStopReason` 会把没有文本、思考或工具调用块的 Cursor 终止 stop 映射为 `CURSOR_EMPTY_STREAM`。该 code 不在默认可重试列表中。其他提供方继续使用通用且默认可重试的 `EMPTY_RESPONSE`；所有带内容的 Cursor 响应以及既有的传输、取消、工具调用、图像和 checkpoint 行为保持不变。通用提供方规则记录在[可重试的空完成](2026-07-24-empty-model-response-is-retryable.zh.md)中；本文只收窄 Cursor 行为。
+`mapStopReason` 会把没有文本、思考或工具调用块的 Cursor 终止 stop 映射为 `CURSOR_EMPTY_STREAM`。该 code 不在默认可重试列表中。其他提供方继续使用通用且默认可重试的 `EMPTY_RESPONSE`；所有带内容的 Cursor 响应以及既有的传输、取消、工具调用、图像和 checkpoint 行为保持不变。通用提供方规则记录在[可重试的空完成](../../archived/bug-fix/2026-07-24-empty-model-response-is-retryable.md)中；本文只收窄 Cursor 行为。
 
 组合 Web 回归测试通过真实回环回调完成模拟的 `/login google-gemini-cli` 流程，验证 Host 模型可见，并观察已打开的选择器在 `llm/adapters-updated` 后刷新。浏览器插件回归测试保持尚未打开的模型目录惰性。
 

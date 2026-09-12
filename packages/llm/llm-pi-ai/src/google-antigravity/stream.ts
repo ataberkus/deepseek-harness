@@ -48,7 +48,7 @@ export const antigravityStreamInternals = {
 export function streamAntigravity(
   model: Model<Api>,
   context: Context,
-  options?: SimpleStreamOptions,
+  options?: Omit<SimpleStreamOptions, 'toolChoice'>,
 ): AssistantMessageEventStream {
   const stream = createAssistantMessageEventStream()
   void runAntigravityStream(stream, model, context, options)
@@ -59,7 +59,7 @@ async function runAntigravityStream(
   stream: AssistantMessageEventStream,
   model: Model<Api>,
   context: Context,
-  options?: SimpleStreamOptions,
+  options?: Omit<SimpleStreamOptions, 'toolChoice'>,
 ): Promise<void> {
   const partial = emptyAssistant(model)
   const snapshot = (): AssistantMessage => ({ ...partial, content: [...partial.content] })
@@ -344,7 +344,7 @@ async function* readSseJson(
   }
 }
 
-function accessTokenFromOptions(options: SimpleStreamOptions | undefined): string | undefined {
+function accessTokenFromOptions(options: Omit<SimpleStreamOptions, 'toolChoice'> | undefined): string | undefined {
   if (options?.apiKey !== undefined && options.apiKey.length > 0) {
     return options.apiKey
   }
@@ -358,7 +358,7 @@ function accessTokenFromOptions(options: SimpleStreamOptions | undefined): strin
   return undefined
 }
 
-function projectIdFromOptions(options: SimpleStreamOptions | undefined): string | undefined {
+function projectIdFromOptions(options: Omit<SimpleStreamOptions, 'toolChoice'> | undefined): string | undefined {
   const headers = options?.headers
   if (headers !== undefined) {
     const value = headers[GOOGLE_ANTIGRAVITY_PROJECT_HEADER]

@@ -156,6 +156,7 @@ function directoryEntries(
     provider: string,
     displayName: string,
     defaults?: LlmConfigurableProvider['defaults'],
+    error?: string,
   ): void => {
     entries.set(provider, {
       provider,
@@ -167,6 +168,7 @@ function directoryEntries(
       // narrowing a shipped provider's models stores a profile too, and that
       // route is still one pi-ai knows.
       declared: !catalog.has(provider),
+      ...error === undefined ? {} : { error },
     })
   }
   // A provider whose only native method is OAuth leaves this adapter nothing
@@ -188,6 +190,7 @@ function directoryEntries(
       provider === LM_STUDIO_PROVIDER
         ? { api: LM_STUDIO_API, baseURL: LM_STUDIO_BASE_URL }
         : undefined,
+      profile.catalogError,
     )
   }
   return [...entries.values()]
@@ -206,19 +209,23 @@ export function apply(ctx: Context, config: Config): void {
    * store revision changes. Settings profiles feed the configurable-provider
    * directory (so a login does not invent a key-card). Live profiles feed the
    * adapter registry (so a stored Codex token becomes a selectable route).
+   * Catalog drift remains visible as diagnostics; scalar configuration errors
+   * still reject resolution.
    */
   const resolveMemo = (): void => {
     const raw = current()
     const revision = oauthStore.revision
     if (raw === lastRaw && revision === lastOAuthRevision
       && memoizedSettings !== undefined && memoizedLive !== undefined) return
-    lastRaw = raw
-    lastOAuthRevision = revision
-    memoizedSettings = resolveProfiles(raw.providers)
-    memoizedLive = resolveProfiles({
+    const settings = resolveProfiles(raw.providers, 'deferred')
+    const live = resolveProfiles({
       ...oauthProviderProfiles(oauthStore.credentialInfos()),
       ...raw.providers,
-    })
+    }, 'deferred')
+    lastRaw = raw
+    lastOAuthRevision = revision
+    memoizedSettings = settings
+    memoizedLive = live
   }
   /** Route keys injected solely by a stored OAuth credential, not settings. */
   const oauthInjected = (): ReadonlySet<string> => {
@@ -390,11 +397,16 @@ export function apply(ctx: Context, config: Config): void {
   registerOAuthCommands(ctx, { store: oauthStore, onCredentialChange })
 
   ctx.inject(['settings'], (settingsCtx) => {
+    let registering = true
     settingsCtx.settings.installSection(ctx, NS, Config, config, {
-      // Refuse an unserviceable section where it is written: without this a
-      // schema-valid profile the adapter cannot serve would be stored and then
-      // silently disable every route in this namespace.
-      validate: assertServiceable,
+      validate: (value) => {
+        // Stored catalog drift must not prevent registration of the repair UI.
+        if (registering) {
+          resolveProfiles(value.providers, 'deferred')
+        } else {
+          assertServiceable(value, current())
+        }
+      },
       setSource: (source) => {
         current = source
       },
@@ -424,5 +436,6 @@ export function apply(ctx: Context, config: Config): void {
         }
       },
     })
+    registering = false
   })
 }

@@ -29,7 +29,7 @@ describe('LM Studio route defaults', () => {
       api: 'openai-completions',
       baseURL: 'http://127.0.0.1:1234/v1',
     })
-    expect(profile?.piProvider.getModels().map(model => model.id)).toEqual(['qwen/qwen3-4b@q4_k_m'])
+    expect(profile?.piProvider?.getModels().map(model => model.id)).toEqual(['qwen/qwen3-4b@q4_k_m'])
   })
 
   it('keeps explicit endpoint and protocol overrides', () => {
@@ -48,12 +48,32 @@ describe('LM Studio route defaults', () => {
     })
   })
 
+  it('retains local defaults and a repair diagnostic when stored models are absent', () => {
+    const profile = resolveProfiles({ lmstudio: {} }, 'deferred').get('lmstudio')
+    expect(profile).toMatchObject({
+      displayName: 'LM Studio',
+      api: 'openai-completions',
+      baseURL: 'http://127.0.0.1:1234/v1',
+    })
+    expect(profile?.catalogError).toContain('resolves no models')
+    expect(profile?.piProvider).toBeUndefined()
+  })
+
   it('still requires an explicit model list', () => {
     expect(() => resolveProfiles({ lmstudio: {} })).toThrow(/resolves no models/)
   })
 })
 
 describe('reasoning schema boundary', () => {
+  it('accepts an empty provider section and propagates unexpected catalog failures', () => {
+    expect(() => { assertServiceable({}) }).not.toThrow()
+    const failure = new TypeError('model metadata lookup failed')
+    expect(() => resolveProfiles({ openrouter: { models: [{
+      id: '111',
+      get name(): string { throw failure },
+    }], api: 'openai-completions' } }, 'deferred')).toThrow(failure)
+  })
+
   it('rejects a level pi-ai does not know at the write that produced it', () => {
     expect(configWith({ reasoningEfforts: { ultra: 'x' } })).toThrow(/"off"/)
     expect(configWith({ reasoningEfforts: { high: 42 } })).toThrow()

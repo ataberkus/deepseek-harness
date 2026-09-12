@@ -6,7 +6,7 @@ Status: implemented
 
 ## 问题
 
-模型页无法用密钥字段认证 `openai-codex`。pi-ai 已安装 catalog 把该路由标成仅 OAuth：ChatGPT 浏览器 PKCE、已存储的 access/refresh token，以及 Codex Responses 后端——不是 `api.openai.com` 的 Chat Completions，也不是 `DEEPSEEK_API_KEY`。[目录不予提供](../bug-fix/2026-08-13-oauth-only-providers-withheld.zh.md)关掉了坏掉的密钥卡片；若没有宿主登录和持久 `CredentialStore`，这条路由仍然跑不起来。
+模型页无法用密钥字段认证 `openai-codex`。pi-ai 已安装 catalog 把该路由标成仅 OAuth：ChatGPT 浏览器 PKCE、已存储的 access/refresh token，以及 Codex Responses 后端——不是 `api.openai.com` 的 Chat Completions，也不是 `DEEPSEEK_API_KEY`。[目录不予提供](../../archived/bug-fix/2026-08-13-oauth-only-providers-withheld.md)关掉了坏掉的密钥卡片；若没有宿主登录和持久 `CredentialStore`，这条路由仍然跑不起来。
 
 在 pi-ai 旁边再手写一套 Codex Responses 客户端，会重复 pi-ai 已经拥有的 OAuth 刷新、SSE 与工具映射。把 OpenAI 的 Codex app-server 拉成子进程，则会在 harness 循环和模型之间再插入另一套 agent runtime。
 

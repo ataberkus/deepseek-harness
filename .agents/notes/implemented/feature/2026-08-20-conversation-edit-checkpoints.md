@@ -30,7 +30,7 @@ Workspace checkpoints are an explicit opt-in: the shipped Web composition and pr
 
 ## Consequences
 
-An edit preserves both conversation branches and provides a durable emergency path back to the pre-edit workspace. Checkpoint metadata is a sidecar rather than model-visible session history, so a client can reconnect to branch and recovery diagnostics without receiving file contents. The local provider requires a storage-domain backend and reports cross-record relation failures through its invariant companion. This reintroduces the settled-message edit affordance removed in [Drop the user-message edit stub](../simplification/2026-07-31-drop-user-message-edit-stub.md), now backed by checkpoint restore and a child branch.
+An edit preserves both conversation branches and provides a durable emergency path back to the pre-edit workspace. Checkpoint metadata is a sidecar rather than model-visible session history, so a client can reconnect to branch and recovery diagnostics without receiving file contents. The local provider requires a storage-domain backend and reports cross-record relation failures through its invariant companion. This reintroduces the settled-message edit affordance removed in [Drop the user-message edit stub](../../archived/simplification/2026-07-31-drop-user-message-edit-stub.md), now backed by checkpoint restore and a child branch.
 
 ## Testing
 

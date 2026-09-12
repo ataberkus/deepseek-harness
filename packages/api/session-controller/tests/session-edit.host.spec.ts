@@ -42,6 +42,38 @@ function messageText(event: { type: string; data: unknown }): string | undefined
   return data.content?.find(block => block.type === 'text')?.text
 }
 
+/** Complete Agent fixture; unexpected driver or inbox mutations fail the test. */
+function agentFixture(
+  ctx: Context,
+  session: Agent['session'],
+  pending: { nextTurn: UserMessage[]; nextStep: UserMessage[] } = { nextTurn: [], nextStep: [] },
+): Agent {
+  const unexpected = (): never => { throw new Error('unexpected Agent fixture operation') }
+  return {
+    id: session.id,
+    session,
+    ctx,
+    status: 'idle',
+    options: {},
+    inbox: {
+      ...pending,
+      clear: unexpected,
+      append: unexpected,
+      prepend: unexpected,
+      replace: unexpected,
+      remove: unexpected,
+      splice: unexpected,
+    },
+    cancel: unexpected,
+    whenIdle: async () => undefined,
+    runMaintenance: unexpected,
+    send: unexpected,
+    followup: unexpected,
+    steer: unexpected,
+    inject: unexpected,
+  }
+}
+
 async function composed(enabled = true): Promise<{
   ctx: Context
   checkpoint: WorkspaceCheckpoint
@@ -49,7 +81,7 @@ async function composed(enabled = true): Promise<{
 }> {
   const ctx = new Context()
   await ctx.plugin(SessionStore)
-  await ctx.plugin(SystemPrompt, { persona: '' })
+  await ctx.plugin(SystemPrompt)
   await ctx.plugin(AgentRegistry)
   await ctx.plugin(UserQuestionService)
   ctx.provide('workspaceRegistry', { list: () => [] } as never)
@@ -61,7 +93,7 @@ async function composed(enabled = true): Promise<{
         ...options.meta === undefined ? {} : { meta: options.meta },
         ...options.inheritedEventCount === undefined ? {} : { inheritedEventCount: options.inheritedEventCount },
       })
-      const agent = {} as Agent
+      const agent = agentFixture(ownerCtx, session)
       const followup = (message: UserMessage): void => {
         const turn = session.snapshotEvents().filter(event => event.type === 'turn/start').length + 1
         session.append('turn/start', { turn })
@@ -74,10 +106,10 @@ async function composed(enabled = true): Promise<{
         session,
         status: 'idle',
         ctx: agentCtx,
-        inbox: { hasPending: false, nextTurn: [], nextStep: [] },
         followup,
       })
-      await options.setup?.(agentCtx)
+      const setup = await options.setup?.(agentCtx, agent)
+      setup?.commit()
       ctx.agents.register(agent)
       return { agent, dispose: async () => undefined }
     },
@@ -205,13 +237,7 @@ describe('session.edit and session.activate', () => {
       await writeFile(join(cwd, 'note.txt'), 'after-turn-2')
       const messageB = parent.snapshotEvents().find(event => event.type === 'user/message' && messageText(event) === 'B')
       if (messageB === undefined) throw new Error('test message B was not appended')
-      ctx.agents.register({
-        id: parent.id,
-        session: parent,
-        status: 'idle',
-        inbox: { hasPending: false },
-        ctx,
-      } as Agent)
+      ctx.agents.register(agentFixture(ctx, parent))
 
       const value = await host(ctx, cwd).edit({
         sessionId: parent.id,
@@ -266,14 +292,11 @@ describe('session.edit and session.activate', () => {
       })
       const whenIdle = vi.fn(async () => undefined)
       ctx.agents.register({
-        id: parent.id,
-        session: parent,
+        ...agentFixture(ctx, parent),
         get status() { return status },
-        inbox: { hasPending: false },
-        ctx,
         cancel,
         whenIdle,
-      } as unknown as Agent)
+      })
 
       const value = await host(ctx, cwd).edit({
         sessionId: parent.id,
@@ -295,6 +318,39 @@ describe('session.edit and session.activate', () => {
     } finally {
       await ctx.fiber.dispose()
       await rm(cwd, { recursive: true, force: true })
+    }
+  })
+
+  it.each(['nextTurn', 'nextStep'] as const)('refuses edit and activation while %s contains pending work', async (target) => {
+    const { ctx, checkpoint, capture } = await composed()
+    try {
+      const session = ctx.sessions.create(sid(`pending-${target}`), { meta: { cwd: process.cwd() } })
+      addTurn(session, 1, 'original')
+      const message = session.snapshotEvents().find(event => event.type === 'user/message')
+      if (message === undefined) throw new Error('test message was not appended')
+      const pending = createUserMessage({ content: [{ type: 'text', text: 'queued' }], source: { kind: 'user' } })
+      const inbox = { nextTurn: [] as UserMessage[], nextStep: [] as UserMessage[] }
+      inbox[target].push(pending)
+      ctx.agents.register(agentFixture(ctx, session, inbox))
+      const original = session.snapshotEvents()
+      const controller = host(ctx)
+
+      await expect(controller.edit({
+        sessionId: session.id,
+        messageSeq: message.seq,
+        checkpointId: CheckpointId('unused'),
+        text: 'replacement',
+      }, abort())).rejects.toMatchObject({ code: 'session/agent-busy' })
+      await expect(controller.activate({ sessionId: session.id }, abort()))
+        .rejects.toMatchObject({ code: 'session/agent-busy' })
+
+      expect(inbox[target]).toEqual([pending])
+      expect(session.snapshotEvents()).toEqual(original)
+      expect(capture).not.toHaveBeenCalled()
+      expect(checkpoint.restore).not.toHaveBeenCalled()
+      expect(checkpoint.acquireLease).not.toHaveBeenCalled()
+    } finally {
+      await ctx.fiber.dispose()
     }
   })
 

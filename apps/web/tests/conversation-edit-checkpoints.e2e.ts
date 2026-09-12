@@ -15,7 +15,7 @@ import {
   assertFixtureInventory, captureStableAria, compareOrRefreshGolden, launchWebScaffold,
   seedSession, watchConsole, webSnapshotMode, type WebScaffold,
 } from './scaffold.ts'
-import { newEnglishPage, saveFailureShot } from './support.ts'
+import { newEnglishPage, saveFailureShot, writeComposerDraft } from './support.ts'
 
 const MODE = webSnapshotMode()
 const SNAPSHOT_DIR = fileURLToPath(new URL('./snapshots/conversation-edit-checkpoints', import.meta.url))
@@ -84,14 +84,13 @@ describe.skipIf(MODE === 'record')('web e2e: conversation edit checkpoints', () 
     expect(checkpoint.restoreEligible).toBe(true)
 
     const sourceTurn = scaffold.whenTurnSettled()
-    const input = page.getByRole('textbox', { name: 'Message the agent' })
-    await input.fill(ORIGINAL_TEXT)
+    const input = page.locator('[data-composer-input]').first()
+    await writeComposerDraft(page, input, ORIGINAL_TEXT)
     await input.press('Enter')
     expect(await sourceTurn).toBe(SessionId(SOURCE_ID))
     expect(sourceSession.session.snapshotEvents().some(event =>
-      event.type === 'assistant/chunk'
-      && event.data.chunk.type === 'text-delta'
-      && event.data.chunk.text === 'EDIT_SOURCE_OK',
+      event.type === 'assistant/message'
+      && event.data.message.content.some(block => block.type === 'text' && block.text === 'EDIT_SOURCE_OK'),
     )).toBe(true)
   }, 120_000)
 
@@ -106,20 +105,20 @@ describe.skipIf(MODE === 'record')('web e2e: conversation edit checkpoints', () 
     await editButton.waitFor({ timeout: 15_000 })
     await editButton.click()
     expect(await page.getByText('Editing this message', { exact: true }).isVisible()).toBe(true)
-    const input = page.getByRole('textbox', { name: 'Message the agent' })
-    expect(await input.inputValue()).toBe(ORIGINAL_TEXT)
+    const input = page.locator('[data-composer-input]').first()
+    expect(await input.innerText()).toBe(ORIGINAL_TEXT)
     const snapshot = await captureStableAria(page, '[class*="centerCol"]', sessionCwd)
     await compareOrRefreshGolden(EDITING_EXPECTED, snapshot, MODE)
   })
 
   it('restores the selected tree, publishes the child label, and reports recovery', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-conversation-edit-branch'))
-    const input = page.locator('textarea').first()
+    const input = page.locator('[data-composer-input]').first()
     expect(await page.getByText('Editing this message', { exact: true }).count()).toBe(1)
     const editRequest = page.waitForRequest(request =>
       request.method() === 'POST' && new URL(request.url()).pathname.startsWith('/api/'),
     { timeout: 10_000 })
-    await input.fill(REPLACEMENT_TEXT)
+    await writeComposerDraft(page, input, REPLACEMENT_TEXT)
     const send = page.getByRole('button', { name: 'Send message' })
     expect(await send.isDisabled()).toBe(false)
     await send.click()
@@ -184,12 +183,12 @@ describe.skipIf(MODE === 'record')('web e2e: conversation edit checkpoints', () 
     const secondEditButton = page.getByRole('button', { name: 'Edit and rerun' }).last()
     await secondEditButton.waitFor({ timeout: 15_000 })
     await secondEditButton.click()
-    const secondInput = page.getByRole('textbox', { name: 'Message the agent' })
-    expect(await secondInput.inputValue()).toBe(REPLACEMENT_TEXT)
+    const secondInput = page.locator('[data-composer-input]').first()
+    expect(await secondInput.innerText()).toBe(REPLACEMENT_TEXT)
     const secondEditRequest = page.waitForRequest(request =>
       request.method() === 'POST' && new URL(request.url()).pathname === '/api/session.edit',
     { timeout: 10_000 })
-    await secondInput.fill(SECOND_REPLACEMENT_TEXT)
+    await writeComposerDraft(page, secondInput, SECOND_REPLACEMENT_TEXT)
     await page.getByRole('button', { name: 'Send message' }).click()
     const secondRequest = await secondEditRequest
     const secondResponse = await secondRequest.response()
@@ -216,7 +215,7 @@ describe.skipIf(MODE === 'record')('web e2e: conversation edit checkpoints', () 
     await scaffold.ctx.workspaceCheckpoint.markRecoveryRequired(sessionCwd, RECOVERY_REASON)
     expect(await page.getByText('Conversation is readable, but workspace files cannot be restored', { exact: true }).first()
       .isVisible()).toBe(true)
-    expect(await input.isDisabled()).toBe(true)
+    expect(await input.getAttribute('contenteditable')).toBe('false')
     const snapshot = await captureStableAria(page, '[class*="centerCol"]', sessionCwd)
     await compareOrRefreshGolden(RECOVERY_EXPECTED, snapshot, MODE)
   }, 90_000)

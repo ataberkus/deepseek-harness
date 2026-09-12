@@ -28,6 +28,8 @@ tmp/
 .idea
 mise.toml
 dist-exe/
+/dist/
+apps/desktop/.desktop-build/
 python/sdk-runtime/src/deepseek_harness_runtime/runtime/deepseek-harness-sdk-runtime-*
 python/sdk-runtime/src/deepseek_harness_runtime/runtime/node/
 python/**/__pycache__/
@@ -44,3 +46,4 @@ worktrees/
 .typert-*/
 processhacker_audit.log
 .serena/
+native/system/test/bin/

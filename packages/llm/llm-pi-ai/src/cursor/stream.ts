@@ -9,6 +9,7 @@
  * @module dsh-llm-pi-ai/cursor/stream
  */
 
+import { randomUUID } from 'node:crypto'
 import { createAssistantMessageEventStream } from '@earendil-works/pi-ai'
 import type {
   Api,
@@ -89,7 +90,7 @@ export function resetCursorSessions(): void {
 export function streamCursor(
   model: Model<Api>,
   context: Context,
-  options?: SimpleStreamOptions,
+  options?: Omit<SimpleStreamOptions, 'toolChoice'>,
 ): AssistantMessageEventStream {
   const stream = createAssistantMessageEventStream()
   void runCursorStream(stream, model, context, options)
@@ -100,7 +101,7 @@ async function runCursorStream(
   stream: AssistantMessageEventStream,
   model: Model<Api>,
   context: Context,
-  options?: SimpleStreamOptions,
+  options?: Omit<SimpleStreamOptions, 'toolChoice'>,
 ): Promise<void> {
   const partial = emptyAssistant(model)
   const pushPartial = (): AssistantMessage => ({ ...partial, content: [...partial.content] })
@@ -331,7 +332,7 @@ async function runCursorStream(
 
 function sessionState(sessionId: string | undefined): SessionState {
   if (sessionId === undefined || sessionId.length === 0) {
-    return { conversationId: crypto.randomUUID(), blobStore: new Map(), awaitingTools: false }
+    return { conversationId: randomUUID(), blobStore: new Map(), awaitingTools: false }
   }
   const existing = sessions.get(sessionId)
   if (existing !== undefined) return existing
@@ -340,7 +341,7 @@ function sessionState(sessionId: string | undefined): SessionState {
   return created
 }
 
-function accessTokenFromOptions(options: SimpleStreamOptions | undefined): string | undefined {
+function accessTokenFromOptions(options: Omit<SimpleStreamOptions, 'toolChoice'> | undefined): string | undefined {
   const headers = options?.headers
   if (headers !== undefined) {
     for (const [name, value] of Object.entries(headers)) {
@@ -463,7 +464,7 @@ function mcpToolCall(toolCall: Uint8Array, fallbackId: string): ToolCall | undef
   const argsFields = decodeFields(argsMessage)
   const name = fieldString(argsFields, 1)
   if (name.length === 0) return undefined
-  const id = fieldString(argsFields, 3) || fallbackId || crypto.randomUUID()
+  const id = fieldString(argsFields, 3) || fallbackId || randomUUID()
   const args: Record<string, unknown> = {}
   for (const [key, value] of fieldMapBytes(argsFields, 2)) {
     args[key] = decodeJsonValue(value)

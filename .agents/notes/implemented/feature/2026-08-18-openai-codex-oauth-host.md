@@ -6,7 +6,7 @@ English | [中文](2026-08-18-openai-codex-oauth-host.zh.md)
 
 ## Problem
 
-The Models page cannot authenticate `openai-codex` with a key field. pi-ai's installed catalog ships that route as OAuth-only: ChatGPT browser PKCE, a stored access and refresh token, and the Codex Responses backend — not `api.openai.com` Chat Completions and not `DEEPSEEK_API_KEY`. The [directory withholding](../bug-fix/2026-08-13-oauth-only-providers-withheld.md) closed the broken key card; without a host login and a persistent `CredentialStore`, the route still could not run.
+The Models page cannot authenticate `openai-codex` with a key field. pi-ai's installed catalog ships that route as OAuth-only: ChatGPT browser PKCE, a stored access and refresh token, and the Codex Responses backend — not `api.openai.com` Chat Completions and not `DEEPSEEK_API_KEY`. The [directory withholding](../../archived/bug-fix/2026-08-13-oauth-only-providers-withheld.md) closed the broken key card; without a host login and a persistent `CredentialStore`, the route still could not run.
 
 Hand-rolling a second Codex Responses client beside pi-ai would duplicate OAuth refresh, SSE, and tool mapping that `@earendil-works/pi-ai` already owns. Spawning OpenAI's Codex app-server would insert another agent runtime between the harness loop and the model.
 

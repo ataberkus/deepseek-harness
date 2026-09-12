@@ -18,7 +18,7 @@ This note extends the runtime-health behavior of [Cursor OAuth hosting](../featu
 
 `PiAiAdapter` removes a rejected served-model promise from the current snapshot before rethrowing it. A model-directory retry therefore performs a fresh Cursor listing, while successful snapshots remain memoized.
 
-`mapStopReason` maps a Cursor terminal stop with no text, thinking, or tool-call blocks to `CURSOR_EMPTY_STREAM`. That code is outside the default retryable set. Other providers retain the generic retryable `EMPTY_RESPONSE` classification, and all non-empty Cursor content plus existing transport, abort, tool-call, image, and checkpoint behavior remains unchanged. The generic provider rule remains in [retryable empty completions](2026-07-24-empty-model-response-is-retryable.md); this note narrows only Cursor.
+`mapStopReason` maps a Cursor terminal stop with no text, thinking, or tool-call blocks to `CURSOR_EMPTY_STREAM`. That code is outside the default retryable set. Other providers retain the generic retryable `EMPTY_RESPONSE` classification, and all non-empty Cursor content plus existing transport, abort, tool-call, image, and checkpoint behavior remains unchanged. The generic provider rule remains in [retryable empty completions](../../archived/bug-fix/2026-07-24-empty-model-response-is-retryable.md); this note narrows only Cursor.
 
 The composed Web regression completes a mocked `/login google-gemini-cli` flow through the real loopback callback, verifies Host model visibility, and observes the already-open picker after `llm/adapters-updated`. The browser-plugin regression keeps unopened model directories lazy.
 
