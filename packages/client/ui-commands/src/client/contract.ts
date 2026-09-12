@@ -122,11 +122,11 @@ export interface CommandUiContract {
     attachments?: readonly SubmitAttachment[],
   ): Promise<SubmitOutcome>
   /**
-   * Open the shared hosted-OAuth blank tab under the caller's user gesture.
-   * Surfaces that start a sign-in outside the composer (the Models page
-   * Connect button) call this in the click handler so the authorize URL
-   * arriving later on `commands/open-url` navigates the prepared tab instead
-   * of a popup-blocked fresh one. Safe to call when no sign-in follows.
+   * Prepare the hosted-OAuth browser destination under the caller's user
+   * gesture. Web opens a reusable blank tab; Desktop later delegates the
+   * forwarded authorize URL to its system-browser bridge. Surfaces that start
+   * sign-in outside the composer call this in the click handler. Safe to call
+   * when no sign-in follows.
    */
   prepareOAuthLoginTab(): void
   /** Resolve the per-session popup controller for one session scope (wiring/overlay layer). */

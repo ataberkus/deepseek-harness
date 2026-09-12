@@ -10,6 +10,7 @@ import {
   ipcMain,
   Menu,
   protocol,
+  shell,
   type IpcMainInvokeEvent,
 } from 'electron'
 import { resolveDesktopPaths } from './paths.ts'
@@ -377,6 +378,18 @@ async function main(): Promise<void> {
   ipcMain.handle(DESKTOP_IPC.updatesInstall, async (event) => {
     assertDesktopSender(event, ['shell'])
     await updates.install()
+  })
+  ipcMain.handle(DESKTOP_IPC.oauthOpen, async (event, value: unknown) => {
+    assertDesktopSender(event, ['app'])
+    if (typeof value !== 'string') throw new Error('dsh desktop: OAuth URL must be a string')
+    let url: URL
+    try {
+      url = new URL(value)
+    } catch {
+      throw new Error('dsh desktop: OAuth URL must be a valid HTTPS URL')
+    }
+    if (url.protocol !== 'https:') throw new Error('dsh desktop: OAuth URL must be a valid HTTPS URL')
+    await shell.openExternal(value)
   })
 
   const checkAndPrompt = async (manual: boolean): Promise<void> => {

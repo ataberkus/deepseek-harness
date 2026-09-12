@@ -12,7 +12,7 @@ const harness = await vi.hoisted(async () => {
   }
   const windows: FakeWindow[] = []
   const hosts: FakeHost[] = []
-  const handlers = new Map<string, (event: { senderFrame: { url: string } }) => unknown>()
+  const handlers = new Map<string, (event: { senderFrame: { url: string } }, ...args: unknown[]) => unknown>()
   let pluginsEnabled = false
   let preparing = deferred()
   let prepared = deferred()
@@ -75,6 +75,7 @@ const harness = await vi.hoisted(async () => {
   return {
     windows, hosts, handlers, app, FakeWindow, FakeHost,
     dialog: { showErrorBox: vi.fn(), showMessageBox: vi.fn() },
+    shell: { openExternal: vi.fn(() => Promise.resolve()) },
     applyRelease: vi.fn(() => { preparing.resolve(); return prepared.promise }),
     assertProfileRuntime: vi.fn(),
     canRecoverProfile: vi.fn(() => true),
@@ -103,6 +104,7 @@ vi.mock('electron', () => ({
   },
   Menu: { setApplicationMenu: vi.fn(), buildFromTemplate: vi.fn() },
   protocol: { registerSchemesAsPrivileged: vi.fn(), handle: vi.fn() },
+  shell: harness.shell,
 }))
 vi.mock('../src/paths.ts', () => ({ resolveDesktopPaths: () => ({ profile: 'desktop-test-profile' }) }))
 vi.mock('../src/project-manager.ts', () => ({
@@ -127,6 +129,12 @@ function invoke(channel: string): unknown {
   const handler = harness.handlers.get(channel)
   if (handler === undefined) throw new Error(`missing handler ${channel}`)
   return handler({ senderFrame: { url: 'dsh-app://shell/startup.html' } })
+}
+
+function invokeFrom(channel: string, senderUrl: string, ...args: unknown[]): unknown {
+  const handler = harness.handlers.get(channel)
+  if (handler === undefined) throw new Error(`missing handler ${channel}`)
+  return handler({ senderFrame: { url: senderUrl } }, ...args)
 }
 
 beforeEach(() => {
@@ -155,6 +163,39 @@ afterEach(async () => {
 })
 
 describe('desktop main startup', () => {
+  it('opens validated application OAuth URLs in the system browser', async () => {
+    await import('../src/main.ts')
+    const authorizeUrl = 'https://auth.openai.com/oauth/authorize?state=test&code_challenge=pkce'
+    await expect(Promise.resolve(invokeFrom(
+      DESKTOP_IPC.oauthOpen,
+      'dsh-app://app/index.html',
+      authorizeUrl,
+    ))).resolves.toBeUndefined()
+    expect(harness.shell.openExternal).toHaveBeenCalledWith(authorizeUrl)
+
+    await expect(Promise.resolve(invokeFrom(
+      DESKTOP_IPC.oauthOpen,
+      'dsh-app://app/index.html',
+      'http://auth.openai.com/oauth/authorize',
+    ))).rejects.toThrow('OAuth URL must be a valid HTTPS URL')
+    await expect(Promise.resolve(invokeFrom(
+      DESKTOP_IPC.oauthOpen,
+      'dsh-app://app/index.html',
+      'not a URL',
+    ))).rejects.toThrow('OAuth URL must be a valid HTTPS URL')
+    await expect(Promise.resolve(invokeFrom(
+      DESKTOP_IPC.oauthOpen,
+      'dsh-app://app/index.html',
+      7,
+    ))).rejects.toThrow('OAuth URL must be a string')
+    await expect(Promise.resolve(invokeFrom(
+      DESKTOP_IPC.oauthOpen,
+      'dsh-app://shell/startup.html',
+      authorizeUrl,
+    ))).rejects.toThrow('rejected IPC from an unowned renderer')
+    expect(harness.shell.openExternal).toHaveBeenCalledTimes(1)
+  })
+
   it('exits with a diagnostic when both initialization and emergency navigation fail', async () => {
     const exited = Promise.withResolvers<undefined>()
     vi.spyOn(harness.app, 'getLocale').mockImplementationOnce(() => { throw new Error('locale unavailable') })

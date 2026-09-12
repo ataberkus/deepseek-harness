@@ -1209,11 +1209,28 @@ describe('openai-codex login tab', () => {
     expect(open).toHaveBeenCalledTimes(1)
   })
 
-  it('leaves commands/open-url unconsumed inside the desktop shell so the host opener serves it', async () => {
+  it('sends commands/open-url through the Desktop system-browser bridge', async () => {
     const open = vi.fn(() => null)
-    vi.stubGlobal('window', { open, dshDesktop: { protocolVersion: 1 } })
+    const openOAuthUrl = vi.fn(() => Promise.resolve())
+    vi.stubGlobal('window', { open, dshDesktop: { protocolVersion: 1, openOAuthUrl } })
     const { remote } = await loginBench()
     remote.emit('commands/open-url', [CODEX_AUTH_URL])
+    expect(openOAuthUrl).toHaveBeenCalledWith(CODEX_AUTH_URL)
     expect(open).not.toHaveBeenCalled()
+  })
+
+  it('reports a rejected Desktop OAuth browser operation', async () => {
+    const failure = new Error('system browser unavailable')
+    const openOAuthUrl = vi.fn(() => Promise.reject(failure))
+    const report = vi.spyOn(console, 'error').mockImplementation(() => {})
+    vi.stubGlobal('window', { open: vi.fn(), dshDesktop: { protocolVersion: 1, openOAuthUrl } })
+    const { remote } = await loginBench()
+    remote.emit('commands/open-url', [CODEX_AUTH_URL])
+    await vi.waitFor(() => {
+      expect(report).toHaveBeenCalledWith(
+        'ui-commands: Desktop could not open the OAuth authorize URL',
+        failure,
+      )
+    })
   })
 })

@@ -1,5 +1,9 @@
 import { afterEach, expect, it, vi } from 'vitest'
-import { DESKTOP_IPC, type DshDesktopStartupApi } from '../src/ipc.ts'
+import {
+  DESKTOP_IPC,
+  type DshDesktopApplicationApi,
+  type DshDesktopStartupApi,
+} from '../src/ipc.ts'
 
 const electron = vi.hoisted(() => ({
   contextBridge: { exposeInMainWorld: vi.fn() },
@@ -9,7 +13,21 @@ vi.mock('electron', () => electron)
 
 afterEach(() => { vi.unstubAllGlobals(); vi.clearAllMocks(); vi.resetModules() })
 
-it.each(['dsh-app://app/index.html', 'https://shell/startup.html'])('exposes only the carrier marker to %s', async (url) => {
+it('exposes the OAuth system-browser operation only to application documents', async () => {
+  vi.stubGlobal('location', new URL('dsh-app://app/index.html'))
+  await import('../src/preload-app.ts')
+  const api = electron.contextBridge.exposeInMainWorld.mock.calls[0]?.[1] as DshDesktopApplicationApi
+  await api.openOAuthUrl('https://auth.openai.com/oauth/authorize?state=test')
+  expect(electron.ipcRenderer.invoke).toHaveBeenCalledWith(
+    DESKTOP_IPC.oauthOpen,
+    'https://auth.openai.com/oauth/authorize?state=test',
+  )
+  expect(api).not.toHaveProperty('plugins')
+  expect(api).not.toHaveProperty('backend')
+})
+
+it('exposes only the carrier marker outside owned desktop documents', async () => {
+  const url = 'https://shell/startup.html'
   vi.stubGlobal('location', new URL(url))
   await import('../src/preload-app.ts')
   expect(electron.contextBridge.exposeInMainWorld).toHaveBeenCalledWith('dshDesktop', { protocolVersion: 1 })

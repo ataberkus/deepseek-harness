@@ -21,6 +21,7 @@ export const DESKTOP_IPC = {
   updatesCheck: 'dsh-desktop:updates-check',
   updatesInstall: 'dsh-desktop:updates-install',
   updatesState: 'dsh-desktop:updates-state',
+  oauthOpen: 'dsh-desktop:oauth-open',
 } as const
 
 /** Desktop release update state rendered by desktop-owned UI. */
@@ -60,4 +61,13 @@ export interface DshDesktopStartupApi extends Pick<DshDesktopApi, 'protocolVersi
   disablePlugins(): Promise<void>
   restart(): Promise<void>
   resetConfiguration(): Promise<void>
+}
+
+/** Application-page bridge for opening a validated OAuth URL outside Electron. */
+export interface DshDesktopApplicationApi extends Pick<DshDesktopApi, 'protocolVersion'> {
+  /**
+   * Open one HTTPS OAuth authorize URL in the operating system browser.
+   * @param url - complete authorize URL, including provider state and PKCE fields.
+   */
+  openOAuthUrl(url: string): Promise<void>
 }

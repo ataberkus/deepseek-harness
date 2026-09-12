@@ -14,7 +14,7 @@ Status: implemented
 
 `LlmConfigurableProvider` 与 live 提供方元数据携带 `auth: 'oauth' | 'api-key'`，表示该路由通过提供方自有登录而非 settings profile 连接。`directoryEntries()` 把三个托管路由与 OpenCode Go 声明为 dormant 条目；已存储 profile 会覆盖对应条目（保留普通 settings 路径），已注入的 live 凭据会收回对应条目，因此页面永远不会为同一路由同时渲染连接卡片与已连接行。页面 join 仅在 live 路由上把任一标记视为已配置；dormant 登录行不进入凭据批量查询、不进入添加菜单，并渲染为带进行中状态与按卡片拒绝信息的方法专属 Connect 卡片。
 
-登录走新的命名空间级 `llm/loginOAuth` Remote，与 `registerModelDiscovery` 同构：待连接的提供方尚无 live 注册可指名，因此以命名空间为键。`llm-pi-ai` 注册该 offer；它用与 `/login` 相同的授权 URL 行为运行 `loginHostedOAuth`（向 GUI 订阅者发送 `commands/open-url`，否则回退到宿主浏览器打开方式），成功后刷新路由。并发登录守卫从命令处理器移入按 store 键控的 `loginHostedOAuth`，使 `/login` 行与 Connect 点击共享同一守卫。Connect 点击在自己的用户手势内调用新增的 `CommandUiContract.prepareOAuthLoginTab()`，使稍后到达的授权 URL 导航已准备的页签，而非被弹窗拦截的新页签。
+登录走新的命名空间级 `llm/loginOAuth` Remote，与 `registerModelDiscovery` 同构：待连接的提供方尚无 live 注册可指名，因此以命名空间为键。`llm-pi-ai` 注册该 offer；它用与 `/login` 相同的授权 URL 行为运行 `loginHostedOAuth`（向 GUI 订阅者发送 `commands/open-url`，否则回退到宿主浏览器打开方式），成功后刷新路由。并发登录守卫从命令处理器移入按 store 键控的 `loginHostedOAuth`，使 `/login` 行与 Connect 点击共享同一守卫。Connect 点击在自己的用户手势内调用新增的 `CommandUiContract.prepareOAuthLoginTab()`，使稍后到达的授权 URL 导航已准备的 Web 页签，而非被弹窗拦截的新页签。Desktop 通过应用 preload 消费该转发 URL，并在验证 HTTPS 与 `dsh-app://app` 发送者后请求 Electron main 在系统浏览器中打开它。
 
 OpenCode Go 走独立的命名空间级 `llm/loginApiKey` Remote，因此秘密是显式类型参数，而非命令文本。客户端校验不含空格的可打印 ASCII，从密码字段提交 trim 后的值，并立即清空字段。宿主在 Remote 边界再次校验，驱动 pi-ai 的 `api_key` 登录方法，并把记录持久化到既有且仅属主可访问的 `$DSH_HOME/oauth-credentials.json` store。该凭据无需写入 `settings.yaml` 即可注入 live `opencode-go` 路由；断开连接会删除记录并恢复 dormant 卡片。
 
@@ -32,4 +32,4 @@ OpenCode Go 走独立的命名空间级 `llm/loginApiKey` Remote，因此秘密�
 
 ## Consequences
 
-`/login` 与 `/logout` 行为与之前完全一致，包括进行中的 OAuth 拒绝文本。Models 页面无需 composer 即可连接和断开 OAuth 与 OpenCode Go。API 密钥校验不会在诊断中包含提交的密钥，浏览器也会在 Remote 完成前清除自身副本。页签交接、秘密持久化、拒绝信息展示、目录收回／恢复生命周期分别覆盖于 `catalog.spec.ts`、`oauth-login.spec.ts`、`topology.spec.ts`、Models store/component spec 与 ui-commands service spec。在拒绝一切 `window.open` 的桌面壳中，客户端不再消费 `commands/open-url`，改由宿主打开器在系统浏览器中完成登录。`session/checkpoints` JSDoc 违规及依赖它的 `api-catalog.ts` 重新生成仍未解决，且与本变更无关。
+`/login` 与 `/logout` 行为与之前完全一致，包括进行中的 OAuth 拒绝文本。Models 页面无需 composer 即可连接和断开 OAuth 与 OpenCode Go。API 密钥校验不会在诊断中包含提交的密钥，浏览器也会在 Remote 完成前清除自身副本。页签交接、Desktop preload 与主进程交接、秘密持久化、拒绝信息展示、目录收回／恢复生命周期分别覆盖于 `catalog.spec.ts`、`oauth-login.spec.ts`、`topology.spec.ts`、Models store/component spec、ui-commands service spec，以及 Desktop preload/main spec。Desktop bridge 仅向应用渲染进程授予 HTTPS OAuth 打开器，而不暴露原始 Electron IPC 或通用 shell API。`session/checkpoints` JSDoc 违规及依赖它的 `api-catalog.ts` 重新生成仍未解决，且与本变更无关。
