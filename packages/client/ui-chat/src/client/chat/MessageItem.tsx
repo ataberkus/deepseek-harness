@@ -1,6 +1,8 @@
 import { Fragment, memo, useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
-import type { PendingSubmission } from '@deepseek-ai/dsh-api-session-controller/client'
+import type {
+  CheckpointSnapshot, CheckpointView, PendingSubmission,
+} from '@deepseek-ai/dsh-api-session-controller/client'
 import type { MessageImageSource } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import { fileExtension, FileTypeIcon, fileSizeText, JsonBlock, projectUserText, StateDot } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { ChatNodeOwnerProps, ChatNodeViewProps, ChatViewSlotProps } from '../contract/slots.ts'
@@ -311,11 +313,43 @@ export function PendingSubmissionBubble({ submission, renderMessageImages, t }: 
   )
 }
 
+/**
+ * Latest usable checkpoint before one durable message, matching the Host edit boundary.
+ * @param checkpoints - session checkpoint snapshot, if the control frame arrived.
+ * @param messageSeq - durable sequence of the message being edited.
+ * @returns the newest ready, eligible, non-emergency checkpoint below the message.
+ */
+export function selectEditCheckpoint(
+  checkpoints: CheckpointSnapshot | undefined,
+  messageSeq: number,
+): CheckpointView | undefined {
+  if (checkpoints?.enabled !== true) return undefined
+  return [...checkpoints.checkpoints].reverse().find(checkpoint =>
+    checkpoint.role !== 'emergency'
+    && checkpoint.status.kind === 'ready'
+    && checkpoint.restoreEligible
+    && checkpoint.boundarySeq < messageSeq)
+}
+
 /** User and admitted-steering keyed Chat renderer. */
 export const UserMessageNodeView = memo(function UserMessageNodeView({
-  node, renderMessageImages, openFile, openSkill, t,
+  node, renderMessageImages, openFile, openSkill, t, useSession, inputActions, useInput,
 }: ChatNodeViewProps<'user' | 'steering'>) {
   const data = node.data
+  let checkpoints: CheckpointSnapshot | undefined
+  try {
+    checkpoints = useSession(s => s.checkpoints)
+  } catch {
+    checkpoints = undefined
+  }
+  let alreadyEditing = false
+  try {
+    alreadyEditing = useInput(s => s.edit) !== undefined
+  } catch {
+    alreadyEditing = false
+  }
+  const eligible = alreadyEditing ? undefined : selectEditCheckpoint(checkpoints, data.seq)
+  const beginEdit = inputActions?.beginEdit
   return (
     <UserStyleBubble
       content={data.content}
@@ -330,6 +364,9 @@ export const UserMessageNodeView = memo(function UserMessageNodeView({
           time={data.time}
           clock="start"
           className={css.actions}
+          {...eligible === undefined || beginEdit === undefined
+            ? {}
+            : { onEdit: () => { beginEdit({ messageSeq: data.seq, checkpointId: eligible.id, originalText: text }) } }}
           t={t}
         />
       )}
