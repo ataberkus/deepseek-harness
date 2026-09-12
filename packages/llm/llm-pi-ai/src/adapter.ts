@@ -72,6 +72,8 @@ import {
 } from './listing.ts'
 import { CURSOR_PROVIDER } from './cursor/constants.ts'
 import { listCursorModels } from './cursor/models.ts'
+import { listCodexModels } from './codex/models.ts'
+import { OPENAI_CODEX_PROVIDER } from './oauth-hosts.ts'
 import { OPENCODE_GO_PROVIDER } from './oauth-login.ts'
 import { advertisedDefaultEffort } from './thinking-levels.ts'
 import { rethrowPiAiError, toStreamChunks } from './stream.ts'
@@ -297,7 +299,7 @@ export class PiAiAdapter extends LlmAdapter {
   /**
    * Resolve the model list currently served by one route. Explicit profile
    * lists stay authoritative; catalog OpenRouter routes use a bounded live
-   * listing, while hosted Cursor uses its OAuth-backed model listing.
+   * listing, while hosted Cursor and Codex use their OAuth-backed listings.
    */
   private async servedModels(snapshot: PiAiSnapshot, provider: string): Promise<readonly Model<Api>[]> {
     const cached = snapshot.served.get(provider)
@@ -317,9 +319,12 @@ export class PiAiAdapter extends LlmAdapter {
     const installed = snapshot.models.getModels(provider)
     if (!profile.servesInstalledCatalog) return installed
     if (provider === CURSOR_PROVIDER) {
-      const token = await cursorAccessToken(this.config.auth.credentials)
+      const token = await hostedAccessToken(this.config.auth.credentials, CURSOR_PROVIDER)
       if (token === undefined) return installed
       return listCursorModels(token)
+    }
+    if (provider === OPENAI_CODEX_PROVIDER) {
+      return this.loadCodexModels(profile, installed)
     }
     const target = catalogListingTarget(provider, {
       ...profile.api === undefined ? {} : { api: profile.api },
@@ -347,6 +352,26 @@ export class PiAiAdapter extends LlmAdapter {
     } catch {
       return installed
     }
+  }
+
+  /**
+   * Resolve the Codex models the signed-in account may use. The token is read
+   * straight from the store — listing never refreshes; a missing token, a store
+   * failure, and any registry failure all keep the installed catalog, while the
+   * request path still refreshes under pi-ai's lock and fails loud there.
+   */
+  private async loadCodexModels(
+    profile: ResolvedPiAiProviderProfile,
+    installed: readonly Model<Api>[],
+  ): Promise<readonly Model<Api>[]> {
+    let accessToken: string | undefined
+    try {
+      accessToken = await hostedAccessToken(this.config.auth.credentials, OPENAI_CODEX_PROVIDER)
+    } catch {
+      accessToken = undefined
+    }
+    if (accessToken === undefined) return installed
+    return listCodexModels(accessToken, installed, profile.baseURL)
   }
 
   /** The configured descriptor for one exact route/model pair within one snapshot. */
@@ -543,12 +568,15 @@ export class PiAiAdapter extends LlmAdapter {
 }
 
 /**
- * Read a hosted Cursor access token from the collection credential store.
+ * Read a hosted OAuth access token from the collection credential store. Listing
+ * reads the stored record directly and never refreshes; the request path owns
+ * refresh under pi-ai's lock.
  * @param store - durable pi-ai credential store.
+ * @param provider - hosted route key the credential was stored under.
  * @returns a non-empty access token, or `undefined` when no OAuth record exists.
  */
-async function cursorAccessToken(store: CredentialStore): Promise<string | undefined> {
-  const credential = await store.read(CURSOR_PROVIDER)
+async function hostedAccessToken(store: CredentialStore, provider: string): Promise<string | undefined> {
+  const credential = await store.read(provider)
   if (credential?.type !== 'oauth') return undefined
   const access = credential.access.trim()
   return access.length === 0 ? undefined : access

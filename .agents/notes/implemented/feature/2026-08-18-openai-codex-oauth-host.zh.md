@@ -22,7 +22,7 @@ Status: implemented
 
 Web 客户端在提交 `/login` 的按键手势里打开空白标签，并在收到 `commands/open-url` 时导航到授权页。授权 URL 到达后再 `window.open` 会被弹窗拦截；Node 里的 `dsh web` 进程也无法可靠地在已经打开的浏览器里再开标签。CLI 与 ACP 仍使用操作系统 opener。命名标签会被复用，因此第二次 `/login` 不会把进行中的授权页换成 `about:blank`。
 
-已存储的 `openai-codex` oauth 凭据会向适配器注册表注入一条无 settings 的 live 路由，模型选择器因此可以列出 pi-ai catalog 模型。可配置提供方目录仍然不提供仅 OAuth 的 catalog **密钥卡片**，这是不予提供那条笔记的决策；settings 里已存储的 profile 仍会出现在目录中，以便编辑或删除。live 路由不点名 `apiKeyEnv`，因此首次引导在 Codex 登录之前仍要求有一个可用的 API 密钥提供方。模型页把这条注入路由显示为已登录行（名称加上已连接圆点，通过 `llm.logout` 退出登录，没有编辑器，也没有 Sign-in 按钮）。`/logout openai-codex` 仍是命令等价物。
+已存储的 `openai-codex` oauth 凭据会向适配器注册表注入一条无 settings 的 live 路由，模型选择器因此可以列出账号的模型：实时注册表叠加在 pi-ai catalog 之上（[实时列表](2026-09-12-codex-oauth-model-listing.zh.md)）。可配置提供方目录仍然不提供仅 OAuth 的 catalog **密钥卡片**，这是不予提供那条笔记的决策；settings 里已存储的 profile 仍会出现在目录中，以便编辑或删除。live 路由不点名 `apiKeyEnv`，因此首次引导在 Codex 登录之前仍要求有一个可用的 API 密钥提供方。模型页把这条注入路由显示为已登录行（名称加上已连接圆点，通过 `llm.logout` 退出登录，没有编辑器，也没有 Sign-in 按钮）。`/logout openai-codex` 仍是命令等价物。
 
 `Provider is not configured` 映射为 `LlmError('MISSING_CREDENTIAL')`，并点名 `/login openai-codex`。托管的 `cursor` 与 `google-gemini-cli` 登录是同一 store 与命令表上的兄弟路由；那些非官方传输见 [Cursor OAuth 宿主](2026-08-18-cursor-oauth-host.zh.md) 和 [Gemini CLI OAuth 宿主](2026-08-19-google-gemini-cli-oauth-host.zh.md)。
 
@@ -44,7 +44,7 @@ Web 客户端在提交 `/login` 的按键手势里打开空白标签，并在收
 
 ## 后果
 
-CLI、ACP 或 Web 会话可以运行 `/login openai-codex`，完成 ChatGPT 浏览器登录，然后选择 `openai-codex` 模型。设置 → 模型随后会把该路由显示为已使用 ChatGPT 登录。agent 循环、工具、审批与会话日志仍由 harness 拥有；PKCE、刷新与 Codex Responses 由 pi-ai 拥有。Codex 后端不是一份与公开 API 同等稳定的契约——OpenAI 侧变更时更新的是 pi-ai 适配器，而不是 harness 自有的协议解析器。
+CLI、ACP 或 Web 会话可以运行 `/login openai-codex`，完成 ChatGPT 浏览器登录，然后选择 `openai-codex` 模型。设置 → 模型随后会把该路由显示为已使用 ChatGPT 登录。agent 循环、工具、审批与会话日志仍由 harness 拥有；PKCE、刷新与 Codex Responses 由 pi-ai 拥有。Codex Responses 传输仍是 pi-ai，其协议变更时更新 pi-ai 适配器；账号注册表读取器由 harness 自有（[实时列表](2026-09-12-codex-oauth-model-listing.zh.md)），负责跟进注册表结构漂移。
 
 device-code／SSH 登录、模型页「登录」按钮、`dsh auth login` 启动器子命令、图片输入，以及其他仅 OAuth 的 catalog 提供方仍不提供。
 

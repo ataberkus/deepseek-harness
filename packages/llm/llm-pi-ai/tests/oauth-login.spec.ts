@@ -995,7 +995,13 @@ describe('login and logout commands', () => {
         source: { kind: 'plugin', plugin: 'test' },
       })],
     })
-    const readCall = read.mock.calls[0] as readonly unknown[] | undefined
+    // Model listing reads the stored token first without request options; the
+    // hosted request still resolves auth through pi-ai with an abort signal.
+    const calls = read.mock.calls as readonly (readonly unknown[])[]
+    const readCall = calls.find((call) => {
+      const options = call[1]
+      return typeof options === 'object' && options !== null && 'signal' in options
+    })
     expect(readCall?.[0]).toBe(OPENAI_CODEX_PROVIDER)
     const readOptions = readCall?.[1]
     expect(

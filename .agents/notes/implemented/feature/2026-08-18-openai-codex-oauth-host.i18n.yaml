@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-08-18-openai-codex-oauth-host.md
-2026-08-18-openai-codex-oauth-host.md: c335a1cf8159c0ec13401176b0610eb1cc8d1c02
-2026-08-18-openai-codex-oauth-host.zh.md: ab9ba8e57d8d158b0c3535be32597cf50d90fbfd
+2026-08-18-openai-codex-oauth-host.md: df607ec9d140c0fbec4b4482f67133a31ae41f6d
+2026-08-18-openai-codex-oauth-host.zh.md: b0be898256c43c418f50c930d1a1d1f4b0af9786
