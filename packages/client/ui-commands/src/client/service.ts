@@ -235,6 +235,14 @@ export class CommandUiRuntime extends Service implements CommandUiContract {
   }
 
   /**
+   * Open the shared hosted-OAuth blank tab under the caller's user gesture.
+   * See {@link CommandUiContract.prepareOAuthLoginTab} for the caller contract.
+   */
+  prepareOAuthLoginTab(): void {
+    this.prepareLoginTab()
+  }
+
+  /**
    * Navigate the prepared tab to `url`, or open `url` if the gesture tab was
    * blocked or already closed. Non-https values are ignored.
    * @param url - authorize URL forwarded from the Host.

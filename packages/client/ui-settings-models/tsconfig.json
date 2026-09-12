@@ -30,6 +30,9 @@
       "path": "../locale"
     },
     {
+      "path": "../ui-commands"
+    },
+    {
       "path": "../../api/remotes/tsconfig.client.json"
     }
   ]

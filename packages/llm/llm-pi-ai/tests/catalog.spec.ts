@@ -15,6 +15,8 @@ import { resolveProfiles } from '../src/config.ts'
 import { buildProvider, supportedProtocols } from '../src/provider.ts'
 import { assemble } from './assemble.ts'
 import { isolateDshHome, removeIsolatedHomes } from './dsh-home.ts'
+import * as catalog from '../src/catalog.ts'
+import { OAUTH_LOGIN_IN_PROGRESS, OAUTH_LOGIN_UNSUPPORTED } from '../src/oauth-login.ts'
 import { memoryAuth } from './auth-double.ts'
 import { closeMockServers, mockServer, textEvents } from './mock-server.ts'
 
@@ -161,10 +163,11 @@ describe('hand-declared providers', () => {
       declared: true,
     })
     // Membership of the catalog, not of the settings document: a shipped
-    // provider carries a stored profile the moment anyone corrects it.
+    // provider carries a stored profile the moment anyone corrects it. The
+    // hosted OAuth routes pi-ai does not ship read as declared too, and
+    // carry the dormant sign-in marker instead of a key posture.
     expect(directory.filter(entry => entry.declared).map(entry => entry.provider))
-      .toEqual(['lmstudio', 'acme-gateway'])
-    expect(directory.find(entry => entry.provider === 'deepseek')?.declared).toBe(false)
+      .toEqual(['lmstudio', 'cursor', 'google-antigravity', 'acme-gateway'])
   })
 
   it('sizes a model the catalog cannot describe from the route\u2019s own fallbacks', () => {
@@ -1227,21 +1230,126 @@ describe('configurable-provider directory', () => {
     expect(ctx.llm.listConfigurableProviders()).toHaveLength(catalogOnly)
   })
 
-  it('offers every installed catalog route, including one that only signs in', async () => {
+  it('offers provider-owned login routes as method-specific Connect cards', async () => {
     const ctx = await harness({})
-    const offered = ctx.llm.listConfigurableProviders().map(entry => entry.provider)
+    const entries = ctx.llm.listConfigurableProviders()
+    const offered = entries.map(entry => entry.provider)
 
-    // `openai-codex` authenticates through OAuth alone. A Models-page key field
-    // cannot complete that login, so the directory withholds the card. `/login
-    // openai-codex` stores the OAuth credential and registers a live route
-    // without inventing a key card.
-    expect(offered).not.toContain('openai-codex')
-    expect(offered).not.toContain('cursor')
-    expect(offered).not.toContain('google-antigravity')
-    // A provider that offers OAuth *beside* an api-key method keeps its entry:
-    // the key is a path this adapter can serve.
+    // `openai-codex` authenticates through OAuth alone, and `cursor` and
+    // `google-antigravity` are hosted routes pi-ai does not ship. A
+    // Models-page key field cannot complete those logins, so the directory
+    // offers a dormant sign-in marker instead of a key posture.
+    for (const provider of ['openai-codex', 'cursor', 'google-antigravity']) {
+      expect(offered).toContain(provider)
+      expect(entries.find(entry => entry.provider === provider)).toMatchObject({
+        settingsNs: 'llm-pi-ai',
+        settingsPath: ['providers', provider],
+        auth: 'oauth',
+      })
+    }
+    // A provider that offers OAuth *beside* an api-key method keeps its key
+    // entry: the key is a path this adapter can serve.
     expect(offered).toContain('anthropic')
     expect(offered).toContain('openai')
+    expect(entries.find(entry => entry.provider === 'anthropic')?.auth).toBeUndefined()
+    expect(entries.find(entry => entry.provider === 'opencode-go')).toMatchObject({
+      provider: 'opencode-go',
+      displayName: 'OpenCode Go',
+      settingsNs: 'llm-pi-ai',
+      settingsPath: ['providers', 'opencode-go'],
+      auth: 'api-key',
+    })
+  })
+
+  it('connects OpenCode Go with an API key and restores its dormant entry on logout', async () => {
+    const ctx = await harness({})
+    const signal = new AbortController().signal
+
+    await expect(ctx.llm.remoteLoginApiKey('llm-pi-ai', 'opencode-go', 'opencode-test-key', signal))
+      .resolves.toBeUndefined()
+    expect(ctx.llm.listProviders().find(route => route.id === 'opencode-go'))
+      .toMatchObject({ auth: 'api-key' })
+    expect(ctx.llm.listConfigurableProviders().map(entry => entry.provider)).not.toContain('opencode-go')
+
+    await ctx.llm.logout('opencode-go')
+    expect(ctx.llm.listProviders().map(route => route.id)).not.toContain('opencode-go')
+    expect(ctx.llm.listConfigurableProviders()).toContainEqual(expect.objectContaining({
+      provider: 'opencode-go',
+      auth: 'api-key',
+    }))
+  })
+
+  it('signs a dormant route in through the namespace login offer', async () => {
+    const ctx = await harness({})
+    const provider = catalog.catalogProvider('openai-codex')
+    if (provider?.auth.oauth === undefined) throw new Error('expected openai-codex oauth')
+    const login = vi.spyOn(provider.auth.oauth, 'login').mockResolvedValue({
+      type: 'oauth',
+      access: 'access-token',
+      refresh: 'refresh-token',
+      expires: Date.now() + 60_000,
+      accountId: 'acc',
+    })
+    try {
+      const signal = new AbortController().signal
+      await expect(ctx.llm.remoteLoginOAuth('llm-pi-ai', 'openai-codex', signal)).resolves.toBeUndefined()
+      expect(login).toHaveBeenCalledTimes(1)
+      // The live route registers and the dormant directory entry withdraws,
+      // so a surface renders the signed-in row instead of a second card.
+      expect(ctx.llm.listProviders().find(route => route.id === 'openai-codex'))
+        .toMatchObject({ auth: 'oauth' })
+      expect(ctx.llm.listConfigurableProviders().map(entry => entry.provider))
+        .not.toContain('openai-codex')
+    } finally {
+      login.mockRestore()
+    }
+  })
+
+  it('refuses a second sign-in while one is still waiting', async () => {
+    const ctx = await harness({})
+    const provider = catalog.catalogProvider('openai-codex')
+    if (provider?.auth.oauth === undefined) throw new Error('expected openai-codex oauth')
+    let release!: (value: { type: 'oauth'; access: string; refresh: string; expires: number }) => void
+    const hanging = new Promise<{
+      type: 'oauth'
+      access: string
+      refresh: string
+      expires: number
+    }>((resolve) => { release = resolve })
+    const login = vi.spyOn(provider.auth.oauth, 'login').mockReturnValue(hanging)
+    try {
+      const signal = new AbortController().signal
+      const first = ctx.llm.remoteLoginOAuth('llm-pi-ai', 'openai-codex', signal)
+      await vi.waitFor(() => { expect(login).toHaveBeenCalledTimes(1) })
+      await expect(ctx.llm.remoteLoginOAuth('llm-pi-ai', 'openai-codex', signal))
+        .rejects.toMatchObject({
+          code: 'llm/login-rejected',
+          message: OAUTH_LOGIN_IN_PROGRESS,
+          details: { settingsNs: 'llm-pi-ai', provider: 'openai-codex' },
+        })
+      expect(login).toHaveBeenCalledTimes(1)
+      release({ type: 'oauth', access: 'access-token', refresh: 'refresh-token', expires: Date.now() + 60_000 })
+      await expect(first).resolves.toBeUndefined()
+    } finally {
+      login.mockRestore()
+    }
+  })
+
+  it('refuses a sign-in no login serves', async () => {
+    const ctx = await harness({})
+    const signal = new AbortController().signal
+    await expect(ctx.llm.remoteLoginOAuth('llm-pi-ai', 'anthropic', signal))
+      .rejects.toMatchObject({
+        code: 'llm/login-rejected',
+        message: OAUTH_LOGIN_UNSUPPORTED,
+        details: { settingsNs: 'llm-pi-ai', provider: 'anthropic' },
+      })
+    await expect(ctx.llm.remoteLoginOAuth('llm-absent', 'cursor', signal))
+      .rejects.toMatchObject({
+        code: 'llm/login-rejected',
+        message: 'no OAuth login is registered for "llm-absent"',
+        details: { settingsNs: 'llm-absent', provider: 'cursor' },
+      })
   })
 
   it('lists a route a stored profile names as a catalog route, not a declared one', async () => {

@@ -110,12 +110,12 @@ export interface PiAiAdapterOptions {
    */
   auth: PiAiAuthInjection
   /**
-   * Hosted OAuth routes injected solely by stored credentials, not settings.
-   * Provider metadata reports these routes as OAuth-backed to selectors.
+   * Routes injected solely by stored provider logins, not settings. Provider
+   * metadata reports each route's login method to selectors.
    */
-  oauthInjected?: () => ReadonlySet<string>
-  /** Delete a hosted OAuth credential and refresh the adapter's route set. */
-  logoutOAuth?: (provider: string) => Promise<void>
+  loginInjected?: () => ReadonlyMap<string, 'oauth' | 'api-key'>
+  /** Delete a provider-managed credential and refresh the adapter's route set. */
+  logoutManagedLogin?: (provider: string) => Promise<void>
   /** Resolve the optional durable attachment service at request time. */
   resolveAttachments?: () => AttachmentStore | undefined
   /** Bridge one attachment reference into the current model-tool execution world. */
@@ -347,16 +347,16 @@ export class PiAiAdapter extends LlmAdapter {
     // The configured name, not the route key: `displayName` exists so a
     // deployment can label a route, and a label only the configuration surface
     // reads would leave every selector showing the raw key.
-    const oauth = this.config.oauthInjected?.().has(provider) === true
+    const auth = this.config.loginInjected?.().get(provider)
     return {
       id: provider,
       name: this.current().profiles.get(provider)?.displayName ?? provider,
-      ...oauth ? { auth: 'oauth' as const } : {},
+      ...auth === undefined ? {} : { auth },
     }
   }
 
   override async logout(provider: string): Promise<void> {
-    const logout = this.config.logoutOAuth
+    const logout = this.config.logoutManagedLogin
     if (logout === undefined) {
       throw new LlmError(
         `pi-ai provider "${provider}" does not support logout`,

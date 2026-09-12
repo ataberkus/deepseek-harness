@@ -16,35 +16,41 @@
 
 选择**添加提供方**，选取 dsh 自带的提供方；列表显示的是提供方 id，例如 `anthropic`、`openai`、Kimi 对应的 `moonshotai`、GLM 对应的 `zai`。输入其 API 密钥并保存。已安装目录会提供端点、协议和模型列表。
 
-使用原生认证的提供方需要各自的原生凭据。Bedrock、Vertex 和 Azure 分别使用 AWS 凭据与区域、ADC 项目和 `api-version`。Codex 通过 `/login openai-codex` 使用 ChatGPT OAuth；Cursor 使用 `/login cursor`；Antigravity 使用 `/login google-antigravity`。只填写 API 密钥字段无法完成配置。
+使用原生认证的提供方需要各自的原生凭据。Bedrock、Vertex 和 Azure 分别使用 AWS 凭据与区域、ADC 项目和 `api-version`。Codex、Cursor 与 Antigravity 使用各自的浏览器登录，OpenCode Go 使用其自有 API 密钥登录。这些提供方显示为独立的**连接**卡片，而不会出现在**添加提供方**中。
+
+## 连接 OpenCode Go
+
+从 [OpenCode Go 控制台](https://opencode.ai/auth)创建或复制 API 密钥。在**设置 → 模型**中找到 **OpenCode Go**，把密钥输入密码遮罩字段，然后选择**连接**。该路由及其已安装模型目录会立即可用，不会创建 `settings.yaml` profile。
+
+密钥以仅属主可访问的权限存入 `$DSH_HOME/oauth-credentials.json`，提交后会立即从浏览器字段清除。连接行上的**删除**会删除该密钥并恢复连接卡片。手工配置 OpenCode Go profile 时仍可使用 `OPENCODE_API_KEY`，但连接卡片不会写环境变量或 `$DSH_HOME/.credentials.yaml` 记录。
 
 ## 登录 OpenAI Codex
 
-Codex 使用 ChatGPT 订阅，而不是 API 密钥。在 Web UI、CLI 或 ACP 对话中运行一次 `/login openai-codex`，完成 ChatGPT 登录，然后选择一个 `openai-codex` 模型。`/logout openai-codex` 删除已存储的 token。
+Codex 使用 ChatGPT 订阅，而不是 API 密钥。在**设置 → 模型**中选择 Codex 卡片上的**连接**并完成 ChatGPT 登录，然后选择一个 `openai-codex` 模型。也可以在 Web、CLI 或 ACP 对话中运行 `/login openai-codex`；`/logout openai-codex` 会删除已存储的 token。
 
 Web UI 会在这次按键手势里打开新标签。若标签没有出现，请允许 dsh 源的弹出式窗口。第一次标签仍在等待时，第二次 `/login` 会被拒绝。不要把终端里更早的授权 URL 粘贴回去：每次尝试都有自己的 `state`，mismatch 会显示 OpenAI 的 **Authentication failed** 页。
 
 若授权页报告 `missing_required_parameter`，把服务器终端里打印的完整 URL 粘贴到地址栏。点击被换行截断的链接会丢掉 `client_id` 和其余查询参数。
 
-token 存放在 `$DSH_HOME/oauth-credentials.json`（仅属主可读）。它们不是环境变量，也绝不会出现在日志里。模型页不提供 Codex 密钥卡片。
+token 存放在 `$DSH_HOME/oauth-credentials.json`（仅属主可读）。它们不是环境变量，也绝不会出现在日志里。模型页提供连接卡片，而非 Codex 密钥卡片。
 
 本构建不包含无界面／SSH 的 device-code 登录。
 
 ## 登录 Cursor
 
-Cursor 使用 Cursor 订阅，而不是 API 密钥。在 Web UI、CLI 或 ACP 对话中运行一次 `/login cursor`，完成 Cursor 登录，然后选择一个 `cursor` 模型。`/logout cursor` 删除已存储的 token。
+Cursor 使用 Cursor 订阅，而不是 API 密钥。在 Models 卡片上选择**连接**，或在 Web、CLI 或 ACP 对话中运行 `/login cursor`；完成 Cursor 登录后选择一个 `cursor` 模型。`/logout cursor` 删除已存储的 token。
 
 Web UI 会像 Codex 一样在这次按键手势里打开新标签。第一次登录仍在等待时，第二次 `/login` 对任一提供方都会被拒绝。
 
-这条非官方 Cursor 后端不是公开 API；Cursor 可能改协议或限制账号。token 与 Codex 共用 `$DSH_HOME/oauth-credentials.json`。模型页不提供 Cursor 密钥卡片。
+这条非官方 Cursor 后端不是公开 API；Cursor 可能改协议或限制账号。token 与 Codex 共用 `$DSH_HOME/oauth-credentials.json`。模型页提供连接卡片，而非 Cursor 密钥卡片。
 
 ## 登录 Antigravity
 
-Antigravity 使用 Google 账号和 Cloud Code Assist，而不是 Gemini API 密钥。在 Web UI、CLI 或 ACP 对话中运行一次 `/login google-antigravity`，完成 Google 登录，然后选择一个 `google-antigravity` 模型。`/logout google-antigravity` 删除已存储的 token。
+Antigravity 使用 Google 账号和 Cloud Code Assist，而不是 Gemini API 密钥。在 Models 卡片上选择**连接**，或在 Web、CLI 或 ACP 对话中运行 `/login google-antigravity`；完成 Google 登录后选择一个 `google-antigravity` 模型。`/logout google-antigravity` 删除已存储的 token。
 
 Web UI 会像 Codex 一样在这次按键手势里打开新标签。第一次登录仍在等待时，第二次 `/login` 对任一托管提供方都会被拒绝。
 
-这条非官方 Cloud Code Assist 后端不是公开 API；Google 可能改协议或限制账号。token 与 Codex 共用 `$DSH_HOME/oauth-credentials.json`。模型页不提供 Antigravity 密钥卡片。这不是已安装的 `google` API 密钥 catalog 提供方。
+这条非官方 Cloud Code Assist 后端不是公开 API；Google 可能改协议或限制账号。token 与 Codex 共用 `$DSH_HOME/oauth-credentials.json`。模型页提供连接卡片，而非 Antigravity 密钥卡片。这不是已安装的 `google` API 密钥 catalog 提供方。
 
 ## 添加自定义提供方
 

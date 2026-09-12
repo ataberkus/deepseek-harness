@@ -29,6 +29,24 @@
       - text: Acme Gateway 自定义
       - button "编辑 Acme Gateway (acme-gateway)": 编辑
       - button "删除 Acme Gateway (acme-gateway)": 删除
+    - listitem:
+      - text: OpenCode Go
+      - button "连接 OpenCode Go (opencode-go)": 连接
+      - paragraph: 输入 OpenCode Go (opencode-go) API 密钥，即可在此使用其模型。
+      - text: API 密钥
+      - textbox "OpenCode Go (opencode-go) API 密钥"
+    - listitem:
+      - text: OpenAI Codex
+      - button "连接 OpenAI Codex (openai-codex)": 连接
+      - paragraph: 在浏览器中使用 OpenAI Codex (openai-codex) 登录，即可在此使用其模型。
+    - listitem:
+      - text: Cursor
+      - button "连接 Cursor (cursor)": 连接
+      - paragraph: 在浏览器中使用 Cursor (cursor) 登录，即可在此使用其模型。
+    - listitem:
+      - text: Antigravity
+      - button "连接 Antigravity (google-antigravity)": 连接
+      - paragraph: 在浏览器中使用 Antigravity (google-antigravity) 登录，即可在此使用其模型。
   - button "添加提供方":
     - img
     - text: 添加提供方

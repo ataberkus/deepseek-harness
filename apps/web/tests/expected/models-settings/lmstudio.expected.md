@@ -19,13 +19,32 @@
     - text: 关闭
   - heading "模型" [level=2]
   - paragraph: 填入各提供方的 API 密钥即可使用其模型。
-  - list
+  - list:
+    - listitem:
+      - text: OpenCode Go
+      - button "连接 OpenCode Go (opencode-go)": 连接
+      - paragraph: 输入 OpenCode Go (opencode-go) API 密钥，即可在此使用其模型。
+      - text: API 密钥
+      - textbox "OpenCode Go (opencode-go) API 密钥"
+    - listitem:
+      - text: OpenAI Codex
+      - button "连接 OpenAI Codex (openai-codex)": 连接
+      - paragraph: 在浏览器中使用 OpenAI Codex (openai-codex) 登录，即可在此使用其模型。
+    - listitem:
+      - text: Cursor
+      - button "连接 Cursor (cursor)": 连接
+      - paragraph: 在浏览器中使用 Cursor (cursor) 登录，即可在此使用其模型。
+    - listitem:
+      - text: Antigravity
+      - button "连接 Antigravity (google-antigravity)": 连接
+      - paragraph: 在浏览器中使用 Antigravity (google-antigravity) 登录，即可在此使用其模型。
   - text: 提供方
   - combobox "提供方":
     - option "amazon-bedrock"
     - option "ant-ling"
     - option "anthropic"
     - option "azure-openai-responses"
+    - option "baseten"
     - option "cerebras"
     - option "cloudflare-ai-gateway"
     - option "cloudflare-workers-ai"
@@ -45,10 +64,10 @@
     - option "nvidia"
     - option "openai"
     - option "opencode"
-    - option "opencode-go"
     - option "openrouter"
     - option "qwen-token-plan"
     - option "qwen-token-plan-cn"
+    - option "qwen-token-plan-individual"
     - option "together"
     - option "vercel-ai-gateway"
     - option "xai"
@@ -63,18 +82,10 @@
   - textbox "API 密钥":
     - /placeholder: 输入 API 密钥，或留空使用环境认证
   - group:
-    - text: 自定义设置 显示名称
-    - textbox "显示名称":
-      - /placeholder: lmstudio
-    - text: API 地址
+    - text: 自定义设置 API 地址
     - textbox "API 地址":
       - /placeholder: 提供方默认
       - text: http://127.0.0.1:1234/v1
-    - text: API 协议
-    - combobox "API 协议":
-      - option "openai-completions" [selected]
-      - option "openai-responses"
-      - option "anthropic-messages"
     - region "模型目录":
       - text: 模型目录 正在使用适配器默认模型
       - button "获取可用模型"

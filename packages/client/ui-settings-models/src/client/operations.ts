@@ -71,8 +71,22 @@ export interface ModelsOperations {
    * @returns the candidates, or the refusal.
    */
   discoverModels(settingsNs: string, request: LlmModelDiscoveryRequest): Promise<ModelDiscoveryOutcome>
+  /**
+   * Sign one dormant OAuth route in through its namespace's login offer.
+   * @param settingsNs - namespace whose registered login serves the provider.
+   * @param provider - dormant OAuth route to connect.
+   * @returns the refusal message, or undefined once the sign-in landed.
+   */
+  loginOAuth(settingsNs: string, provider: string): Promise<string | undefined>
+  /**
+   * Connect one dormant route through its provider-owned API-key method.
+   * @param settingsNs - namespace whose registered login serves the provider.
+   * @param provider - dormant API-key route to connect.
+   * @param apiKey - secret supplied for this login alone.
+   * @returns the refusal message, or undefined once the login landed.
+   */
+  loginApiKey(settingsNs: string, provider: string, apiKey: string): Promise<string | undefined>
 }
-
 /**
  * Bind the page's Host operations to the plugin's own Remote namespaces.
  * @param ctx - the page plugin's context, which declares `remote.credentials`,
@@ -104,6 +118,14 @@ export function createModelsOperations(ctx: ClientContext): ModelsOperations {
       return response.ok
         ? { kind: 'found', models: response.value }
         : { kind: 'refused', message: response.error.message }
+    },
+    loginOAuth: async (settingsNs, provider) => {
+      const response = await ctx.remote.llm.loginOAuth(settingsNs, provider)
+      return response.ok ? undefined : response.error.message
+    },
+    loginApiKey: async (settingsNs, provider, apiKey) => {
+      const response = await ctx.remote.llm.loginApiKey(settingsNs, provider, apiKey)
+      return response.ok ? undefined : response.error.message
     },
   }
 }

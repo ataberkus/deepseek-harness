@@ -30,7 +30,7 @@ export interface ProviderDirectoryEntry {
   readonly settingsPath: readonly string[]
   readonly active: boolean
   readonly declared?: boolean
-  readonly auth?: 'oauth'
+  readonly auth?: 'oauth' | 'api-key'
   readonly defaults?: LlmConfigurableProvider['defaults']
   readonly error?: string
 }
@@ -57,6 +57,7 @@ export function joinProviderDirectory(
       settingsPath: [...entry.settingsPath],
       active: active.has(entry.provider),
       ...entry.declared === undefined ? {} : { declared: entry.declared },
+      ...entry.auth === undefined ? {} : { auth: entry.auth },
       ...live?.auth === undefined ? {} : { auth: live.auth },
       ...entry.error === undefined ? {} : { error: entry.error },
       ...entry.defaults === undefined ? {} : { defaults: entry.defaults },
@@ -207,7 +208,10 @@ export class ModelsSettingsStore {
     const namespaces = new Map(views.map(view => [view.ns, view]))
     const rows: ProviderRow[] = providers.map((entry) => {
       const namespace = namespaces.get(entry.settingsNs)
-      const configured = entry.auth === 'oauth' || (namespace !== undefined
+      // A login marker alone does not configure a route: dormant directory
+      // entries carry it so the page can offer Connect, and only a live
+      // (registered) route counts as connected.
+      const configured = (entry.auth !== undefined && entry.active) || (namespace !== undefined
         && (entry.settingsPath.length === 0 || this.schema.getPath(namespace.value, entry.settingsPath) !== undefined))
       const removable = namespace !== undefined
         && entry.settingsPath.length > 0
@@ -222,7 +226,7 @@ export class ModelsSettingsStore {
       }
     })
     const refs = [...new Set(rows.flatMap(row =>
-      row.entry.auth === 'oauth' ? [] : [row.apiKeyEnv ?? deriveKeyRef(row.entry.provider)]))]
+      row.entry.auth !== undefined ? [] : [row.apiKeyEnv ?? deriveKeyRef(row.entry.provider)]))]
     let credentials: Record<string, CredentialInfo> = {}
     let credentialError: string | null = null
     if (refs.length > 0) {
@@ -262,14 +266,11 @@ export class ModelsSettingsStore {
     })
   }
   /**
-   * Sign out of a live hosted OAuth route through the LLM service. The
-   * generated remote surface is optional in older bundles, so the narrow cast
-   * keeps this page source-compatible while the deployed route is upgraded.
-   * @param provider - registered OAuth route id.
+   * Disconnect a live provider-managed login through the LLM service. The
+   * @param provider - registered provider-login route id.
    */
   async logout(provider: string): Promise<void> {
-    const llm = this.ctx.remote.llm as unknown as { logout(provider: string): Promise<void> }
-    await llm.logout(provider)
+    await this.ctx.remote.llm.logout(provider)
   }
 }
 

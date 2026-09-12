@@ -27,6 +27,8 @@ English | [中文](README.zh.md)
 
 Open the Models page from the Settings navigation to see every configured provider as a row. A whole-section provider whose key is not configured anywhere renders as its open setup card instead, but only in the first-run posture and only until the user closes that card. Each card kind owns its own open state, so closing one never discards a draft in another.
 
+Provider-owned logins appear as Connect cards while disconnected and as live rows with a disconnect action once connected. Codex, Cursor, and Antigravity run the namespace `llm/loginOAuth` offer and open an authorize URL in the login tab. OpenCode Go renders a password-masked key field and runs `llm/loginApiKey`; the submitted secret is cleared from browser state immediately and never enters settings.
+
 A provider with a stored catalog error remains visible with its diagnostic and edit/delete actions. Add actions are offered only for registered settings namespaces, so an unavailable namespace cannot leave a button that opens no editor. A rejected save leaves the editor open and displays the Host diagnostic.
 
 ### API keys
@@ -108,7 +110,7 @@ These limits define the editor's field coverage and the page's reach; they are c
 - **Credential cleanup is intentionally narrow** — deleting a row removes the configured, writable credential only when its reference is the exact `<ROUTE>_API_KEY` target this page derives. Custom references, environment credentials, and unidentifiable targets are retained because the row cannot prove ownership of them.
 - **Only pi-ai routes can be hand-declared** — the custom-provider card writes into `llm-pi-ai`, the one namespace whose profiles describe a whole provider. A `llm-deepseek` route is a composition fact, not something this page can create.
 - **Interrogation covers OpenAI-compatible and Anthropic Messages endpoints** — OpenAI protocols accept a standard `data` array or an enriched `models` map, while Anthropic uses its native model-listing route; every other protocol reports that it cannot be asked and its models are entered by hand.
-- **Undeclared live routes render nowhere** — a route registered without a configurable-provider declaration has no settings address; it stays visible in pickers but not on this page's rows.
+- **Undeclared live routes render nowhere** — a route registered without a configurable-provider declaration has no settings address; it stays visible in pickers but not on this page's rows. The exception is a signed-in hosted OAuth route, which renders a sign-out row, and its signed-out dormant entry, which renders a Connect card.
 
 <a id="dev-note"></a>
 ### Dev Note

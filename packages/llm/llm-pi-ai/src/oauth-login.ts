@@ -1,7 +1,8 @@
 /**
- * Hosted OAuth login for `openai-codex` (pi-ai browser PKCE), `cursor`
+ * Provider-managed login for `openai-codex` (pi-ai browser PKCE), `cursor`
  * (loginDeepControl poll), and `google-antigravity` (Google auth-code on
- * 127.0.0.1:51121). All persist in {@link FileOAuthStore}.
+ * 127.0.0.1:51121), plus the OpenCode Go API-key method. All persist in
+ * {@link FileOAuthStore}.
  *
  * Codex keeps {@link createBrowserOAuthInteraction}: always choose browser
  * login, open the authorize URL, hang the manual-code prompt until the
@@ -18,6 +19,7 @@ import { createModels } from '@earendil-works/pi-ai'
 import type { AuthEvent, AuthInteraction, AuthPrompt, CredentialInfo, CredentialStore } from '@earendil-works/pi-ai'
 import type { Context } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-commands'
+import { assertUsableApiKey } from '@deepseek-ai/dsh-llm'
 import { catalogProvider } from './catalog.ts'
 import type { PiAiProviderProfile } from './config.ts'
 import {
@@ -49,6 +51,10 @@ export {
 } from './google-antigravity/constants.ts'
 /** pi-ai's browser login method id for OpenAI Codex. */
 export const OPENAI_CODEX_BROWSER_LOGIN_METHOD = 'browser'
+/** pi-ai provider id for OpenCode Go. */
+export const OPENCODE_GO_PROVIDER = 'opencode-go'
+/** Human-readable OpenCode Go provider name. */
+export const OPENCODE_GO_DISPLAY_NAME = 'OpenCode Go'
 
 
 /**
@@ -73,6 +79,19 @@ export function oauthProviderProfiles(
     }
   }
   return profiles
+}
+
+/**
+ * Settings-free profiles for supported API-key logins this host persists.
+ * @param infos - non-secret store listing.
+ * @returns a providers dict suitable for {@link resolveProfiles}.
+ */
+export function apiKeyProviderProfiles(
+  infos: readonly CredentialInfo[],
+): Record<string, PiAiProviderProfile> {
+  return infos.some(info => info.providerId === OPENCODE_GO_PROVIDER && info.type === 'api_key')
+    ? { [OPENCODE_GO_PROVIDER]: { displayName: OPENCODE_GO_DISPLAY_NAME } }
+    : {}
 }
 
 /** Injectable platform facts so tests do not depend on the host OS. */
@@ -150,6 +169,20 @@ export async function openUrl(url: string, internals: BrowserOpenInternals = {})
     })
   })
 }
+/**
+ * Forward one authorize URL to `commands/open-url` subscribers (the web and
+ * desktop login tab) and run every listener inline, as Cordis emit dispatch
+ * does. Callers keep the answer to decide whether the host browser opener
+ * must still run for listener-less compositions like plain CLI.
+ * @param emit - dispatches `['commands/open-url', url]` and answers the subscribed listeners.
+ * @param url - the authorize URL pi-ai emitted.
+ * @returns whether any subscriber received the URL.
+ */
+export function emitOAuthOpenUrl(emit: (url: string) => unknown, url: string): boolean {
+  const listeners = emit(url) as Array<(authUrl: string) => unknown>
+  for (const listener of listeners) listener(url)
+  return listeners.length > 0
+}
 
 /** Dependencies for {@link createBrowserOAuthInteraction}. */
 export interface BrowserOAuthInteractionOptions {
@@ -225,6 +258,26 @@ export function createBrowserOAuthInteraction(
 }
 
 /**
+ * Logins in flight keyed by their credential store. One plugin instance owns
+ * one store, so a `/login` line and a Models-page Connect click racing at the
+ * same store share this guard instead of opening two browser flows at it.
+ */
+const loginFlightByStore = new WeakMap<CredentialStore, boolean>()
+
+/** Run one provider login under the credential store's single-flight guard. */
+async function withLoginFlight(store: CredentialStore, operation: () => Promise<void>): Promise<void> {
+  if (loginFlightByStore.get(store) === true) {
+    throw new Error(OAUTH_LOGIN_IN_PROGRESS)
+  }
+  loginFlightByStore.set(store, true)
+  try {
+    await operation()
+  } finally {
+    loginFlightByStore.delete(store)
+  }
+}
+
+/**
  * Run hosted OAuth login against `store` and persist the credential.
  * @param id - hosted provider id (`openai-codex`, `cursor`, or `google-antigravity`).
  * @param store - the host credential store passed to `createModels`.
@@ -235,16 +288,54 @@ export async function loginHostedOAuth(
   store: CredentialStore,
   interaction: AuthInteraction,
 ): Promise<void> {
-  const provider = catalogProvider(id)
-  if (provider === undefined) {
-    throw new Error(`llm-pi-ai: hosted catalog does not ship ${id}`)
-  }
-  if (provider.auth.oauth === undefined) {
-    throw new Error(`llm-pi-ai: provider "${id}" does not offer OAuth`)
-  }
-  const models = createModels({ credentials: store })
-  models.setProvider(provider)
-  await models.login(id, 'oauth', interaction)
+  await withLoginFlight(store, async () => {
+    const provider = catalogProvider(id)
+    if (provider === undefined) {
+      throw new Error(`llm-pi-ai: hosted catalog does not ship ${id}`)
+    }
+    if (provider.auth.oauth === undefined) {
+      throw new Error(`llm-pi-ai: provider "${id}" does not offer OAuth`)
+    }
+    const models = createModels({ credentials: store })
+    models.setProvider(provider)
+    await models.login(id, 'oauth', interaction)
+  })
+}
+
+/**
+ * Persist an OpenCode Go key through pi-ai's provider-owned API-key method.
+ * @param store - the host credential store passed to `createModels`.
+ * @param apiKey - secret received from the login surface.
+ * @param signal - caller cancellation.
+ */
+export async function loginOpenCodeGo(
+  store: CredentialStore,
+  apiKey: string,
+  signal?: AbortSignal,
+): Promise<void> {
+  const key = assertUsableApiKey(apiKey, 'llm-pi-ai', 'OpenCode Go API-key login')
+  await withLoginFlight(store, async () => {
+    const provider = catalogProvider(OPENCODE_GO_PROVIDER)
+    if (provider === undefined) {
+      throw new Error(`llm-pi-ai: hosted catalog does not ship ${OPENCODE_GO_PROVIDER}`)
+    }
+    if (provider.auth.apiKey === undefined) {
+      throw new Error(`llm-pi-ai: provider "${OPENCODE_GO_PROVIDER}" does not offer API-key login`)
+    }
+    const interaction: AuthInteraction = {
+      prompt: (prompt): Promise<string> => {
+        if (prompt.type !== 'secret') {
+          throw new Error(`OpenCode Go API-key login does not support ${prompt.type} prompts`)
+        }
+        return Promise.resolve(key)
+      },
+      notify: () => undefined,
+      ...signal === undefined ? {} : { signal },
+    }
+    const models = createModels({ credentials: store })
+    models.setProvider(provider)
+    await models.login(OPENCODE_GO_PROVIDER, 'api_key', interaction)
+  })
 }
 
 /**
@@ -274,7 +365,6 @@ export interface OAuthCommandDeps {
  */
 export function registerOAuthCommands(ctx: Context, deps: OAuthCommandDeps): void {
   ctx.inject(['commands'], (commandCtx) => {
-    let loginInFlight = false
     commandCtx.commands.register({
       name: 'login',
       description: 'Sign in to OpenAI Codex, Cursor, or Antigravity',
@@ -288,10 +378,6 @@ export function registerOAuthCommands(ctx: Context, deps: OAuthCommandDeps): voi
         if (host === undefined) {
           return { kind: 'error', text: OAUTH_LOGIN_UNSUPPORTED }
         }
-        if (loginInFlight) {
-          return { kind: 'error', text: OAUTH_LOGIN_IN_PROGRESS }
-        }
-        loginInFlight = true
         try {
           // Web subscribers open the gesture-owned tab; CLI has no subscriber and uses the host opener.
           let browserEventDelivered = false
@@ -302,12 +388,10 @@ export function registerOAuthCommands(ctx: Context, deps: OAuthCommandDeps): voi
               await openUrl(url)
             },
             writeAuthUrl: (url) => {
-              const listeners = commandCtx.events.dispatch(
-                'emit',
-                ['commands/open-url', url],
-              ) as Array<(authUrl: string) => unknown>
-              browserEventDelivered = listeners.length > 0
-              for (const listener of listeners) listener(url)
+              browserEventDelivered = emitOAuthOpenUrl(
+                authUrl => commandCtx.events.dispatch('emit', ['commands/open-url', authUrl]),
+                url,
+              )
               process.stderr.write(authUrlFallbackMessage(url))
             },
           }))
@@ -315,8 +399,6 @@ export function registerOAuthCommands(ctx: Context, deps: OAuthCommandDeps): voi
           return { kind: 'success', text: host.signedIn }
         } catch (error) {
           return { kind: 'error', text: commandFailure(error, host.loginFailed) }
-        } finally {
-          loginInFlight = false
         }
       },
     })
@@ -355,8 +437,27 @@ export async function logoutHostedOAuth(provider: string, deps: OAuthCommandDeps
   return host.signedOut
 }
 
-/** Render a command failure without assuming the value is safe to stringify as a secret. */
-function commandFailure(error: unknown, fallback: string): string {
+/**
+ * Delete a credential-backed route managed outside settings and refresh live routes.
+ * @param provider - supported OAuth provider id or `opencode-go`.
+ * @param deps - store and route-refresh hook.
+ */
+export async function logoutManagedLogin(provider: string, deps: OAuthCommandDeps): Promise<void> {
+  if (provider !== OPENCODE_GO_PROVIDER && hostedOAuthProvider(provider) === undefined) {
+    throw new Error(`llm-pi-ai: provider "${provider}" does not support managed logout`)
+  }
+  await deps.store.delete(provider)
+  deps.onCredentialChange()
+}
+/**
+ * Render a login/logout failure without assuming the value is safe to
+ * stringify as a secret. Shared by the `/login` command and the Models-page
+ * remote sign-in, which report through different carriers.
+ * @param error - rejected value to inspect without stringifying arbitrary data.
+ * @param fallback - message used when the rejection has no non-empty Error message.
+ * @returns the safe diagnostic for the command or Remote carrier.
+ */
+export function commandFailure(error: unknown, fallback: string): string {
   if (error instanceof Error && error.message.trim().length > 0) return error.message
   return fallback
 }

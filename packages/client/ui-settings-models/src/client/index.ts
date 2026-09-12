@@ -15,6 +15,7 @@ import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 // Type-only: pulls the ctx.remote merge and the forwarded-event key face
 // (settings/credentials invalidations ride the allowlist) into this program.
 import type {} from '@deepseek-ai/dsh-api-remotes/client'
+import type { CommandUiContract } from '@deepseek-ai/dsh-client-ui-commands/client'
 import { ModelsSection } from './ModelsSection.tsx'
 import type { ModelsSectionInjected } from './ModelsSection.tsx'
 import { DeepSeekOnboardingDialog } from './DeepSeekOnboardingDialog.tsx'
@@ -87,6 +88,13 @@ export function apply(ctx: ClientContext): void {
     controller,
     hooks: { snapshot: controller.store },
     operations,
+    // Resolved at click time, not at apply: plugin activation order is
+    // unconstrained, and a composition without the command surface still
+    // signs in (the authorize URL then opens without a prepared tab).
+    prepareLoginTab: () => {
+      const commandUi = ctx.get('commandUi') as CommandUiContract | undefined
+      commandUi?.prepareOAuthLoginTab()
+    },
     schema,
     t,
   })

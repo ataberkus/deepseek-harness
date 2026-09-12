@@ -24,6 +24,7 @@ import type { ModelsSettingsStore, ProviderRow } from './store.ts'
 import type { ModelsOperations } from './operations.ts'
 import type { SettingsSchemaOperations } from './schema-operations.ts'
 import { ProviderEditor, type ProviderEditorProps } from './ProviderEditor.tsx'
+import { apiKeyFailure } from './apiKey.ts'
 import type { en } from './locales.ts'
 import styles from './ModelsSection.module.css'
 
@@ -37,6 +38,12 @@ export interface ModelsSectionInjected {
   }
   /** The Host operations the section and its cards invoke. */
   operations: ModelsOperations
+  /**
+   * Open the shared hosted-OAuth blank tab under the Connect click's user
+   * gesture, so the authorize URL arriving later navigates it instead of a
+   * popup-blocked fresh tab. No-op when the command surface is not composed.
+   */
+  prepareLoginTab: () => void
   /** Settings schema and immutable path callbacks. */
   schema: SettingsSchemaOperations
   /** Section copy. */
@@ -79,10 +86,10 @@ interface EditorTarget extends ProviderIdentity {
   /** Values a settings surface may seed when creating this provider's profile. */
   defaults?: ProviderEditorProps['defaults']
 }
-/** Confirmed destructive action: a settings profile, or an OAuth live-route logout. */
+/** Confirmed destructive action: a settings profile, or a provider-login disconnect. */
 interface DeleteTarget extends EditorTarget {
-  /** Present when Delete signs out a hosted OAuth route instead of unsetting a profile. */
-  oauth?: true
+  /** Present when Delete disconnects a provider login instead of unsetting a profile. */
+  auth?: 'oauth' | 'api-key'
 }
 
 /** Values that vary around the shared provider-editor rendering. */
@@ -137,14 +144,14 @@ export async function removeProviderProfile(
   return undefined
 }
 /**
- * Sign out of a hosted OAuth live route. The call deletes the stored login
+ * Disconnect a provider-managed live route. The call deletes the stored login
  * and unregisters the route; it does not mutate settings.
  * @param api - the narrow LLM logout face.
  * @param controller - the page store to refresh.
  * @param provider - live route id.
  * @returns the failure message, or undefined once logout and reload landed.
  */
-export async function logoutOAuthProvider(
+export async function logoutManagedProvider(
   api: { logout(provider: string): Promise<void> },
   controller: ModelsSettingsStore,
   provider: string,
@@ -223,12 +230,26 @@ export function providerCopy(template: string, target: ProviderIdentity): string
  * @returns the section, or null while the shell has not injected yet.
  */
 export function ModelsSection(props: ModelsSectionProps): ReactNode {
-  const { controller, useSnapshot, operations, schema, t, renderSlot } = props
+  const { controller, useSnapshot, operations, schema, t, renderSlot, prepareLoginTab } = props
   if (
     controller === undefined || useSnapshot === undefined || operations === undefined
     || schema === undefined || t === undefined
   ) return null
-  return <Loaded injected={{ controller, useSnapshot, operations, schema, t }} renderSlot={renderSlot} />
+  // Older compositions and scripted tests omit the gesture prep; signing in
+  // still works, the authorize URL then opens without a prepared tab.
+  return (
+    <Loaded
+      injected={{
+        controller,
+        useSnapshot,
+        operations,
+        schema,
+        t,
+        prepareLoginTab: prepareLoginTab ?? (() => undefined),
+      }}
+      renderSlot={renderSlot}
+    />
+  )
 }
 
 function Loaded({ injected, renderSlot }: { injected: ModelsSectionFace; renderSlot: ModelsRenderSlot }): ReactNode {
@@ -239,6 +260,12 @@ function Loaded({ injected, renderSlot }: { injected: ModelsSectionFace; renderS
   const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | undefined>(undefined)
   const [deleting, setDeleting] = useState(false)
   const [deleteFailure, setDeleteFailure] = useState<string | undefined>(undefined)
+  /** Provider id with a Models-page login in flight, if any. */
+  const [connecting, setConnecting] = useState<string | undefined>(undefined)
+  /** Last Models-page sign-in refusal, shown on the card that produced it. */
+  const [connectFailure, setConnectFailure] = useState<{ provider: string; message: string } | undefined>(undefined)
+  /** Write-only drafts for provider-owned API-key login cards. */
+  const [loginApiKeys, setLoginApiKeys] = useState<Readonly<Record<string, string>>>({})
   const [savedTarget, setSavedTarget] = useState<ProviderIdentity | undefined>(undefined)
   const [declaring, setDeclaring] = useState(false)
   const [dismissedSetup, setDismissedSetup] = useState<ReadonlySet<string>>(() => new Set())
@@ -280,8 +307,8 @@ function Loaded({ injected, renderSlot }: { injected: ModelsSectionFace; renderS
     if (deleteTarget === undefined || deleting) return
     setDeleting(true)
     setDeleteFailure(undefined)
-    void (deleteTarget.oauth === true
-      ? logoutOAuthProvider(controller, controller, deleteTarget.provider)
+    void (deleteTarget.auth !== undefined
+      ? logoutManagedProvider(controller, controller, deleteTarget.provider)
       : removeProviderProfile(operations, controller, deleteTarget))
       .then((failure) => {
         if (failure !== undefined) {
@@ -323,9 +350,12 @@ function Loaded({ injected, renderSlot }: { injected: ModelsSectionFace; renderS
   const anyUsable = state.rows.some(providerUsable)
   const configured = state.rows.filter(row => row.configured)
   const configurable = state.rows.filter(row => state.namespaces.has(row.entry.settingsNs))
-  const addable = configurable.filter(row => !row.configured)
   const addTarget = adding ? editing : undefined
   const addNamespace = addTarget === undefined ? undefined : state.namespaces.get(addTarget.settingsNs)
+  // Dormant provider-owned logins render Connect cards below, never settings
+  // editors: their credentials live in the login store, not settings.
+  const dormantLogins = state.rows.filter(row => row.entry.auth !== undefined && !row.configured)
+  const addable = configurable.filter(row => !row.configured && row.entry.auth === undefined)
   // The draft's directory row, for the card extension seat. A refresh can drop
   // the row mid-draft (the route was adopted or withdrawn elsewhere); the
   // draft card stays while the seat simply has no row to dispatch.
@@ -351,18 +381,20 @@ function Loaded({ injected, renderSlot }: { injected: ModelsSectionFace; renderS
         )}
       <ul className={styles['rows']}>
         {configured.map((row) => {
-          if (row.entry.auth === 'oauth' && row.entry.settingsNs === '') {
-            const oauthLabel = row.entry.provider === 'cursor'
-              ? t('oauthConfiguredCursor')
-              : row.entry.provider === 'google-antigravity' || row.entry.provider === 'google-gemini-cli'
-                ? t('oauthConfiguredAntigravity')
-                : t('oauthConfigured')
-            const oauthTarget: DeleteTarget = {
+          if (row.entry.auth !== undefined && row.entry.settingsNs === '') {
+            const loginLabel = row.entry.auth === 'api-key'
+              ? t('apiKeyLoginConfigured')
+              : row.entry.provider === 'cursor'
+                ? t('oauthConfiguredCursor')
+                : row.entry.provider === 'google-antigravity' || row.entry.provider === 'google-gemini-cli'
+                  ? t('oauthConfiguredAntigravity')
+                  : t('oauthConfigured')
+            const loginTarget: DeleteTarget = {
               provider: row.entry.provider,
               displayName: row.entry.displayName,
               settingsNs: '',
               settingsPath: [],
-              oauth: true,
+              auth: row.entry.auth,
             }
             return (
               <li key={row.entry.provider} className={styles['rowCard']}>
@@ -372,19 +404,19 @@ function Loaded({ injected, renderSlot }: { injected: ModelsSectionFace; renderS
                     <span
                       className={`${styles['credentialDot']} ${styles['credentialDotConfigured']}`}
                       role="img"
-                      aria-label={oauthLabel}
-                      title={oauthLabel}
+                      aria-label={loginLabel}
+                      title={loginLabel}
                     />
                   </span>
                   <span className={styles['rowActions']}>
                     <button
                       type="button"
                       className={styles['dangerButton']}
-                      aria-label={providerCopy(t('oauthSignOutProvider'), oauthTarget)}
+                      aria-label={providerCopy(t('oauthSignOutProvider'), loginTarget)}
                       onClick={() => {
                         setSavedTarget(undefined)
                         setDeleteFailure(undefined)
-                        setDeleteTarget(oauthTarget)
+                        setDeleteTarget(loginTarget)
                       }}
                     >
                       {t('remove')}
@@ -516,6 +548,92 @@ function Loaded({ injected, renderSlot }: { injected: ModelsSectionFace; renderS
             </li>
           )
         })}
+        {dormantLogins.map((row) => {
+          const target = { provider: row.entry.provider, displayName: row.entry.displayName }
+          const busy = connecting !== undefined
+          const failure = connectFailure?.provider === row.entry.provider ? connectFailure.message : undefined
+          const apiKey = loginApiKeys[row.entry.provider] ?? ''
+          const connect = (): void => {
+            if (connecting !== undefined) return
+            setConnectFailure(undefined)
+            if (row.entry.auth === 'api-key') {
+              const invalid = apiKey.length === 0 ? 'keyRequired' : apiKeyFailure(apiKey)
+              if (invalid !== undefined) {
+                setConnectFailure({ provider: row.entry.provider, message: t(invalid) })
+                return
+              }
+              const submitted = apiKey.trim()
+              setConnecting(row.entry.provider)
+              setLoginApiKeys(previous => ({ ...previous, [row.entry.provider]: '' }))
+              void operations.loginApiKey(row.entry.settingsNs, row.entry.provider, submitted).then((refusal) => {
+                setConnecting(undefined)
+                if (refusal !== undefined) {
+                  setConnectFailure({ provider: row.entry.provider, message: refusal })
+                  return
+                }
+                void controller.load()
+              })
+              return
+            }
+            setConnecting(row.entry.provider)
+            injected.prepareLoginTab()
+            void operations.loginOAuth(row.entry.settingsNs, row.entry.provider).then((refusal) => {
+              setConnecting(undefined)
+              if (refusal !== undefined) {
+                setConnectFailure({ provider: row.entry.provider, message: refusal })
+                return
+              }
+              void controller.load()
+            })
+          }
+          return (
+            <li key={row.entry.provider} className={styles['rowCard']}>
+              <div className={styles['rowHead']}>
+                <span className={styles['rowIdentity']}>
+                  <span className={styles['rowName']}>{row.entry.displayName}</span>
+                </span>
+                <span className={styles['rowActions']}>
+                  <button
+                    type="button"
+                    className={styles['secondaryButton']}
+                    aria-label={providerCopy(t('oauthConnectProvider'), target)}
+                    disabled={busy || !state.writable}
+                    onClick={connect}
+                  >
+                    {connecting === row.entry.provider ? providerCopy(t('oauthConnecting'), target) : t('oauthConnect')}
+                  </button>
+                </span>
+              </div>
+              <p className={styles['notice']}>{providerCopy(
+                row.entry.auth === 'api-key' ? t('apiKeyConnectDescription') : t('oauthConnectDescription'),
+                target,
+              )}</p>
+              {row.entry.auth === 'api-key'
+                ? (
+                  <label className={styles['field']}>
+                    <span className={styles['fieldLabel']}>{t('keyInput')}</span>
+                    <input
+                      type="password"
+                      autoComplete="off"
+                      className={styles['input']}
+                      aria-label={providerCopy(t('apiKeyInputProvider'), target)}
+                      value={apiKey}
+                      disabled={busy || !state.writable}
+                      onChange={(event) => {
+                        const value = event.target.value
+                        setLoginApiKeys(previous => ({ ...previous, [row.entry.provider]: value }))
+                        if (connectFailure?.provider === row.entry.provider) setConnectFailure(undefined)
+                      }}
+                    />
+                  </label>
+                )
+                : null}
+              {failure === undefined
+                ? null
+                : <p role="alert" className={styles['error']}>{failure}</p>}
+            </li>
+          )
+        })}
       </ul>
       <div className={styles['addBlock']}>
         {addTarget !== undefined && addNamespace !== undefined
@@ -631,18 +749,22 @@ function Loaded({ injected, renderSlot }: { injected: ModelsSectionFace; renderS
         title={deleteTarget === undefined
           ? ''
           : providerCopy(
-            deleteTarget.oauth === true ? t('oauthSignOutTitle') : t('deleteTitle'),
+            deleteTarget.auth === 'api-key'
+              ? t('apiKeyDisconnectTitle')
+              : deleteTarget.auth === 'oauth' ? t('oauthSignOutTitle') : t('deleteTitle'),
             deleteTarget,
           )}
         closeLabel={t('close')}
         description={deleteTarget === undefined
           ? ''
           : providerCopy(
-            deleteTarget.oauth === true
-              ? t('oauthSignOutDescription')
-              : deleteTarget.credentialRef === undefined
-                ? t('deleteDescription')
-                : t('deleteDescriptionWithCredential'),
+            deleteTarget.auth === 'api-key'
+              ? t('apiKeyDisconnectDescription')
+              : deleteTarget.auth === 'oauth'
+                ? t('oauthSignOutDescription')
+                : deleteTarget.credentialRef === undefined
+                  ? t('deleteDescription')
+                  : t('deleteDescriptionWithCredential'),
             deleteTarget,
           )}
         className={styles['deleteDialog'] as string}
@@ -661,8 +783,12 @@ function Loaded({ injected, renderSlot }: { injected: ModelsSectionFace; renderS
                 ? ''
                 : providerCopy(
                   deleting
-                    ? (deleteTarget.oauth === true ? t('oauthSigningOut') : t('deleting'))
-                    : (deleteTarget.oauth === true ? t('oauthSignOutConfirm') : t('deleteConfirm')),
+                    ? (deleteTarget.auth === 'api-key'
+                      ? t('apiKeyDisconnecting')
+                      : deleteTarget.auth === 'oauth' ? t('oauthSigningOut') : t('deleting'))
+                    : (deleteTarget.auth === 'api-key'
+                      ? t('apiKeyDisconnectConfirm')
+                      : deleteTarget.auth === 'oauth' ? t('oauthSignOutConfirm') : t('deleteConfirm')),
                   deleteTarget,
                 )}
             </Button>

@@ -260,7 +260,7 @@ describe('PiAiAdapter provider routing', () => {
     expect(adapter.providerInfo('departed')).toEqual({ id: 'departed', name: 'departed' })
   })
 
-  it('reports oauth auth only for injected OAuth routes', () => {
+  it('reports the login method only for routes injected by managed credentials', () => {
     const adapter = new PiAiAdapter({
       profiles: () => resolveProfiles({
         openai: { apiKeyEnv: 'OPENAI_API_KEY' },
@@ -268,7 +268,10 @@ describe('PiAiAdapter provider routing', () => {
       }),
       resolveApiKey: () => Promise.resolve(undefined),
       auth: memoryAuth(),
-      oauthInjected: () => new Set(['openai-codex']),
+      loginInjected: () => new Map([
+        ['openai-codex', 'oauth' as const],
+        ['opencode-go', 'api-key' as const],
+      ]),
     })
     expect(adapter.providerInfo('openai')).toEqual({ id: 'openai', name: 'openai' })
     expect(adapter.providerInfo('openai-codex')).toEqual({
@@ -276,8 +279,13 @@ describe('PiAiAdapter provider routing', () => {
       name: 'OpenAI Codex',
       auth: 'oauth',
     })
+    expect(adapter.providerInfo('opencode-go')).toEqual({
+      id: 'opencode-go',
+      name: 'opencode-go',
+      auth: 'api-key',
+    })
   })
-  it('refuses logout when the adapter has no OAuth host hook', async () => {
+  it('refuses logout when the adapter has no managed-login hook', async () => {
     const adapter = new PiAiAdapter({
       profiles: () => resolveProfiles({ openai: { apiKeyEnv: 'OPENAI_API_KEY' } }),
       resolveApiKey: () => Promise.resolve(undefined),

@@ -459,6 +459,11 @@ interface LlmProviderInfo {
   id: string
   /** Human-readable provider name for selectors and diagnostics. */
   name: string
+  /**
+   * How a settings-free stored login registered this live route. Omit for
+   * settings profiles and provider-native discovery routes.
+   */
+  auth?: 'oauth' | 'api-key'
 }
 ```
 
@@ -483,6 +488,8 @@ interface LlmConfigurableProvider {
    * object; empty when the whole section is the profile.
    */
   settingsPath: readonly string[]
+  /** Values a settings surface may seed when creating this provider's profile. */
+  defaults?: LlmProviderConfigDefaults
   /**
    * Whether the owning adapter knows this route only because configuration
    * declared it — a gateway or self-hosted server it ships nothing about.
@@ -492,6 +499,12 @@ interface LlmConfigurableProvider {
    * from outside.
    */
   declared?: boolean
+  /**
+   * The route connects through a provider-owned login rather than a settings
+   * profile. Configuration surfaces offer the named login method; a live
+   * route merged over it reports the same value from its own metadata.
+   */
+  auth?: 'oauth' | 'api-key'
   /** Configuration diagnostic for repair; unaffected models may remain serviceable. */
   error?: string
 }
@@ -825,6 +838,13 @@ declare abstract class LlmAdapter {
     model: string,
     _signal?: AbortSignal,
   ): Promise<LlmResolvedModelInfo>;
+  /**
+   * Disconnect a provider-managed route this adapter injected. Default refuses:
+   * only adapters that persist managed login credentials implement this.
+   * @param provider - a route passed to {@link LlmRuntime.registerAdapter}.
+   * @returns nothing; a successful call unregisters the live route.
+   */
+  logout(provider: string): Promise<void>;
   /**
    * Bind exact model metadata and the eventual request dispatch to one adapter generation.
    * Dynamic adapters override this so settings changes between preparation and

@@ -328,6 +328,113 @@ describe('model discovery registry', () => {
   })
 })
 
+describe('OAuth login registry', () => {
+  it('offers one sign-in per settings namespace and disposes with its fiber', async () => {
+    const ctx = await setup()
+    const login = vi.fn((_provider: string) => Promise.resolve())
+
+    const dispose = ctx.llm.registerOAuthLogin('llm-pi-ai', login)
+    await expect(ctx.llm.loginOAuth('llm-pi-ai', 'openai-codex')).resolves.toBeUndefined()
+    expect(login).toHaveBeenCalledWith('openai-codex', undefined)
+
+    // Disposal is observed through the offer itself, which is the only thing
+    // the registration ever produced.
+    dispose()
+    await expect(ctx.llm.loginOAuth('llm-pi-ai', 'openai-codex'))
+      .rejects.toMatchObject({ code: 'NO_LOGIN' })
+  })
+
+  it('rejects an unnamed namespace and a second registration of the same one', async () => {
+    const ctx = await setup()
+    const login = (): Promise<void> => Promise.resolve()
+
+    expect(() => ctx.llm.registerOAuthLogin('', login)).toThrow(/non-empty settings namespace/)
+    ctx.llm.registerOAuthLogin('llm-pi-ai', login)
+    expect(() => ctx.llm.registerOAuthLogin('llm-pi-ai', login)).toThrow(/already registered/)
+    // The refused second registration left the first one serving.
+    await expect(ctx.llm.loginOAuth('llm-pi-ai', 'cursor')).resolves.toBeUndefined()
+  })
+
+  it('carries cancellation into the Remote sign-in and maps provider failures', async () => {
+    const ctx = await setup()
+    const login = vi.fn()
+      .mockResolvedValueOnce(undefined)
+      .mockRejectedValueOnce(new Error('loopback occupied'))
+      .mockRejectedValueOnce('polling aborted')
+    ctx.llm.registerOAuthLogin('llm-pi-ai', login)
+    const signal = new AbortController().signal
+
+    await expect(ctx.llm.remoteLoginOAuth('llm-pi-ai', 'cursor', signal)).resolves.toBeUndefined()
+    expect(login).toHaveBeenNthCalledWith(1, 'cursor', signal)
+
+    await expect(ctx.llm.remoteLoginOAuth('llm-pi-ai', 'google-antigravity', signal))
+      .rejects.toMatchObject({
+        code: 'llm/login-rejected',
+        message: 'loopback occupied',
+        details: { settingsNs: 'llm-pi-ai', provider: 'google-antigravity' },
+      })
+    await expect(ctx.llm.remoteLoginOAuth('llm-pi-ai', 'cursor', signal))
+      .rejects.toMatchObject({
+        code: 'llm/login-rejected',
+        message: 'polling aborted',
+        details: { settingsNs: 'llm-pi-ai', provider: 'cursor' },
+      })
+  })
+
+  it('refuses a namespace nothing serves', async () => {
+    const ctx = await setup()
+    ctx.llm.registerOAuthLogin('llm-pi-ai', () => Promise.resolve())
+
+    await expect(ctx.llm.loginOAuth('llm-absent', 'cursor'))
+      .rejects.toMatchObject({ code: 'NO_LOGIN' })
+  })
+})
+
+describe('API-key login registry', () => {
+  it('offers one secret-bearing login per settings namespace and disposes with its fiber', async () => {
+    const ctx = await setup()
+    const login = vi.fn((_provider: string, _apiKey: string) => Promise.resolve())
+
+    const dispose = ctx.llm.registerApiKeyLogin('llm-pi-ai', login)
+    await expect(ctx.llm.loginApiKey('llm-pi-ai', 'opencode-go', 'test-key')).resolves.toBeUndefined()
+    expect(login).toHaveBeenCalledWith('opencode-go', 'test-key', undefined)
+
+    dispose()
+    await expect(ctx.llm.loginApiKey('llm-pi-ai', 'opencode-go', 'test-key'))
+      .rejects.toMatchObject({ code: 'NO_LOGIN' })
+  })
+
+  it('rejects an unnamed namespace and a second registration of the same one', async () => {
+    const ctx = await setup()
+    const login = (): Promise<void> => Promise.resolve()
+
+    expect(() => ctx.llm.registerApiKeyLogin('', login)).toThrow(/non-empty settings namespace/)
+    ctx.llm.registerApiKeyLogin('llm-pi-ai', login)
+    expect(() => ctx.llm.registerApiKeyLogin('llm-pi-ai', login)).toThrow(/already registered/)
+  })
+
+  it('carries the secret and cancellation into Remote login without echoing the key on failure', async () => {
+    const ctx = await setup()
+    const secret = 'open-code-secret'
+    const signal = new AbortController().signal
+    const login = vi.fn((_provider: string, _apiKey: string, _signal?: AbortSignal) => {
+      throw new Error('credential refused')
+    })
+    ctx.llm.registerApiKeyLogin('llm-pi-ai', login)
+
+    await expect(ctx.llm.remoteLoginApiKey('llm-pi-ai', 'opencode-go', secret, signal))
+      .rejects.toMatchObject({
+        code: 'llm/login-rejected',
+        message: 'credential refused',
+        details: { settingsNs: 'llm-pi-ai', provider: 'opencode-go' },
+      })
+    expect(login).toHaveBeenCalledWith('opencode-go', secret, signal)
+    await ctx.llm.remoteLoginApiKey('llm-pi-ai', 'opencode-go', secret, signal).catch((error: unknown) => {
+      expect(String(error)).not.toContain(secret)
+    })
+  })
+})
+
 describe('imageRequestPricing resolution', () => {
   it('resolves the owning adapter declaration and degrades everywhere else to undefined', async () => {
     const ctx = await setup()

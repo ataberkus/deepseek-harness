@@ -93,6 +93,9 @@ The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-a
 
 A provider pi-ai ships a login for can be signed into through the harness authorization seam: the flow offers OAuth or an interactive key prompt (a key is typed into pi-ai's own login prompt, not into the settings form), and the resulting credential is stored in the harness credential store at `llm-pi-ai/<provider id>`. The stored sign-in authenticates its route beneath any `apiKeyEnv` override and refreshes itself under the store's cross-process lock; signing out deletes the stored record. A hand-declared route key outside the record grammar — a lowercase hyphenated identifier — cannot be signed into, because a record write for it refuses with `LlmError('UNSTORABLE_PROVIDER_ID')`; such a route authenticates through `apiKeyEnv` or ambient provider settings instead.
 
+The Models page offers provider-owned login without the composer. Hosted OAuth routes appear as dormant directory entries marked `auth: 'oauth'`; Connect runs the namespace `llm/loginOAuth` offer and opens the authorize URL in the login tab. OpenCode Go appears with `auth: 'api-key'`; Connect sends its password-masked key through `llm/loginApiKey`, and pi-ai stores the resulting `api_key` credential in `$DSH_HOME/oauth-credentials.json` with owner-only permissions. Neither login creates a settings profile. Disconnecting withdraws the live route and restores its dormant entry.
+
+<a id="surviving-local-and-hosted-routes"></a>
 ### Surviving local and hosted routes
 
 The first-class `lmstudio` route remains available with `openai-completions` at `http://127.0.0.1:1234/v1`. With no `apiKeyEnv`, the adapter supplies pi-ai's OpenAI client a non-secret placeholder; if LM Studio authentication is enabled, configure a credential reference instead. The Models surface can discover loaded ids through the local `/v1/models` endpoint and save the selected ids in the profile.

@@ -149,6 +149,54 @@ describe('ModelsSettingsStore', () => {
     expect(state.namespaces.get('llm-pi-ai')?.ns).toBe('llm-pi-ai')
   })
 
+  it.each(['oauth', 'api-key'] as const)(
+    'leaves a dormant %s login row unconfigured and out of the credential batch',
+    async (auth) => {
+      const dormant = {
+        provider: auth === 'oauth' ? 'cursor' : 'opencode-go',
+        displayName: auth === 'oauth' ? 'Cursor' : 'OpenCode Go',
+        settingsNs: 'llm-pi-ai',
+        settingsPath: ['providers', auth === 'oauth' ? 'cursor' : 'opencode-go'],
+        active: false,
+        auth,
+      }
+      const { ctx, mirror, seenRefs } = api({
+        providers: () => Promise.resolve(ok({ providers: [...DIRECTORY, dormant] })),
+      })
+      const store = new ModelsSettingsStore(ctx, settingsSchema, mirror)
+      await store.load()
+      const state = store.store.getSnapshot()
+      // The marker alone configures nothing, and there is no reference to
+      // describe: the sign-in is the credential.
+      expect(state.rows.find(row => row.entry.provider === dormant.provider)).toMatchObject({
+        configured: false,
+        removable: false,
+      })
+      expect(seenRefs).toEqual([['DEEPSEEK_API_KEY', 'OPENAI_API_KEY', 'ANTHROPIC_API_KEY', 'GHOST_API_KEY']])
+    },
+  )
+
+  it.each(['oauth', 'api-key'] as const)(
+    'treats a live %s login route as configured without a settings credential',
+    async (auth) => {
+      const live = {
+        provider: auth === 'oauth' ? 'cursor' : 'opencode-go',
+        displayName: auth === 'oauth' ? 'Cursor' : 'OpenCode Go',
+        settingsNs: 'llm-pi-ai',
+        settingsPath: ['providers', auth === 'oauth' ? 'cursor' : 'opencode-go'],
+        active: true,
+        auth,
+      }
+      const { ctx, mirror } = api({
+        providers: () => Promise.resolve(ok({ providers: [...DIRECTORY, live] })),
+      })
+      const store = new ModelsSettingsStore(ctx, settingsSchema, mirror)
+      await store.load()
+      const state = store.store.getSnapshot()
+      expect(state.rows.find(row => row.entry.provider === live.provider)).toMatchObject({ configured: true })
+    },
+  )
+
   it('degrades the credential badge, not the page, when the credential domain fails', async () => {
     const { ctx, mirror } = api({ describeCredentials: () => Promise.resolve(remoteFail('no provider')) })
     const store = new ModelsSettingsStore(ctx, settingsSchema, mirror)

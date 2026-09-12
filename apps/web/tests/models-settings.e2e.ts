@@ -1,5 +1,6 @@
 // Web e2e scenario: the Models settings page end to end through the real
-// wire — the add card offers the dormant pi-ai catalog, a blank key saves a
+// wire — OpenCode Go connects through its provider-owned API-key login, the
+// add card offers the remaining dormant pi-ai catalog, a blank key saves a
 // reference-free profile for provider-native auth, and typing an API key later
 // stores it write-only under the derived reference (`MINIMAX_CN_API_KEY`)
 // while the settings document records only that reference. Each saved row
@@ -27,6 +28,7 @@ import { ZH_BROWSER_LOCALE, saveFailureShot } from './support.ts'
 
 const SNAPSHOT_DIR = fileURLToPath(new URL('./expected/models-settings', import.meta.url))
 const EMPTY_EXPECTED = join(SNAPSHOT_DIR, 'empty.expected.md')
+const OPENCODE_GO_EXPECTED = join(SNAPSHOT_DIR, 'opencode-go-connect.expected.md')
 const LM_STUDIO_EXPECTED = join(SNAPSHOT_DIR, 'lmstudio.expected.md')
 const CONFIGURED_EXPECTED = join(SNAPSHOT_DIR, 'configured.expected.md')
 const DECLARED_EXPECTED = join(SNAPSHOT_DIR, 'declared.expected.md')
@@ -57,15 +59,51 @@ describe('web e2e: Models settings page configures a dormant provider', () => {
     await scaffold?.close()
   })
 
-  it('opens the add card over the dormant directory vocabulary', async () => {
-    onTestFailed(() => saveFailureShot(page, 'web-e2e-models-empty'))
+  it('connects OpenCode Go without writing the secret to settings or the page', async () => {
+    onTestFailed(() => saveFailureShot(page, 'web-e2e-models-opencode-go'))
     await page.getByRole('button', { name: '设置', exact: true }).click()
     const dialog = page.getByRole('dialog', { name: '设置' })
     await dialog.waitFor({ timeout: 10_000 })
     await dialog.getByRole('button', { name: '模型' }).click()
+    const key = dialog.getByLabel('OpenCode Go (opencode-go) API 密钥')
+    await key.waitFor({ timeout: 10_000 })
+    await compareOrRefreshGolden(
+      OPENCODE_GO_EXPECTED,
+      await captureStableAria(page, '[role="dialog"]', scaffold.workspaceCwd),
+      MODE,
+    )
+
+    const secret = 'opencode-go-e2e-key'
+    await key.fill(secret)
+    await dialog.getByRole('button', { name: '连接 OpenCode Go (opencode-go)' }).click()
+    await expect.poll(
+      () => scaffold.ctx.llm.listProviders().some(provider => provider.id === 'opencode-go'),
+      { timeout: 10_000 },
+    ).toBe(true)
+    await dialog.getByRole('img', { name: 'API 密钥已连接' }).waitFor({ timeout: 10_000 })
+    expect(await page.content()).not.toContain(secret)
+    expect(await readFile(join(scaffold.harnessHome, 'settings.yaml'), 'utf8').catch(() => '')).not.toContain(secret)
+    const credentials = JSON.parse(
+      await readFile(join(scaffold.harnessHome, 'oauth-credentials.json'), 'utf8'),
+    ) as Record<string, { type?: unknown; key?: unknown }>
+    expect(credentials['opencode-go']).toEqual({ type: 'api_key', key: secret })
+
+    await dialog.getByRole('button', { name: '删除 OpenCode Go (opencode-go)' }).click()
+    const disconnect = page.getByRole('dialog', { name: '断开 OpenCode Go (opencode-go)？' })
+    await disconnect.getByRole('button', { name: '断开 OpenCode Go (opencode-go)' }).click()
+    await dialog.getByLabel('OpenCode Go (opencode-go) API 密钥').waitFor({ timeout: 10_000 })
+    await expect.poll(
+      () => scaffold.ctx.llm.listProviders().some(provider => provider.id === 'opencode-go'),
+      { timeout: 10_000 },
+    ).toBe(false)
+  }, 60_000)
+
+  it('opens the add card over the dormant directory vocabulary', async () => {
+    onTestFailed(() => saveFailureShot(page, 'web-e2e-models-empty'))
+    const dialog = page.getByRole('dialog', { name: '设置' })
     await dialog.getByText('填入各提供方的 API 密钥即可使用其模型。').waitFor({ timeout: 10_000 })
-    // The dormant pi-ai adapter contributes its whole installed catalog; no
-    // provider is configured yet, so the page is one add button.
+    // Provider-login routes keep their Connect cards; the remaining dormant
+    // catalog is offered through Add provider.
     const add = dialog.getByRole('button', { name: '添加提供方' })
     await add.waitFor({ timeout: 10_000 })
     // The button enables once the dormant catalog lands in the join.
@@ -79,11 +117,13 @@ describe('web e2e: Models settings page configures a dormant provider', () => {
     expect(options).toContain('LM Studio')
     expect(await pick.locator('option[value="lmstudio"]').count()).toBe(1)
     expect(options).toContain('minimax-cn')
+    expect(options).not.toContain('opencode-go')
+    expect(options).not.toContain('openai-codex')
 
     await pick.selectOption('lmstudio')
-    await expect.poll(() => dialog.getByLabel('API 地址').inputValue()).toBe('http://127.0.0.1:1234/v1')
-    await expect.poll(() => dialog.getByLabel('API 协议').inputValue()).toBe('openai-completions')
     await dialog.getByText('自定义设置', { exact: true }).click()
+    await expect.poll(() => dialog.getByLabel('API 地址').inputValue()).toBe('http://127.0.0.1:1234/v1')
+    expect(await dialog.getByLabel('API 协议').count()).toBe(0)
     const lmStudioSnapshot = await captureStableAria(page, '[role="dialog"]', scaffold.workspaceCwd)
     await compareOrRefreshGolden(LM_STUDIO_EXPECTED, lmStudioSnapshot, MODE)
 
@@ -96,7 +136,7 @@ describe('web e2e: Models settings page configures a dormant provider', () => {
   it('refuses a key no HTTP header can carry before anything is written', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-models-illegal-key'))
     const dialog = page.getByRole('dialog', { name: '设置' })
-    const key = dialog.getByLabel('API 密钥')
+    const key = dialog.getByLabel('API 密钥', { exact: true })
     const save = dialog.getByRole('button', { name: '保存', exact: true })
 
     // A key no HTTP header can carry would save cleanly and fail the first
@@ -338,6 +378,7 @@ describe('web e2e: Models settings page configures a dormant provider', () => {
       'configured.expected.md', 'declared-edit.expected.md', 'declared.expected.md',
       'delete.expected.md', 'empty.expected.md', 'lmstudio.expected.md',
       'model-picker.expected.md', 'native-delete.expected.md',
+      'opencode-go-connect.expected.md',
     ])
   })
 })

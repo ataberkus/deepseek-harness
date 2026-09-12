@@ -162,6 +162,9 @@ function scriptedFace(overrides: {
   mutate?: ReturnType<typeof vi.fn>
   set?: ReturnType<typeof vi.fn>
   unset?: ReturnType<typeof vi.fn>
+  loginOAuth?: ReturnType<typeof vi.fn>
+  loginApiKey?: ReturnType<typeof vi.fn>
+  extraDirectory?: ReadonlyArray<Record<string, unknown>>
 } = {}) {
   const providerNamespace = wireNamespaces().find(view => view.ns === 'llm-pi-ai')!
   const update = overrides.update ?? vi.fn(() => Promise.resolve(remoteOk(providerNamespace)))
@@ -181,8 +184,11 @@ function scriptedFace(overrides: {
         { provider: 'zombie', displayName: 'zombie', settingsNs: 'llm-pi-ai', settingsPath: ['providers', 'zombie'], active: false },
         { provider: 'broken', displayName: 'broken', settingsNs: 'llm-pi-ai', settingsPath: ['nope', 'x'], active: false },
         { provider: 'plain', displayName: 'plain', settingsNs: 'llm-plain', settingsPath: ['profiles', 'plain'], active: false },
+        ...(overrides.extraDirectory ?? []),
       ].map(({ active: _active, ...entry }) => entry)))),
       discoverModels: vi.fn(() => Promise.resolve(remoteOk([]))),
+      loginOAuth: overrides.loginOAuth ?? vi.fn(() => Promise.resolve(remoteOk(undefined))),
+      loginApiKey: overrides.loginApiKey ?? vi.fn(() => Promise.resolve(remoteOk(undefined))),
     },
     settings: {
       describe: vi.fn(() => Promise.resolve(remoteOk({ writable: true, hasDocument: false, namespaces: wireNamespaces() }))),
@@ -259,7 +265,10 @@ function cardSeatCalls(
     ])
 }
 
-async function mountFace(scripted: ReturnType<typeof scriptedFace>) {
+async function mountFace(
+  scripted: ReturnType<typeof scriptedFace>,
+  options: { prepareLoginTab?: () => void } = {},
+) {
   const { face, update, mutate, set, unset } = scripted
   const ctx = ctxWith(face)
   const mirror = new SettingsDescribeMirror(ctx)
@@ -273,6 +282,7 @@ async function mountFace(scripted: ReturnType<typeof scriptedFace>) {
     schema: settingsSchema,
     t,
     renderSlot: renderSlot as unknown as ModelsSectionProps['renderSlot'],
+    ...options.prepareLoginTab === undefined ? {} : { prepareLoginTab: options.prepareLoginTab },
   }
   const view = render(<ModelsSection {...injected} />)
   return { view, ctx, face, update, mutate, set, unset, controller, mirror, renderSlot }
@@ -1572,5 +1582,142 @@ describe('apiKeyFailure', () => {
     // heuristic leaves them alone rather than guessing at a paste error.
     expect(apiKeyFailure('"')).toBeUndefined()
     expect(apiKeyFailure('"a')).toBeUndefined()
+  })
+})
+
+describe('dormant hosted OAuth routes', () => {
+  const dormantCursor = {
+    provider: 'cursor',
+    displayName: 'Cursor',
+    settingsNs: 'llm-pi-ai',
+    settingsPath: ['providers', 'cursor'],
+    auth: 'oauth',
+  }
+
+  function cursorFace(loginOAuth?: ReturnType<typeof vi.fn>) {
+    return scriptedFace({
+      extraDirectory: [dormantCursor],
+      ...(loginOAuth === undefined ? {} : { loginOAuth }),
+    })
+  }
+
+  it('renders a Connect card for a dormant route and keeps it out of the Add menu', async () => {
+    await mountFace(cursorFace())
+    // The openai row is usable, so the dormant route renders beside it as an
+    // ordinary card rather than a first-run setup.
+    expect(screen.getByRole('button', { name: 'Connect Cursor (cursor)' })).toBeTruthy()
+    expect(screen.getByText('Sign in with Cursor (cursor) in your browser to use its models here.')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: en.add }))
+    expect(screen.queryByRole('option', { name: 'cursor' })).toBeNull()
+    expect(screen.getByRole('option', { name: 'anthropic' })).toBeTruthy()
+  })
+
+  it('prepares the login tab, signs in, and reloads the page on Connect', async () => {
+    const gate = Promise.withResolvers<unknown>()
+    const loginOAuth = vi.fn(() => gate.promise)
+    const prepareLoginTab = vi.fn()
+    const mounted = await mountFace(cursorFace(loginOAuth), { prepareLoginTab })
+    const load = vi.spyOn(mounted.controller, 'load')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Connect Cursor (cursor)' }))
+    // The gesture prep runs synchronously in the click handler, before the
+    // authorize URL arrives on the downlink.
+    expect(prepareLoginTab).toHaveBeenCalledTimes(1)
+    expect(screen.getByRole('button', { name: 'Connect Cursor (cursor)' }).textContent)
+      .toBe('Connecting Cursor (cursor)…')
+    await vi.waitFor(() => { expect(loginOAuth).toHaveBeenCalledWith('llm-pi-ai', 'cursor') })
+    gate.resolve(remoteOk(undefined))
+    await vi.waitFor(() => { expect(load).toHaveBeenCalledTimes(1) })
+    expect(screen.queryByRole('alert')).toBeNull()
+  })
+
+  it('shows the Host refusal on its own card and leaves the others alone', async () => {
+    const loginOAuth = vi.fn(() => Promise.resolve(remoteFail('loopback occupied')))
+    await mountFace(cursorFace(loginOAuth), {})
+    fireEvent.click(screen.getByRole('button', { name: 'Connect Cursor (cursor)' }))
+    expect((await screen.findByRole('alert')).textContent).toBe('loopback occupied')
+    // The button is usable again for a retry.
+    expect(screen.getByRole('button', { name: 'Connect Cursor (cursor)' })).toBeTruthy()
+  })
+
+  it('renders the signed-in row with sign-out for a live OAuth route', async () => {
+    const scripted = scriptedFace()
+    scripted.face.llm.listProviders.mockResolvedValue(remoteOk([
+      { id: 'deepseek-official', name: 'DeepSeek' },
+      { id: 'openai', name: 'openai' },
+      { id: 'cursor', name: 'Cursor', auth: 'oauth' },
+    ]))
+    await mountFace(scripted)
+    expect(screen.getByRole('button', { name: 'Delete Cursor (cursor)' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Connect Cursor (cursor)' })).toBeNull()
+  })
+})
+
+describe('OpenCode Go API-key login', () => {
+  const dormantOpenCodeGo = {
+    provider: 'opencode-go',
+    displayName: 'OpenCode Go',
+    settingsNs: 'llm-pi-ai',
+    settingsPath: ['providers', 'opencode-go'],
+    auth: 'api-key',
+  }
+
+  function openCodeFace(loginApiKey?: ReturnType<typeof vi.fn>) {
+    return scriptedFace({
+      extraDirectory: [dormantOpenCodeGo],
+      ...(loginApiKey === undefined ? {} : { loginApiKey }),
+    })
+  }
+
+  it('validates the secret field and connects without preparing a browser tab', async () => {
+    const loginApiKey = vi.fn(() => Promise.resolve(remoteOk(undefined)))
+    const prepareLoginTab = vi.fn()
+    const mounted = await mountFace(openCodeFace(loginApiKey), { prepareLoginTab })
+    const load = vi.spyOn(mounted.controller, 'load')
+    const connect = screen.getByRole('button', { name: 'Connect OpenCode Go (opencode-go)' })
+
+    fireEvent.click(connect)
+    expect((await screen.findByRole('alert')).textContent).toBe(en.keyRequired)
+    expect(loginApiKey).not.toHaveBeenCalled()
+
+    const input = screen.getByLabelText('OpenCode Go (opencode-go) API key') as HTMLInputElement
+    expect(input.type).toBe('password')
+    fireEvent.change(input, { target: { value: '  opencode-test-key  ' } })
+    fireEvent.click(connect)
+
+    await vi.waitFor(() => {
+      expect(loginApiKey).toHaveBeenCalledWith('llm-pi-ai', 'opencode-go', 'opencode-test-key')
+    })
+    expect(prepareLoginTab).not.toHaveBeenCalled()
+    expect(input.value).toBe('')
+    await vi.waitFor(() => { expect(load).toHaveBeenCalledTimes(1) })
+  })
+
+  it('clears a refused key and leaves the Connect card retryable', async () => {
+    const loginApiKey = vi.fn(() => Promise.resolve(remoteFail('credential refused')))
+    await mountFace(openCodeFace(loginApiKey))
+    const input = screen.getByLabelText('OpenCode Go (opencode-go) API key') as HTMLInputElement
+
+    fireEvent.change(input, { target: { value: 'never-render-this-secret' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Connect OpenCode Go (opencode-go)' }))
+
+    expect((await screen.findByRole('alert')).textContent).toBe('credential refused')
+    expect(input.value).toBe('')
+    expect(document.body.textContent).not.toContain('never-render-this-secret')
+    expect(screen.getByRole('button', { name: 'Connect OpenCode Go (opencode-go)' })).toBeTruthy()
+  })
+
+  it('renders a connected API-key route with a disconnect action', async () => {
+    const scripted = scriptedFace()
+    scripted.face.llm.listProviders.mockResolvedValue(remoteOk([
+      { id: 'deepseek-official', name: 'DeepSeek' },
+      { id: 'openai', name: 'openai' },
+      { id: 'opencode-go', name: 'OpenCode Go', auth: 'api-key' },
+    ]))
+    await mountFace(scripted)
+
+    expect(screen.getByRole('img', { name: en.apiKeyLoginConfigured })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Delete OpenCode Go (opencode-go)' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Connect OpenCode Go (opencode-go)' })).toBeNull()
   })
 })

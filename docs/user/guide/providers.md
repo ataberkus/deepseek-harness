@@ -16,35 +16,41 @@ Keys are write-only. The page receives a redacted descriptor after saving, never
 
 Choose **Add provider** and pick a provider dsh ships with; the list shows provider ids such as `anthropic`, `openai`, `moonshotai` for Kimi, or `zai` for GLM. Enter its API key and save. The installed catalog supplies the endpoint, protocol, and model list.
 
-Providers with native authentication need their native credentials instead. Bedrock, Vertex, and Azure use AWS credentials and a region, an ADC project, and an `api-version` respectively. Codex uses ChatGPT OAuth via `/login openai-codex`; Cursor uses `/login cursor`; Antigravity uses `/login google-antigravity`. Filling only the API-key field does not configure them.
+Providers with native authentication need their native credentials instead. Bedrock, Vertex, and Azure use AWS credentials and a region, an ADC project, and an `api-version` respectively. Codex, Cursor, and Antigravity use their browser sign-ins. OpenCode Go uses its own API-key login. These providers appear as separate **Connect** cards instead of entries in **Add provider**.
+
+## Connect OpenCode Go
+
+Create or copy an API key from the [OpenCode Go dashboard](https://opencode.ai/auth). In **Settings → Models**, find **OpenCode Go**, enter the key in its password-masked field, and choose **Connect**. The route and its installed model catalog become available immediately; no `settings.yaml` profile is created.
+
+The key is stored in `$DSH_HOME/oauth-credentials.json` with owner-only permissions and is cleared from the browser field as soon as it is submitted. **Delete** on the connected row deletes that stored key and restores the Connect card. `OPENCODE_API_KEY` remains available for a manually configured OpenCode Go profile, but the Connect card does not write an environment variable or `$DSH_HOME/.credentials.yaml` record.
 
 ## Sign in to OpenAI Codex
 
-Codex uses a ChatGPT subscription, not an API key. In the Web UI, CLI, or ACP chat, run `/login openai-codex` once, complete ChatGPT login, then select an `openai-codex` model. `/logout openai-codex` deletes the stored tokens.
+Codex uses a ChatGPT subscription, not an API key. In **Settings → Models**, choose **Connect** on the Codex card and complete ChatGPT login, then select an `openai-codex` model. `/login openai-codex` in Web, CLI, or ACP chat is an alternative; `/logout openai-codex` deletes the stored tokens.
 
 The Web UI opens a new tab from that keystroke. Allow pop-ups for the dsh origin if the tab does not appear. A second `/login` while the first tab is still waiting is refused. Do not paste an older authorize URL from the terminal: each attempt has its own `state`, and a mismatch shows OpenAI's **Authentication failed** page.
 
 If the authorize page reports `missing_required_parameter`, paste the full URL printed in the server terminal into the address bar. Clicking a line-wrapped link drops `client_id` and the rest of the query.
 
-Tokens live in `$DSH_HOME/oauth-credentials.json` (owner-only). They are not environment variables and never appear in logs. The Models page does not offer a Codex key card.
+Tokens live in `$DSH_HOME/oauth-credentials.json` (owner-only). They are not environment variables and never appear in logs. The Models page offers a Connect card, not a Codex key card.
 
 Headless and SSH device-code login is not in this build.
 
 ## Sign in to Cursor
 
-Cursor uses a Cursor subscription, not an API key. In the Web UI, CLI, or ACP chat, run `/login cursor` once, complete Cursor login, then select a `cursor` model. `/logout cursor` deletes the stored tokens.
+Cursor uses a Cursor subscription, not an API key. Choose **Connect** on its Models card or run `/login cursor` in Web, CLI, or ACP chat, complete Cursor login, then select a `cursor` model. `/logout cursor` deletes the stored tokens.
 
 The Web UI opens a new tab from that keystroke, the same way as Codex. A second `/login` while the first is still waiting is refused for either provider.
 
-This unofficial Cursor backend is not a public API; Cursor may change the wire or restrict accounts. Tokens live in the same `$DSH_HOME/oauth-credentials.json` file as Codex. The Models page does not offer a Cursor key card.
+This unofficial Cursor backend is not a public API; Cursor may change the wire or restrict accounts. Tokens live in the same `$DSH_HOME/oauth-credentials.json` file as Codex. The Models page offers a Connect card, not a Cursor key card.
 
 ## Sign in to Antigravity
 
-Antigravity uses a Google account and Cloud Code Assist, not a Gemini API key. In the Web UI, CLI, or ACP chat, run `/login google-antigravity` once, complete Google login, then select a `google-antigravity` model. `/logout google-antigravity` deletes the stored tokens.
+Antigravity uses a Google account and Cloud Code Assist, not a Gemini API key. Choose **Connect** on its Models card or run `/login google-antigravity` in Web, CLI, or ACP chat, complete Google login, then select a `google-antigravity` model. `/logout google-antigravity` deletes the stored tokens.
 
 The Web UI opens a new tab from that keystroke, the same way as Codex. A second `/login` while the first is still waiting is refused for any hosted provider.
 
-This unofficial Cloud Code Assist backend is not a public API; Google may change the wire or restrict accounts. Tokens live in the same `$DSH_HOME/oauth-credentials.json` file. The Models page does not offer an Antigravity key card. This is not the installed `google` API-key catalog provider.
+This unofficial Cloud Code Assist backend is not a public API; Google may change the wire or restrict accounts. Tokens live in the same `$DSH_HOME/oauth-credentials.json` file. The Models page offers a Connect card, not an Antigravity key card. This is not the installed `google` API-key catalog provider.
 
 ## Add a custom provider
 

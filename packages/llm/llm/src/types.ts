@@ -204,11 +204,10 @@ export interface LlmProviderInfo {
   /** Human-readable provider name for selectors and diagnostics. */
   name: string
   /**
-   * How this live route authenticates when it is not an API-key profile.
-   * `oauth` means a stored OAuth credential registered the route. Omit for
-   * API-key and provider-native discovery routes.
+   * How a settings-free stored login registered this live route. Omit for
+   * settings profiles and provider-native discovery routes.
    */
-  auth?: 'oauth'
+  auth?: 'oauth' | 'api-key'
 }
 
 /** Merge-extensible provider model modality vocabulary. */
@@ -257,6 +256,12 @@ export interface LlmConfigurableProvider {
    * from outside.
    */
   declared?: boolean
+  /**
+   * The route connects through a provider-owned login rather than a settings
+   * profile. Configuration surfaces offer the named login method; a live
+   * route merged over it reports the same value from its own metadata.
+   */
+  auth?: 'oauth' | 'api-key'
   /** Configuration diagnostic for repair; unaffected models may remain serviceable. */
   error?: string
 }
@@ -298,6 +303,11 @@ declare module '@deepseek-ai/dsh-typert-protocol' {
     'llm/model-discovery-rejected': {
       readonly settingsNs: string
       readonly baseURL?: string
+    }
+    /** A provider OAuth sign-in refused or failed. */
+    'llm/login-rejected': {
+      readonly settingsNs: string
+      readonly provider: string
     }
   }
 }

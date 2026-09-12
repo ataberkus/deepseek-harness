@@ -194,11 +194,12 @@ export function catalogProviderIds(): readonly string[] {
  * pi-ai per request. pi-ai's other method, OAuth, resolves from a stored
  * credential in the collection's `CredentialStore`. `/login openai-codex`,
  * `/login cursor`, and `/login google-antigravity` persist that credential and
- * register a live route; the configurable-provider directory still withholds
- * OAuth-only cards, because a key field cannot authenticate them and a blank
- * card would invite a posture that fails. Hosted `cursor` and
- * `google-antigravity` are withheld the same way: they are not in
- * {@link catalogProviderIds} and this function returns false for them.
+ * register a live route; the configurable-provider directory offers those
+ * routes as dormant sign-in entries (marked `auth: 'oauth'`) rather than key
+ * cards, because a key field cannot authenticate them and a blank card would
+ * invite a posture that fails. Hosted `cursor` and `google-antigravity` are
+ * offered the same way: they are not in {@link catalogProviderIds} and this
+ * function returns false for them.
  * @param provider - provider route key.
  * @returns whether the catalog provider takes an api key; false for a route
  *   pi-ai does not ship, which the caller answers for separately.

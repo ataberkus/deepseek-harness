@@ -1194,4 +1194,18 @@ describe('openai-codex login tab', () => {
     finish({ matched: true })
     await expect(pending).resolves.toEqual({ kind: 'success' })
   })
+
+  it('opens the shared blank tab through the public gesture prep', async () => {
+    const tab = { closed: false, location: { href: 'about:blank' } }
+    const open = vi.fn(() => tab)
+    vi.stubGlobal('window', { open })
+    const { remote, command } = await loginBench()
+    command.prepareOAuthLoginTab()
+    expect(open).toHaveBeenCalledWith('about:blank', 'dsh-oauth-login')
+    command.prepareOAuthLoginTab()
+    expect(open).toHaveBeenCalledTimes(1)
+    remote.emit('commands/open-url', [CODEX_AUTH_URL])
+    expect(tab.location.href).toBe(CODEX_AUTH_URL)
+    expect(open).toHaveBeenCalledTimes(1)
+  })
 })

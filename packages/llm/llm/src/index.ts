@@ -258,8 +258,8 @@ export abstract class LlmAdapter {
   }
 
   /**
-   * Sign out of a hosted OAuth route this adapter injected. Default refuses:
-   * only adapters that persist OAuth credentials implement this.
+   * Disconnect a provider-managed route this adapter injected. Default refuses:
+   * only adapters that persist managed login credentials implement this.
    * @param provider - a route passed to {@link LlmRuntime.registerAdapter}.
    * @returns nothing; a successful call unregisters the live route.
    */
@@ -349,6 +349,11 @@ export class LlmRuntime extends TypertRemoteService {
   private discoveries = new Map<
     string,
     (request: LlmModelDiscoveryRequest, signal?: AbortSignal) => Promise<readonly LlmDiscoveredModel[]>
+  >()
+  private oauthLogins = new Map<string, (provider: string, signal?: AbortSignal) => Promise<void>>()
+  private apiKeyLogins = new Map<
+    string,
+    (provider: string, apiKey: string, signal?: AbortSignal) => Promise<void>
   >()
 
   constructor(ctx: Context) {
@@ -644,10 +649,11 @@ export class LlmRuntime extends TypertRemoteService {
   }
 
   /**
-   * Sign out of a hosted OAuth route owned by its registered adapter.
+   * Disconnect a provider-managed route through its registered adapter.
    * @param provider - registered provider route to disconnect.
    * @returns nothing; a successful call unregisters the live route.
    */
+  @Remote('logout')
   async logout(provider: string): Promise<void> {
     await this.registration(provider).adapter.logout(provider)
   }
@@ -676,6 +682,146 @@ export class LlmRuntime extends TypertRemoteService {
           settingsNs,
           ...request.baseURL === undefined ? {} : { baseURL: request.baseURL },
         },
+        { cause: error },
+      )
+    }
+  }
+  /**
+   * Offer to sign a provider route in through OAuth on behalf of the settings
+   * namespace this plugin owns. The namespace is the key for the same reason
+   * discovery is keyed that way: a route being signed in has no live
+   * registration to name yet. Disposed with the fiber.
+   * @param settingsNs - the namespace whose routes this login serves.
+   * @param login - signs in one provider and must honor the supplied signal.
+   * @returns the disposer that withdraws the offer.
+   */
+  registerOAuthLogin(
+    settingsNs: string,
+    login: (provider: string, signal?: AbortSignal) => Promise<void>,
+  ): () => void {
+    const dispose = this.ctx.effect(function* (this: LlmRuntime) {
+      if (settingsNs.length === 0) {
+        throw new LlmError('OAuth login needs a non-empty settings namespace', 'INVALID_LOGIN')
+      }
+      if (this.oauthLogins.has(settingsNs)) {
+        throw new LlmError(`OAuth login for "${settingsNs}" is already registered`, 'DUPLICATE_LOGIN')
+      }
+      this.oauthLogins.set(settingsNs, login)
+      yield () => {
+        this.oauthLogins.delete(settingsNs)
+      }
+    }.bind(this), 'llm.registerOAuthLogin()')
+    return () => void dispose()
+  }
+
+  /**
+   * Sign one provider route in through its namespace's OAuth offer.
+   * @param settingsNs - namespace whose registered login serves this provider.
+   * @param provider - dormant OAuth route to sign in.
+   * @param signal - caller cancellation.
+   * @returns nothing; a successful call registers the live route.
+   */
+  async loginOAuth(settingsNs: string, provider: string, signal?: AbortSignal): Promise<void> {
+    const login = this.oauthLogins.get(settingsNs)
+    if (login === undefined) {
+      throw new LlmError(`no OAuth login is registered for "${settingsNs}"`, 'NO_LOGIN')
+    }
+    await login(provider, signal)
+  }
+
+  /**
+   * Remote adapter for one provider sign-in.
+   * @param settingsNs - namespace whose registered login serves this provider.
+   * @param provider - dormant OAuth route to sign in.
+   * @param signal - caller cancellation supplied by the Remote carrier.
+   * @returns nothing; a successful call registers the live route.
+   * @throws RemoteError with `llm/login-rejected` when login refuses or fails.
+   */
+  @Remote('loginOAuth')
+  async remoteLoginOAuth(settingsNs: string, provider: string, signal: AbortSignal): Promise<void> {
+    try {
+      await this.loginOAuth(settingsNs, provider, signal)
+    } catch (error: unknown) {
+      throw new RemoteError(
+        'llm/login-rejected',
+        error instanceof Error ? error.message : String(error),
+        { settingsNs, provider },
+        { cause: error },
+      )
+    }
+  }
+
+  /**
+   * Offer to store one provider API key through the provider's own login
+   * method on behalf of the settings namespace this plugin owns. Disposed
+   * with the fiber.
+   * @param settingsNs - the namespace whose routes this login serves.
+   * @param login - stores one provider key and must honor the supplied signal.
+   * @returns the disposer that withdraws the offer.
+   */
+  registerApiKeyLogin(
+    settingsNs: string,
+    login: (provider: string, apiKey: string, signal?: AbortSignal) => Promise<void>,
+  ): () => void {
+    const dispose = this.ctx.effect(function* (this: LlmRuntime) {
+      if (settingsNs.length === 0) {
+        throw new LlmError('API-key login needs a non-empty settings namespace', 'INVALID_LOGIN')
+      }
+      if (this.apiKeyLogins.has(settingsNs)) {
+        throw new LlmError(`API-key login for "${settingsNs}" is already registered`, 'DUPLICATE_LOGIN')
+      }
+      this.apiKeyLogins.set(settingsNs, login)
+      yield () => {
+        this.apiKeyLogins.delete(settingsNs)
+      }
+    }.bind(this), 'llm.registerApiKeyLogin()')
+    return () => void dispose()
+  }
+
+  /**
+   * Store one provider key through its namespace's API-key login offer.
+   * @param settingsNs - namespace whose registered login serves this provider.
+   * @param provider - dormant API-key route to connect.
+   * @param apiKey - secret supplied for this login alone.
+   * @param signal - caller cancellation.
+   * @returns nothing; a successful call registers the live route.
+   */
+  async loginApiKey(
+    settingsNs: string,
+    provider: string,
+    apiKey: string,
+    signal?: AbortSignal,
+  ): Promise<void> {
+    const login = this.apiKeyLogins.get(settingsNs)
+    if (login === undefined) {
+      throw new LlmError(`no API-key login is registered for "${settingsNs}"`, 'NO_LOGIN')
+    }
+    await login(provider, apiKey, signal)
+  }
+
+  /**
+   * Remote adapter for one provider API-key login.
+   * @param settingsNs - namespace whose registered login serves this provider.
+   * @param provider - dormant API-key route to connect.
+   * @param apiKey - secret supplied for this login alone.
+   * @param signal - caller cancellation supplied by the Remote carrier.
+   * @returns nothing; a successful call registers the live route.
+   * @throws RemoteError with `llm/login-rejected` when login refuses or fails.
+   */
+  @Remote('loginApiKey')
+  async remoteLoginApiKey(
+    settingsNs: string,
+    provider: string,
+    apiKey: string,
+    signal: AbortSignal,
+  ): Promise<void> {
+    try {
+      await this.loginApiKey(settingsNs, provider, apiKey, signal)
+    } catch (error: unknown) {
+      throw new RemoteError(
+        'llm/login-rejected',
+        error instanceof Error ? error.message : String(error),
+        { settingsNs, provider },
         { cause: error },
       )
     }

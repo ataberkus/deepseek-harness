@@ -12,14 +12,19 @@ import * as LlmPiAi from '@deepseek-ai/dsh-llm-pi-ai'
 import { getBuiltinModels } from '@earendil-works/pi-ai/providers/all'
 import * as catalog from '../src/catalog.ts'
 import {
+  apiKeyProviderProfiles,
   authUrlFallbackMessage,
   browserOpenArgv,
   createBrowserOAuthInteraction,
   loginHostedOAuth,
   loginOpenaiCodex,
+  loginOpenCodeGo,
   OPENAI_CODEX_BROWSER_LOGIN_METHOD,
+  emitOAuthOpenUrl,
   OPENAI_CODEX_DISPLAY_NAME,
   OPENAI_CODEX_PROVIDER,
+  OPENCODE_GO_DISPLAY_NAME,
+  OPENCODE_GO_PROVIDER,
   OAUTH_LOGIN_IN_PROGRESS,
   OAUTH_LOGIN_UNSUPPORTED,
   OAUTH_LOGOUT_UNSUPPORTED,
@@ -55,6 +60,7 @@ function fakeAgent(): Agent {
 
 interface StoredCredentialRecord {
   readonly type: string
+  readonly key?: string
   readonly refresh?: string
   readonly projectId?: string
 }
@@ -115,6 +121,47 @@ describe('oauthProviderProfiles', () => {
     expect(oauthProviderProfiles([{ providerId: 'openai-codex', type: 'oauth' }])).toEqual({
       'openai-codex': { displayName: OPENAI_CODEX_DISPLAY_NAME },
     })
+  })
+})
+
+describe('apiKeyProviderProfiles', () => {
+  it('injects only a stored OpenCode Go API-key credential', () => {
+    expect(apiKeyProviderProfiles([
+      { providerId: OPENCODE_GO_PROVIDER, type: 'api_key' },
+      { providerId: OPENCODE_GO_PROVIDER, type: 'oauth' },
+      { providerId: 'openai', type: 'api_key' },
+    ])).toEqual({
+      [OPENCODE_GO_PROVIDER]: { displayName: OPENCODE_GO_DISPLAY_NAME },
+    })
+    expect(apiKeyProviderProfiles([])).toEqual({})
+  })
+})
+
+describe('loginOpenCodeGo', () => {
+  it('trims and persists the key through the provider-owned login method', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'dsh-opencode-go-login-'))
+    const filename = join(dir, OAUTH_CREDENTIALS_FILENAME)
+    const store = new FileOAuthStore(filename)
+
+    await loginOpenCodeGo(store, '  opencode-test-key  ')
+
+    expect(parseStoredCredentials(await readFile(filename, 'utf8'))).toMatchObject({
+      [OPENCODE_GO_PROVIDER]: { type: 'api_key', key: 'opencode-test-key' },
+    })
+  })
+
+  it('refuses an invalid key without putting the secret in the diagnostic', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'dsh-opencode-go-login-'))
+    const store = new FileOAuthStore(join(dir, OAUTH_CREDENTIALS_FILENAME))
+    const secret = 'bad key'
+
+    await loginOpenCodeGo(store, secret).then(
+      () => { throw new Error('expected login to fail') },
+      (error: unknown) => {
+        expect(error).toBeInstanceOf(LlmError)
+        expect(String(error)).not.toContain(secret)
+      },
+    )
   })
 })
 
@@ -292,6 +339,22 @@ describe('authUrlFallbackMessage', () => {
   })
 })
 
+describe('emitOAuthOpenUrl', () => {
+  it('runs every subscriber inline and reports whether any received the URL', () => {
+    const seen: string[] = []
+    const listeners = [
+      (url: string) => { seen.push(`first:${url}`) },
+      (url: string) => { seen.push(`second:${url}`) },
+    ]
+    expect(emitOAuthOpenUrl(() => listeners, 'https://accounts.example/oups')).toBe(true)
+    expect(seen).toEqual([
+      'first:https://accounts.example/oups',
+      'second:https://accounts.example/oups',
+    ])
+    expect(emitOAuthOpenUrl(() => [], 'https://accounts.example/oups')).toBe(false)
+  })
+})
+
 describe('openUrl', () => {
   const linuxDesktop = { platform: 'linux' as const, env: {}, osRelease: '6.8.0-generic' }
 
@@ -347,7 +410,7 @@ describe('openUrl', () => {
 })
 
 describe('login and logout commands', () => {
-  it('signs in, registers a live openai-codex route, and keeps it off the Models directory', async () => {
+  it('signs in, registers a live openai-codex route, and swaps the dormant directory entry for it', async () => {
     const home = await isolateDshHome()
     const provider = catalog.catalogProvider(OPENAI_CODEX_PROVIDER)
     if (provider?.auth.oauth === undefined) throw new Error('expected openai-codex oauth')
@@ -376,7 +439,10 @@ describe('login and logout commands', () => {
     await ctx.plugin(CommandRuntime)
     await ctx.plugin(LlmPiAi, {})
     expect(ctx.llm.listProviders()).toEqual([])
-    expect(ctx.llm.listConfigurableProviders().map(entry => entry.provider)).not.toContain(OPENAI_CODEX_PROVIDER)
+    // No credential yet: the directory offers a dormant sign-in marker, not
+    // a key card.
+    expect(ctx.llm.listConfigurableProviders().find(entry => entry.provider === OPENAI_CODEX_PROVIDER))
+      .toMatchObject({ settingsNs: 'llm-pi-ai', auth: 'oauth' })
 
     const agent = fakeAgent()
     const login = await ctx.commands.execute(agent, '/login', [], AbortSignal.timeout(5_000))
@@ -402,9 +468,12 @@ describe('login and logout commands', () => {
     const logout = await ctx.commands.execute(agent, '/logout openai-codex', [], AbortSignal.timeout(5_000))
     expect(logout?.result).toEqual({ kind: 'success', text: 'Signed out of OpenAI Codex.' })
     expect(ctx.llm.listProviders()).toEqual([])
+    // The credential is gone, so the dormant sign-in offer returns.
+    expect(ctx.llm.listConfigurableProviders().find(entry => entry.provider === OPENAI_CODEX_PROVIDER))
+      .toMatchObject({ settingsNs: 'llm-pi-ai', auth: 'oauth' })
   })
 
-  it('signs in with /login cursor, injects a live route, and keeps the key card withheld', async () => {
+  it('signs in with /login cursor, injects a live route, and restores the dormant offer on logout', async () => {
     const home = await isolateDshHome()
     const provider = catalog.catalogProvider('cursor')
     if (provider?.auth.oauth === undefined) throw new Error('expected cursor oauth')
@@ -422,7 +491,8 @@ describe('login and logout commands', () => {
     await ctx.plugin(LlmRuntime)
     await ctx.plugin(CommandRuntime)
     await ctx.plugin(LlmPiAi, {})
-    expect(ctx.llm.listConfigurableProviders().map(entry => entry.provider)).not.toContain('cursor')
+    expect(ctx.llm.listConfigurableProviders().find(entry => entry.provider === 'cursor'))
+      .toMatchObject({ settingsNs: 'llm-pi-ai', auth: 'oauth' })
     const login = await ctx.commands.execute(fakeAgent(), '/login cursor', [], AbortSignal.timeout(5_000))
     expect(login?.result).toEqual({
       kind: 'success',
@@ -440,9 +510,11 @@ describe('login and logout commands', () => {
     const logout = await ctx.commands.execute(fakeAgent(), '/logout cursor', [], AbortSignal.timeout(5_000))
     expect(logout?.result).toEqual({ kind: 'success', text: 'Signed out of Cursor.' })
     expect(ctx.llm.listProviders()).toEqual([])
+    expect(ctx.llm.listConfigurableProviders().find(entry => entry.provider === 'cursor'))
+      .toMatchObject({ settingsNs: 'llm-pi-ai', auth: 'oauth' })
   })
 
-  it('signs in with /login google-antigravity, injects a live route, and keeps the key card withheld', async () => {
+  it('signs in with /login google-antigravity, injects a live route, and restores the dormant offer on logout', async () => {
     const home = await isolateDshHome()
     const provider = catalog.catalogProvider('google-antigravity')
     if (provider?.auth.oauth === undefined) throw new Error('expected google-antigravity oauth')
@@ -464,8 +536,8 @@ describe('login and logout commands', () => {
     await ctx.plugin(LlmRuntime)
     await ctx.plugin(CommandRuntime)
     await ctx.plugin(LlmPiAi, {})
-    expect(ctx.llm.listConfigurableProviders().map(entry => entry.provider))
-      .not.toContain('google-antigravity')
+    expect(ctx.llm.listConfigurableProviders().find(entry => entry.provider === 'google-antigravity'))
+      .toMatchObject({ settingsNs: 'llm-pi-ai', auth: 'oauth' })
     const login = await ctx.commands.execute(fakeAgent(), '/login google-antigravity', [], AbortSignal.timeout(5_000))
     expect(login?.result).toEqual({
       kind: 'success',
@@ -493,6 +565,8 @@ describe('login and logout commands', () => {
     )
     expect(logout?.result).toEqual({ kind: 'success', text: 'Signed out of Antigravity.' })
     expect(ctx.llm.listProviders()).toEqual([])
+    expect(ctx.llm.listConfigurableProviders().find(entry => entry.provider === 'google-antigravity'))
+      .toMatchObject({ settingsNs: 'llm-pi-ai', auth: 'oauth' })
   })
 
   it('rejects login and logout for any provider other than openai-codex', async () => {
@@ -869,7 +943,7 @@ describe('login and logout commands', () => {
     const result = await ctx.commands.execute(fakeAgent(), '/login openai-codex', [], AbortSignal.timeout(5_000))
     expect(result?.result).toMatchObject({ kind: 'success' })
     expect(logged.mock.calls.some(([value]) =>
-      typeof value === 'string' && value.includes('OAuth credential change'),
+      typeof value === 'string' && value.includes('managed credential change'),
     )).toBe(true)
     expect(ctx.llm.listProviders()).toEqual([
       { id: OPENAI_CODEX_PROVIDER, name: OPENAI_CODEX_PROVIDER },
@@ -921,7 +995,14 @@ describe('login and logout commands', () => {
         source: { kind: 'plugin', plugin: 'test' },
       })],
     })
-    expect(read).toHaveBeenCalledWith(OPENAI_CODEX_PROVIDER, expect.objectContaining({ signal: expect.any(AbortSignal) }))
+    const readCall = read.mock.calls[0] as readonly unknown[] | undefined
+    expect(readCall?.[0]).toBe(OPENAI_CODEX_PROVIDER)
+    const readOptions = readCall?.[1]
+    expect(
+      typeof readOptions === 'object' && readOptions !== null && 'signal' in readOptions
+        ? readOptions.signal
+        : undefined,
+    ).toBeInstanceOf(AbortSignal)
     expect(result.finish.kind).toBe('error')
     if (result.finish.kind !== 'error') throw new Error('expected OAuth lookup to fail the request')
     expect(result.finish.failure.code).toBe('PI_AI_ERROR')
