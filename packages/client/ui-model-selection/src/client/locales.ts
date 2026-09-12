@@ -40,6 +40,9 @@ export const zh = {
   'search.aria': '筛选模型',
   'blocked.composer': '当前模型不可用，请先选择模型',
   'empty.efforts': '当前模型未提供推理等级。',
+  'favorites.title': '收藏',
+  'favorites.add': '将 {model} 添加到收藏',
+  'favorites.remove': '将 {model} 移出收藏',
 } satisfies Record<string, string>
 
 /** The model namespace key union. */
@@ -77,4 +80,7 @@ export const en = {
   'search.aria': 'Filter models',
   'blocked.composer': 'This model is unavailable — select one to continue',
   'empty.efforts': 'This model provides no reasoning effort levels.',
+  'favorites.title': 'Favorites',
+  'favorites.add': 'Add {model} to favorites',
+  'favorites.remove': 'Remove {model} from favorites',
 } satisfies Record<ModelKey, string>

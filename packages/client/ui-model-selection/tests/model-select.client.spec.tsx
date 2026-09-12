@@ -50,6 +50,30 @@ function state(overrides: Partial<ModelDirectoryState> = {}): ModelDirectoryStat
   }
 }
 
+/** Empty favorites face for tests that do not exercise starring. */
+function emptyFavorites() {
+  return {
+    favorites: createSnapshotStore({ favorites: [] as string[] }),
+    toggleFavorite: vi.fn(),
+  }
+}
+
+/** Working favorites face whose toggle writes through the stub store. */
+function workingFavorites(initial: readonly string[] = []) {
+  const favorites = createSnapshotStore({ favorites: [...initial] })
+  const toggleFavorite = vi.fn((providerId: string, modelId: string) => {
+    const id = `${providerId}/${modelId}`
+    favorites.update((draft) => {
+      draft.favorites = draft.favorites.includes(id)
+        ? draft.favorites.filter(entry => entry !== id)
+        : [...draft.favorites, id]
+    })
+  })
+  return { favorites, toggleFavorite }
+}
+
+const sharedEmpty = emptyFavorites()
+
 afterEach(cleanup)
 
 describe('ModelSelect reasoning effort', () => {
@@ -63,6 +87,8 @@ describe('ModelSelect reasoning effort', () => {
       locked={false}
       available
       directory={directory}
+      favorites={sharedEmpty.favorites}
+      toggleFavorite={sharedEmpty.toggleFavorite}
       load={vi.fn()}
       select={select}
       t={t}
@@ -95,6 +121,8 @@ describe('ModelSelect reasoning effort', () => {
       locked={false}
       available
       directory={directory}
+      favorites={sharedEmpty.favorites}
+      toggleFavorite={sharedEmpty.toggleFavorite}
       load={vi.fn()}
       select={select}
       t={t}
@@ -130,6 +158,8 @@ describe('ModelSelect reasoning effort', () => {
       locked={false}
       available
       directory={directory}
+      favorites={sharedEmpty.favorites}
+      toggleFavorite={sharedEmpty.toggleFavorite}
       load={vi.fn()}
       select={vi.fn().mockResolvedValue(true)}
       t={t}
@@ -152,6 +182,8 @@ describe('ModelSelect reasoning effort', () => {
       locked={false}
       available
       directory={directory}
+      favorites={sharedEmpty.favorites}
+      toggleFavorite={sharedEmpty.toggleFavorite}
       load={vi.fn()}
       select={select}
       t={t}
@@ -178,6 +210,8 @@ describe('ModelSelect reasoning effort', () => {
       locked={false}
       available
       directory={directory}
+      favorites={sharedEmpty.favorites}
+      toggleFavorite={sharedEmpty.toggleFavorite}
       load={vi.fn()}
       select={vi.fn().mockResolvedValue(true)}
       t={t}
@@ -211,6 +245,8 @@ describe('ModelSelect reasoning effort', () => {
       locked={false}
       available
       directory={directory}
+      favorites={sharedEmpty.favorites}
+      toggleFavorite={sharedEmpty.toggleFavorite}
       load={vi.fn()}
       select={select}
       t={t}
@@ -254,6 +290,8 @@ describe('ModelSelect reasoning effort', () => {
       locked={false}
       available
       directory={directory}
+      favorites={sharedEmpty.favorites}
+      toggleFavorite={sharedEmpty.toggleFavorite}
       load={load}
       select={vi.fn().mockResolvedValue(true)}
       t={t}
@@ -278,6 +316,8 @@ describe('ModelSelect reasoning effort', () => {
         locked={false}
         available
         directory={createSnapshotStore(state())}
+        favorites={sharedEmpty.favorites}
+        toggleFavorite={sharedEmpty.toggleFavorite}
         load={vi.fn()}
         select={vi.fn().mockResolvedValue(true)}
         t={t}
@@ -311,6 +351,8 @@ describe('ModelSelect reasoning effort', () => {
       locked={false}
       available={false}
       directory={createSnapshotStore(state())}
+      favorites={sharedEmpty.favorites}
+      toggleFavorite={sharedEmpty.toggleFavorite}
       load={load}
       select={vi.fn().mockResolvedValue(false)}
       t={t}
@@ -345,6 +387,8 @@ describe('ModelSelect model search', () => {
       locked={false}
       available
       directory={directory}
+      favorites={sharedEmpty.favorites}
+      toggleFavorite={sharedEmpty.toggleFavorite}
       load={vi.fn()}
       select={select}
       t={t}
@@ -419,6 +463,96 @@ describe('ModelSelect model search', () => {
     fireEvent.click(screen.getByRole('menuitemradio', { name: /DeepSeek-V4-Pro/ }))
     await waitFor(() => {
       expect(select).toHaveBeenCalledWith({ provider: 'deepseek-official', model: 'deepseek-v4-pro' })
+    })
+  })
+})
+
+describe('ModelSelect favorites', () => {
+  const groups = [
+    {
+      id: 'deepseek-official',
+      name: 'DeepSeek',
+      models: [
+        { id: 'deepseek-v4-flash', name: 'DeepSeek-V4-Flash' },
+        { id: 'deepseek-v4-pro', name: 'DeepSeek-V4-Pro' },
+      ],
+    },
+    {
+      id: 'acme-gateway',
+      name: 'Acme Gateway',
+      models: [{ id: 'acme-large', name: 'Acme Large' }],
+    },
+  ]
+
+  function openWithFavorites(initial: readonly string[] = []) {
+    const directory = createSnapshotStore(state({ groups }))
+    const fav = workingFavorites(initial)
+    render(<ModelSelect
+      locked={false}
+      available
+      directory={directory}
+      favorites={fav.favorites}
+      toggleFavorite={fav.toggleFavorite}
+      load={vi.fn()}
+      select={vi.fn().mockResolvedValue(true)}
+      t={t}
+    />)
+    fireEvent.click(screen.getByRole('button', { name: /选择模型|当前/ }))
+    fireEvent.click(screen.getByRole('menuitem', { name: /模型/ }))
+    return fav
+  }
+
+  it('hides the Favorites group without favorites and pins it first once starred', () => {
+    const fav = openWithFavorites()
+    expect(screen.queryByText('收藏')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: '将 Acme Large 添加到收藏' }))
+    expect(fav.toggleFavorite).toHaveBeenCalledWith('acme-gateway', 'acme-large')
+    const headings = screen.getAllByText('收藏')
+    expect(headings).toHaveLength(1)
+    const favoriteGroup = headings[0]!.closest('section')!
+    expect(favoriteGroup.textContent).toContain('Acme Large')
+    const groupsEl = favoriteGroup.parentElement!
+    expect(groupsEl.firstElementChild).toBe(favoriteGroup)
+  })
+
+  it('keeps a favorited model in its provider group and unstars from either row', () => {
+    const fav = openWithFavorites(['deepseek-official/deepseek-v4-pro'])
+    expect(screen.getAllByRole('menuitemradio', { name: 'DeepSeek-V4-Pro' })).toHaveLength(2)
+    fireEvent.click(screen.getAllByRole('button', { name: '将 DeepSeek-V4-Pro 移出收藏' })[0]!)
+    expect(fav.toggleFavorite).toHaveBeenCalledWith('deepseek-official', 'deepseek-v4-pro')
+    expect(screen.queryByText('收藏')).toBeNull()
+    expect(screen.getAllByRole('menuitemradio', { name: 'DeepSeek-V4-Pro' })).toHaveLength(1)
+  })
+
+  it('filters the Favorites group with the search query', () => {
+    openWithFavorites(['deepseek-official/deepseek-v4-pro', 'acme-gateway/acme-large'])
+    const search = screen.getByRole('textbox', { name: '筛选模型' })
+    fireEvent.change(search, { target: { value: 'Acme' } })
+    expect(screen.getByText('收藏')).toBeTruthy()
+    expect(screen.getAllByRole('menuitemradio', { name: 'Acme Large' })).toHaveLength(2)
+    expect(screen.queryByRole('menuitemradio', { name: 'DeepSeek-V4-Pro' })).toBeNull()
+  })
+
+  it('selects a favorited model from the Favorites group', async () => {
+    const directory = createSnapshotStore(state({ groups }))
+    const select = vi.fn().mockResolvedValue(true)
+    const fav = workingFavorites(['acme-gateway/acme-large'])
+    render(<ModelSelect
+      locked={false}
+      available
+      directory={directory}
+      favorites={fav.favorites}
+      toggleFavorite={fav.toggleFavorite}
+      load={vi.fn()}
+      select={select}
+      t={t}
+    />)
+    fireEvent.click(screen.getByRole('button', { name: /选择模型|当前/ }))
+    fireEvent.click(screen.getByRole('menuitem', { name: /模型/ }))
+    const favoriteGroup = screen.getByText('收藏').closest('section')!
+    fireEvent.click(favoriteGroup.querySelector('[role="menuitemradio"]')!)
+    await waitFor(() => {
+      expect(select).toHaveBeenCalledWith({ provider: 'acme-gateway', model: 'acme-large' })
     })
   })
 })

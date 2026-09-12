@@ -226,9 +226,55 @@
   cursor: pointer;
 }
 
+/* One model row: the select button takes the row width, the star toggles
+   the browser-local favorite without selecting. */
+.optionRow {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  width: auto;
+  min-width: 100%;
+}
+
+.optionRow > .option {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
 .option:hover:not(:disabled),
 .option:focus-visible {
   background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.favorite {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.favorite:hover,
+.favorite:focus-visible {
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-primary);
+}
+
+.favoriteActive {
+  color: var(--dsw-alias-state-warn-label);
+}
+
+.favoriteActive:hover,
+.favoriteActive:focus-visible {
+  color: var(--dsw-alias-state-warn-label);
 }
 
 /* Selection marker is the trailing check, not a fill — matches the Menu

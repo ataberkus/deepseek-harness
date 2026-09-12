@@ -395,6 +395,40 @@ describe('ui-model-selection dual entry', () => {
     expect(() => b.seat().inject!(sid('ghost'))).toThrow(/resolved no scope/)
   })
 
+  it('pins favorited models first in the popup and shares the toggle with the seat', async () => {
+    const b = await bench()
+    b.mint('s1')
+    const face = b.seat().inject!(sid('s1'))
+    expect(face.favorites.getSnapshot()).toEqual({ favorites: [] })
+
+    face.toggleFavorite('external', 'deepseek-v4-flash')
+    expect(face.favorites.getSnapshot()).toEqual({ favorites: ['external/deepseek-v4-flash'] })
+    expect(b.ctx.modelDirectories.favorites.getSnapshot()).toEqual({
+      favorites: ['external/deepseek-v4-flash'],
+    })
+
+    const options = await b.popup().options(projection('s1'), new AbortController().signal)
+    expect(options.map((o: SelectOption) => o.label)).toEqual([
+      'External Flash', 'DeepSeek-V4-Flash', 'DeepSeek-V4-Pro',
+    ])
+
+    face.toggleFavorite('external', 'deepseek-v4-flash')
+    expect(face.favorites.getSnapshot()).toEqual({ favorites: [] })
+    const restored = await b.popup().options(projection('s1'), new AbortController().signal)
+    expect(restored.map((o: SelectOption) => o.label)).toEqual([
+      'DeepSeek-V4-Flash', 'DeepSeek-V4-Pro', 'External Flash',
+    ])
+  })
+
+  it('orders a single favorite before the remaining catalog order', async () => {
+    const b = await bench()
+    b.mint('s1')
+    const face = b.seat().inject!(sid('s1'))
+    face.toggleFavorite('deepseek-official', 'deepseek-v4-pro')
+    const options = await b.popup().options(projection('s1'), new AbortController().signal)
+    expect(options[0]).toMatchObject({ id: 'deepseek-official/deepseek-v4-pro' })
+  })
+
   it('withholds both model entries from addressed subagent sessions without Agent-bound RPCs', async () => {
     const b = await bench()
     b.mint('child')

@@ -1,8 +1,10 @@
 /**
  * ModelDirectoryResolver (`ctx.modelDirectories`): the root owner of per-session
- * {@link ModelDirectory} instances. Both selection entries (the /model popup
- * and the composer model seat) resolve their session's directory through
- * this service, which is what makes the dual entry one shared state.
+ * {@link ModelDirectory} instances plus the browser-local favorites list.
+ * Both selection entries (the /model popup and the composer model seat)
+ * resolve their session's directory through this service, which is what
+ * makes the dual entry one shared state; both read the same favorites store
+ * so a star toggled in the seat reorders the popup next open.
  *
  * Per-session storage follows the client service pattern (InputTriggerService /
  * CommandUiRuntime): a lazy service-internal map whose entry is deleted by the
@@ -16,8 +18,12 @@ import { Service } from '@deepseek-ai/cordis'
 import type { Context } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-api-session-controller/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
+import type { SnapshotStore } from '@deepseek-ai/dsh-client-store'
 import { ModelCatalogDirectory } from './catalog.ts'
 import { ModelDirectory } from './directory.ts'
+import {
+  createFavoritesStore, favoriteId, toggledFavorites, type ModelFavoritesState,
+} from './favorites.ts'
 
 declare module '@deepseek-ai/cordis' {
   interface Context {
@@ -37,6 +43,8 @@ export class ModelDirectoryResolver extends Service {
 
   private readonly live: LiveState = { directories: new Map() }
   private readonly catalog: ModelCatalogDirectory
+  /** Browser-local favorites shared by both entries (persisted, presentation-only). */
+  readonly favorites: SnapshotStore<ModelFavoritesState>
 
   /** Localized composer-block copy; this plugin owns the string it raises. */
   private readonly blockReason: () => string
@@ -48,6 +56,7 @@ export class ModelDirectoryResolver extends Service {
   constructor(ctx: Context, config: { blockReason: () => string }) {
     super(ctx, 'modelDirectories')
     this.blockReason = config.blockReason
+    this.favorites = createFavoritesStore()
     this.catalog = new ModelCatalogDirectory(ctx)
     void this.catalog.load().catch(() => { /* selectors expose the shared error */ })
     ctx.on('connection/reset', () => {
@@ -57,6 +66,18 @@ export class ModelDirectoryResolver extends Service {
     ctx.remote.$on('llm/adapters-updated', () => { this.catalog.refresh() })
     ctx.remote.$on('settings/document-updated', () => { this.catalog.refresh() })
     ctx.remote.$on('credentials/reference-updated', () => { this.catalog.refresh() })
+  }
+
+  /**
+   * Toggle one model in the browser-local favorites list.
+   * @param providerId - provider id.
+   * @param modelId - provider-owned model id.
+   */
+  toggleFavorite(providerId: string, modelId: string): void {
+    const id = favoriteId(providerId, modelId)
+    this.favorites.update((draft) => {
+      draft.favorites = toggledFavorites(draft.favorites, id)
+    })
   }
 
   /**

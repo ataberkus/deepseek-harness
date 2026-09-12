@@ -11,9 +11,12 @@
  * soon as a click is submitted; the directory echoes the selection so the
  * trigger updates without waiting for `session.selectModel`. The model pane
  * filters advertised groups locally as the user types; `/model` already
- * filters through the shared popupSelect shell. A rejected selection
- * announces through the shared transient Toast anchored to the composer
- * card; the in-menu strip with Retry remains the catalog-load surface.
+ * filters through the shared popupSelect shell. Favorited models pin a
+ * Favorites group first with per-row stars; the same ids order the popup
+ * first. Favorites are browser-local viewing state and never reach the
+ * model request. A rejected selection announces through the shared transient
+ * Toast anchored to the composer card; the in-menu strip with Retry remains
+ * the catalog-load surface.
  */
 import {
   useEffect, useId, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore,
@@ -29,6 +32,7 @@ import {
 import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ModelSelectInjected } from './slots.ts'
 import { filterModelGroups } from './filter.ts'
+import { favoriteEntries, favoriteId, normalizeFavorites } from './favorites.ts'
 import css from './ModelSelect.module.css'
 
 /** Which pane the dropdown shows: the two-row root or one drilled-in list. */
@@ -47,16 +51,20 @@ const MEASURE_STYLE: CSSProperties = { visibility: 'hidden', left: 0, top: 0 }
 /**
  * Render the composer model seat.
  * @param props - owner share (locked) + injected face (shared directory
- * store/verbs) + the standard locale seat.
+ * store/verbs plus the shared favorites list) + the standard locale seat.
  * @returns the trigger and, while open, the two-level menu.
  */
 export function ModelSelect(
-  { locked, available, directory, load, select, t }:
+  { locked, available, directory, favorites, load, select, toggleFavorite, t }:
   ModelSelectInjected & { locked: boolean } & PropsLocale<'model'>,
 ) {
   const state = useSyncExternalStore(
     fn => directory.subscribe(fn),
     () => directory.getSnapshot(),
+  )
+  const favoritesState = useSyncExternalStore(
+    fn => favorites.subscribe(fn),
+    () => favorites.getSnapshot(),
   )
   const [open, setOpen] = useState(false)
   const [pane, setPane] = useState<Pane>('root')
@@ -91,6 +99,15 @@ export function ModelSelect(
   const filteredGroups = useMemo(
     () => filterModelGroups(state.groups, query),
     [state.groups, query],
+  )
+  const favoriteIds = useMemo(
+    () => normalizeFavorites(favoritesState.favorites),
+    [favoritesState],
+  )
+  const favoriteSet = useMemo(() => new Set(favoriteIds), [favoriteIds])
+  const filteredFavorites = useMemo(
+    () => favoriteEntries(filteredGroups, favoriteIds),
+    [filteredGroups, favoriteIds],
   )
   const selectedIndex = state.current === null
     ? -1
@@ -170,7 +187,7 @@ export function ModelSelect(
       window.removeEventListener('scroll', place, true)
       window.removeEventListener('resize', place)
     }
-  }, [open, pane, state, query])
+  }, [open, pane, state, query, favoritesState])
   /* jscpd:ignore-end */
 
   if (!available) return null
@@ -291,6 +308,49 @@ export function ModelSelect(
     return (node: HTMLButtonElement | null) => { itemRefs.current[at] = node }
   }
 
+  const renderModelRow = (
+    groupId: string,
+    model: { id: string; name: string },
+    rowKey: string,
+  ) => {
+    const selected = state.current?.provider === groupId && state.current.model === model.id
+    const isFavorite = favoriteSet.has(favoriteId(groupId, model.id))
+    const starLabel = isFavorite
+      ? t('favorites.remove', { model: model.name })
+      : t('favorites.add', { model: model.name })
+    return (
+      <div className={css.optionRow} key={rowKey}>
+        <button
+          ref={itemRef()}
+          type="button"
+          role="menuitemradio"
+          aria-checked={selected}
+          className={clsx(css.option, selected && css.selected)}
+          title={model.name}
+          disabled={busy}
+          onClick={() => { choose({ provider: groupId, model: model.id }) }}
+        >
+          <span className={css.optionCopy}>
+            <span className={css.modelName}>{model.name}</span>
+          </span>
+          <span className={css.check}>
+            {selected ? <IconCheckOutline16 /> : null}
+          </span>
+        </button>
+        <button
+          type="button"
+          className={clsx(css.favorite, isFavorite && css.favoriteActive)}
+          aria-pressed={isFavorite}
+          aria-label={starLabel}
+          title={starLabel}
+          onClick={() => { toggleFavorite(groupId, model.id) }}
+        >
+          <span aria-hidden="true">{isFavorite ? '★' : '☆'}</span>
+        </button>
+      </div>
+    )
+  }
+
   return (
     <div ref={rootRef} className={css.root} onKeyDown={onRootKeyDown} onBlur={onBlur}>
       <button
@@ -375,34 +435,22 @@ export function ModelSelect(
                 </div>
               ))}
               <div className={clsx(css.groups, 'scrollable')}>
+                {filteredFavorites.length > 0 && (
+                  <section role="group" aria-labelledby={`${id}-favorites`} className={css.group}>
+                    <div className={css.groupTitle} id={`${id}-favorites`}>{t('favorites.title')}</div>
+                    {filteredFavorites.map(({ group, model }) => renderModelRow(
+                      group.id,
+                      model,
+                      `${group.id}/${model.id}`,
+                    ))}
+                  </section>
+                )}
                 {filteredGroups.map((group) => {
                   const headingId = `${id}-${group.id}`
                   return (
                     <section role="group" aria-labelledby={headingId} className={css.group} key={group.id}>
                       <div className={css.groupTitle} id={headingId}>{group.name}</div>
-                      {group.models.map((model) => {
-                        const selected = state.current?.provider === group.id && state.current.model === model.id
-                        return (
-                          <button
-                            ref={itemRef()}
-                            type="button"
-                            role="menuitemradio"
-                            aria-checked={selected}
-                            className={clsx(css.option, selected && css.selected)}
-                            key={model.id}
-                            title={model.name}
-                            disabled={busy}
-                            onClick={() => { choose({ provider: group.id, model: model.id }) }}
-                          >
-                            <span className={css.optionCopy}>
-                              <span className={css.modelName}>{model.name}</span>
-                            </span>
-                            <span className={css.check}>
-                              {selected ? <IconCheckOutline16 /> : null}
-                            </span>
-                          </button>
-                        )
-                      })}
+                      {group.models.map(model => renderModelRow(group.id, model, model.id))}
                     </section>
                   )
                 })}
