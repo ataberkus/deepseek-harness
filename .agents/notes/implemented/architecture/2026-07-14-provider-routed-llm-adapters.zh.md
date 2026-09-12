@@ -32,7 +32,7 @@ Status: implemented
 
 插件通过一次原子调用，将已配置的提供方名称注册到同一个 `PiAiAdapter`。每个不可变请求快照组合有效 profile 与可服务模型的描述符。目录外模型需要显式指定或可推断的协议与端点。根据[设置目录恢复决策](../bug-fix/2026-09-07-pi-ai-settings-catalog-recovery.zh.md)，已存储的目录错误保持可见、可修复，写入仍会校验已修改提供方，请求则在网络 I/O 前拒绝所选错误模型。
 
-适配器调用 pi-ai 的 `streamSimple()`，因此每个目录模型会选择其注册的 API 实现；描述符为 `openai-responses` 时使用 OpenAI Responses，而非 Chat Completions。Harness 的 temperature、最大 token 数、signal、session ID，以及提供方配置中的通用流选项均直接传递。配置 headers 与 Harness 强制归因 headers 合并；发生保留名称冲突时，以 Harness 归因为准。适配器不再维护 DeepSeek 专用 payload 重写或提供方协议矩阵。
+适配器调用 pi-ai 的 `streamSimple()`，因此每个目录模型会选择其注册的 API 实现；描述符为 `openai-responses` 时使用 OpenAI Responses，而非 Chat Completions。Harness 的 temperature、最大 token 数、signal、session ID，以及提供方配置中的通用流选项均直接传递。配置 headers 与 Harness 自有标头合并，发生不区分大小写的冲突时以 Harness 标头为准：归因标头在每条路由上标识客户端，而 OpenCode Go 会使用带域分隔的 SHA-256 摘要对请求的 Session ID 进行哈希处理，并在所有协议实现中将结果作为其必需的 `x-opencode-session` 路由标头发送。原始 Session ID 保留在本地。适配器不维护 DeepSeek 专用 payload 重写或提供方协议矩阵。
 
 pi-ai 的通用流选项不支持停止序列。若 Harness `stop` 选项已定义，`dsh-llm-pi-ai` 会以 `UNSUPPORTED_OPTION` 拒绝请求，不会静默忽略，也不会增加第二套提供方专用 payload 实现。`dsh-llm-deepseek` 继续通过原生请求序列化器支持 `stop`。
 

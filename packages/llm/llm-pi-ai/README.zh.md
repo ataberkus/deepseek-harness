@@ -93,7 +93,7 @@ kind: "package-reference"
 
 pi-ai 提供登录的提供方可以通过 harness 授权 seam 登录：流程提供 OAuth 或交互式密钥提示（密钥键入 pi-ai 自己的登录提示，而非设置表单），得到的凭据存储在 harness 凭据存储的 `llm-pi-ai/<provider id>` 记录中。存储的登录在其路由的 `apiKeyEnv` 覆盖之下完成认证，并在存储的跨进程锁下自行刷新；退出登录即删除存储记录。落在记录文法之外——小写连字符标识符——的手工声明路由键无法登录，因为对它的记录写入会以 `LlmError('UNSTORABLE_PROVIDER_ID')` 拒绝；这类路由改用 `apiKeyEnv` 或提供方 ambient 设置认证。
 
-Models 页面无需经过对话输入框即可完成提供方自有登录。托管 OAuth 路由以带 `auth: 'oauth'` 标记的 dormant 目录条目出现；“连接”会运行命名空间的 `llm/loginOAuth` offer，并在登录页签中打开授权 URL。OpenCode Go 以 `auth: 'api-key'` 出现；“连接”通过 `llm/loginApiKey` 发送密码遮罩的密钥，pi-ai 将得到的 `api_key` 凭据以仅属主可访问的权限存入 `$DSH_HOME/oauth-credentials.json`。两种登录都不会创建 settings profile。断开连接会收回 live 路由并恢复其 dormant 条目。
+Models 页面无需经过对话输入框即可完成提供方自有登录。托管 OAuth 路由以带 `auth: 'oauth'` 标记的 dormant 目录条目出现；“连接”会运行命名空间的 `llm/loginOAuth` offer，并在登录页签中打开授权 URL。OpenCode Go 以 `auth: 'api-key'` 出现；“连接”通过 `llm/loginApiKey` 发送密码遮罩的密钥，pi-ai 将得到的 `api_key` 凭据以仅属主可访问的权限存入 `$DSH_HOME/oauth-credentials.json`。每个 OpenCode Go 模型请求都会将稳定的不透明会话摘要作为 `x-opencode-session` 发送；原始 Harness Session ID 保留在本地。两种登录都不会创建 settings profile。断开连接会收回 live 路由并恢复其 dormant 条目。
 
 <a id="surviving-local-and-hosted-routes"></a>
 ### 保留的本地与托管路由

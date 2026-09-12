@@ -171,6 +171,27 @@ describe('PiAiAdapter provider routing', () => {
     expect(server.headers[0]?.['user-agent']).toBe(userAgent())
   })
 
+  it('sends an opaque Harness session identity on OpenCode Go Responses requests', async () => {
+    const server = await mockServer([{ status: 400, body: '{"error":{"message":"fixture stop"}}' }])
+    const adapter = adapterOf({
+      'opencode-go': {
+        baseURL: `${server.url}/v1`,
+        headers: { 'X-OpenCode-Session': 'deployment-value' },
+      },
+    })
+
+    for await (const _chunk of adapter.stream({
+      provider: 'opencode-go',
+      model: 'muse-spark-1.3-contributor',
+      messages: [],
+      sessionId: 'session-for-opencode-go' as never,
+    })) { /* drain */ }
+
+    expect(server.paths).toEqual(['/v1/responses'])
+    expect(server.headers[0]?.['x-opencode-session'])
+      .toBe('f8fb7f3396338610cfa2bbe235288f4599a78914db511111905cdb942f7dd21f')
+  })
+
   it('forwards common stream options and profile reasoning', async () => {
     const server = await mockServer([{ events: textEvents }])
     const ctx = await harness(server.url, {
