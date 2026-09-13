@@ -5,7 +5,7 @@ import { act, cleanup, fireEvent, render, waitFor } from '@testing-library/react
 import { afterEach } from 'vitest'
 import type { CheckpointSnapshot } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
-import type { ChatNode } from '@deepseek-ai/dsh-client-ui-chat/client'
+import type { ChatNode, ChatNodeViewProps } from '@deepseek-ai/dsh-client-ui-chat/client'
 import { bindSnapshotSelector, makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import { zh as commonZh } from '@deepseek-ai/dsh-client-locale/src/locales/zh.ts'
@@ -96,7 +96,7 @@ function renderTurnError(options: {
         useChat: chatHook,
         useInput: inputHook,
         ...(retryTurn === undefined ? {} : { retryTurn }),
-      } as never}
+      } as unknown as ChatNodeViewProps<'turn-error'>}
     />,
   )
   return view
