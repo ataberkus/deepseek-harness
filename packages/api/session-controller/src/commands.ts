@@ -57,6 +57,8 @@ import type {
   SessionPromptValue,
   SessionRenameRequest,
   SessionRenameValue,
+  SessionRetryRequest,
+  SessionRetryValue,
   SessionSelectModelRequest,
   SessionSelectModelValue,
   SessionUpdateQueueRequest,
@@ -683,6 +685,131 @@ export class SessionCommandController {
   }
 
   /**
+   * Retry one failed turn in place by restoring its pre-turn workspace checkpoint
+   * and re-queuing its user message as a new turn in the same session.
+   * @param request - source session, failed message sequence, and checkpoint.
+   * @returns acceptance once the same-branch retry was queued.
+   */
+  async retry(request: SessionRetryRequest): Promise<SessionRetryValue> {
+    const checkpoint = this.requireCheckpointService(request.sessionId)
+    const source = await this.readRetryableSource(request.sessionId, request.messageSeq)
+    let agent = this.ctx.agents.get(request.sessionId)
+    if (agent === undefined) agent = await this.resolveAgent(request.sessionId)
+    if (agent.status !== 'idle' || agent.inbox.nextTurn.length > 0 || agent.inbox.nextStep.length > 0) {
+      throw new RemoteError('session/agent-busy', `session "${request.sessionId}" is busy`, {
+        reason: 'retry requires an idle Agent with an empty inbox',
+      })
+    }
+    const cwd = source.header.cwd
+    if (cwd === undefined) throw retryRefusal(request)
+    const workspaceKey = await canonicalWorkspaceKey(cwd)
+    const recovery = await checkpoint.recoveryRequired(workspaceKey)
+    if (recovery !== undefined) {
+      throw new RemoteError('checkpoint-recovery-required', recovery, {
+        sessionId: request.sessionId,
+        reason: recovery,
+      })
+    }
+    const targetIndex = source.events.findIndex(event => event.seq === request.messageSeq)
+    const target = source.events[targetIndex]
+    if (target === undefined
+      || target.type !== 'user/message'
+      || target.data.source.kind !== 'user'
+      || !isAppendSurfaceEvent(target)) {
+      throw retryRefusal(request)
+    }
+    const turnStartIndex = source.events.findLastIndex((event, index) =>
+      index < targetIndex && event.type === 'turn/start')
+    const turnEndIndex = source.events.findIndex((event, index) =>
+      index > targetIndex && event.type === 'turn/end')
+    if (turnStartIndex < 0 || turnEndIndex < 0) throw retryRefusal(request)
+    const turnEnd = source.events[turnEndIndex]
+    if (turnEnd?.type !== 'turn/end' || turnEnd.data.reason.kind !== 'error') throw retryRefusal(request)
+    const sourceBoundarySeq = source.events
+      .slice(0, turnStartIndex)
+      .findLast(event => event.type === 'turn/end')?.seq ?? -1
+    const views = await checkpoint.list(request.sessionId)
+    const selected = await checkpoint.inspect(request.checkpointId).catch(() => undefined)
+    if (selected === undefined
+      || selected.sessionId !== request.sessionId
+      || selected.workspaceKey !== workspaceKey
+      || selected.boundarySeq !== sourceBoundarySeq
+      || selected.role === 'emergency'
+      || selected.status.kind !== 'ready'
+      || !selected.restoreEligible) {
+      throw checkpointUnavailable(request)
+    }
+    const operation = (phase: CheckpointOperationPhase, message?: string): void => {
+      this.ctx.emit('session/checkpoints', {
+        type: 'session/checkpoints',
+        sessionId: request.sessionId,
+        checkpoints: views,
+        enabled: checkpoint.enabled,
+        appliedCheckpointId: selected.id,
+        operation: {
+          sourceSessionId: request.sessionId,
+          checkpointId: selected.id,
+          phase,
+          fileCount: selected.fileCount,
+          ...(message === undefined ? {} : { message }),
+        },
+        workspaceResumable: true,
+      })
+    }
+    operation('preparing')
+    let lease: WorkspaceLease | undefined
+    let emergency: CheckpointRecord | undefined
+    try {
+      operation('capturing-emergency')
+      lease = await checkpoint.acquireLease(workspaceKey)
+      emergency = await checkpoint.capture({
+        sessionId: request.sessionId,
+        cwd,
+        boundarySeq: source.events.at(-1)?.seq ?? -1,
+        role: 'emergency',
+        turnOutcome: 'failed',
+        lease,
+      })
+      if (emergency.status.kind !== 'ready') throw new Error(emergency.status.reason)
+      operation('restoring')
+      await checkpoint.restore({ checkpointId: selected.id, cwd, lease })
+      const live = this.ctx.agents.get(request.sessionId) ?? await this.resolveAgent(request.sessionId)
+      live.followup(createUserMessage({
+        content: [...target.data.content],
+        source: { kind: 'user' },
+      }))
+      operation('ready')
+      return { accepted: true }
+    } catch (error) {
+      operation('failed', String(error))
+      if (emergency !== undefined) {
+        try {
+          await checkpoint.restore({
+            checkpointId: emergency.id,
+            cwd,
+            ...lease === undefined ? {} : { lease },
+          })
+          await checkpoint.clearRecoveryRequired(workspaceKey)
+        } catch (rollbackError) {
+          const reason = `checkpoint rollback failed: ${String(rollbackError)}`
+          await checkpoint.markRecoveryRequired(workspaceKey, reason)
+          throw new RemoteError('checkpoint-recovery-required', reason, {
+            sessionId: request.sessionId,
+            reason,
+          })
+        }
+      }
+      if (remoteErrorOf(error) !== undefined) throw error
+      throw new RemoteError('checkpoint-unavailable', `session retry failed: ${String(error)}`, {
+        sessionId: request.sessionId,
+        checkpointId: request.checkpointId,
+      })
+    } finally {
+      lease?.release()
+    }
+  }
+
+  /**
    * Restore the latest usable checkpoint for a Session without creating a branch.
    * @param request - Session whose workspace should be restored.
    * @returns restore status and selected checkpoint identity.
@@ -854,6 +981,20 @@ export class SessionCommandController {
     }
   }
 
+  private async readRetryableSource(sessionId: SessionId, messageSeq: number): Promise<SessionReadState> {
+    try {
+      const source = await this.readSessionState(sessionId)
+      if (!Number.isSafeInteger(messageSeq) || messageSeq < 0) throw retryRefusal({ sessionId, messageSeq })
+      return source
+    } catch (error) {
+      if (remoteErrorOf(error) !== undefined) throw error
+      if (error instanceof ApiSessionNotFound) {
+        throw new RemoteError('session/not-found', error.message, { sessionId })
+      }
+      throw new RemoteError('gateway/internal', `session "${sessionId}" is unavailable: ${String(error)}`, {})
+    }
+  }
+
   private async readSessionState(sessionId: SessionId): Promise<SessionReadState> {
     const attached = this.ctx.sessions.get(sessionId)
     if (attached !== undefined) {
@@ -984,6 +1125,14 @@ function editRefusal(request: Pick<SessionEditRequest, 'sessionId' | 'messageSeq
   return new RemoteError(
     'edit-not-editable',
     `message ${String(request.messageSeq)} is not editable in session "${request.sessionId}"`,
+    { sessionId: request.sessionId, messageSeq: request.messageSeq },
+  )
+}
+
+function retryRefusal(request: Pick<SessionRetryRequest, 'sessionId' | 'messageSeq'>): RemoteError<'retry-not-retryable'> {
+  return new RemoteError(
+    'retry-not-retryable',
+    `message ${String(request.messageSeq)} is not retryable in session "${request.sessionId}"`,
     { sessionId: request.sessionId, messageSeq: request.messageSeq },
   )
 }

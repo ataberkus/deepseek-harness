@@ -269,6 +269,25 @@
   font: var(--dsw-font-markdown-code-block-small);
 }
 
+.turnErrorWrap {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 2px 0;
+}
+
+.turnErrorActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: 18px;
+}
+
+.turnErrorRetryError {
+  color: var(--dsw-alias-state-error-primary);
+  overflow-wrap: anywhere;
+}
+
 .maxTokensTitle {
   margin-right: 6px;
   color: var(--dsw-alias-state-warn-primary);

@@ -43,6 +43,7 @@ function sessionFakeFor() {
     })),
     prompt: vi.fn<ISession['prompt']>(() => Promise.resolve({ ok: true, value: { accepted: true } })),
     cancel: vi.fn<ISession['cancel']>(() => Promise.resolve({ ok: true, value: { accepted: true } })),
+    retry: vi.fn<ISession['retry']>(() => Promise.resolve({ ok: true, value: { accepted: true } })),
   } satisfies SessionBehaviorOverrides
 }
 
@@ -211,6 +212,15 @@ describe('Chat inject API', () => {
     expect(loaded).toEqual(expect.any(String))
     expect(b.session.readAttachment).toHaveBeenCalledWith(ATTACHMENT.attachmentId)
     expect(injected.loadImage.peek?.(ATTACHMENT)).toBe(loaded)
+    await b.runtime.dispose()
+  })
+
+  it('forwards turn retries to the viewed Session', async () => {
+    const b = await bench()
+    const { injected } = b.chatViewApi(ROOT)
+    const result = await injected.retryTurn?.(7, 'cp-2' as never)
+    expect(result).toEqual({ ok: true, value: { accepted: true } })
+    expect(b.session.retry).toHaveBeenCalledWith(7, 'cp-2')
     await b.runtime.dispose()
   })
 })

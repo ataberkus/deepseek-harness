@@ -215,6 +215,7 @@ declare module '@deepseek-ai/dsh-typert-protocol' {
       readonly checkpointId: CheckpointView['id']
     }
     'edit-not-editable': { readonly sessionId: SessionId; readonly messageSeq: number }
+    'retry-not-retryable': { readonly sessionId: SessionId; readonly messageSeq: number }
     'subagent/not-found': {
       readonly parentSessionId: SessionId
       readonly childSessionId: SessionId
@@ -325,6 +326,18 @@ export interface SessionEditRequest {
 /** Identity of the new child Session created by an edit branch. */
 export interface SessionEditValue {
   readonly sessionId: SessionId
+}
+
+/** Session retry request: restore the checkpoint before one failed turn and re-run its message in place. */
+export interface SessionRetryRequest {
+  readonly sessionId: SessionId
+  readonly messageSeq: number
+  readonly checkpointId: CheckpointView['id']
+}
+
+/** Acknowledgement that the failed turn was restored and re-queued in the same session. */
+export interface SessionRetryValue {
+  readonly accepted: true
 }
 
 /** Request to activate the latest usable workspace checkpoint for one Session. */

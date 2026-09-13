@@ -148,6 +148,8 @@ export class FakeApiClient {
   onCancel: (payload: unknown) => Promise<RemoteResult<{ accepted: true }>> = () => Promise.resolve(ok({ accepted: true as const }))
   onEdit: (payload: unknown) => Promise<RemoteResult<{ sessionId: SessionId }>> =
     () => Promise.resolve(ok({ sessionId: 'fk-edit' as SessionId }))
+  onRetry: (payload: unknown) => Promise<RemoteResult<{ accepted: true }>> =
+    () => Promise.resolve(ok({ accepted: true as const }))
   onActivate: (payload: unknown) => Promise<RemoteResult<{ restored: boolean }>> =
     () => Promise.resolve(ok({ restored: false }))
   onOpenWorkspacePath: (payload: unknown) => Promise<RemoteResult<{ opened: true }>> =
@@ -236,6 +238,7 @@ export class FakeApiClient {
         updateQueue: payload => this.record('session.updateQueue', payload, this.onUpdateQueue(payload)),
         cancel: payload => this.record('session.cancel', payload, this.onCancel(payload)),
         edit: payload => this.record('session.edit', payload, this.onEdit(payload)),
+        retry: payload => this.record('session.retry', payload, this.onRetry(payload)),
         activate: payload => this.record('session.activate', payload, this.onActivate(payload)),
         openWorkspacePath: payload => this.record(
           'session.openWorkspacePath',

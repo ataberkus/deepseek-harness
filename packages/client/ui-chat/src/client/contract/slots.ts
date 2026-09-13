@@ -1,6 +1,8 @@
 /** Chat-owned Slot declarations and composed component props. */
 import type { MessageId } from '@deepseek-ai/dsh-llm/brand'
 import type { SessionId, SessionSeq } from '@deepseek-ai/dsh-session/types'
+import type { CheckpointView } from '@deepseek-ai/dsh-api-session-controller/client'
+import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import type {
   CommandNode, CompactionSummaryNode, ConversationLocationDataStore, ConversationTurnDataMap,
   MessageImageLoader, MessageImagesOwnerProps, RenderMessageImages, TurnLocation,
@@ -85,6 +87,11 @@ export interface ChatNodeOwnerProps {
   inspectCall: (callId: ToolCallId) => void
   forkAt: (seq: number) => void
   /**
+   * Retry one failed turn in place after restoring its pre-turn checkpoint.
+   * Absent while the retry action is unavailable to this renderer.
+   */
+  retryTurn?: ((messageSeq: number, checkpointId: CheckpointView['id']) => Promise<RemoteResult<{ accepted: true }>>) | undefined
+  /**
    * Session-authorized image loader, down-threaded from the Chat view so a
    * chat-node renderer can render the attachment presentation slot directly
    * with only the durable references plus this loader, instead of receiving a
@@ -152,6 +159,11 @@ export interface ChatViewInjected {
     read: () => ChatScrollPosition | null
   }
   forkAt: (seq: number) => void
+  /**
+   * Retry one failed turn in place after restoring its pre-turn checkpoint.
+   * Absent while the retry action is unavailable to this view.
+   */
+  retryTurn?: ((messageSeq: number, checkpointId: CheckpointView['id']) => Promise<RemoteResult<{ accepted: true }>>) | undefined
   fileMentions: (owner: TurnTailOwnerProps) => MarkdownFileMentions | undefined
 }
 

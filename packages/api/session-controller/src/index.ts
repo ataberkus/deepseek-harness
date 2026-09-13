@@ -51,6 +51,8 @@ import type {
   SessionPromptValue,
   SessionRenameRequest,
   SessionRenameValue,
+  SessionRetryRequest,
+  SessionRetryValue,
   SessionSearchRequest,
   SessionSearchValue,
   SessionSelectModelRequest,
@@ -351,6 +353,18 @@ export class SessionController extends TypertRemoteService {
   edit(request: SessionEditRequest, signal: AbortSignal): Promise<SessionEditValue> {
     signal.throwIfAborted()
     return this.commands.edit(request)
+  }
+
+  /**
+   * Retry one failed turn in place after restoring its pre-turn workspace checkpoint.
+   * @param request - source session, failed message sequence, and checkpoint.
+   * @param signal - caller cancellation before the retry transaction starts.
+   * @returns acceptance once the retry was queued in the same session.
+   */
+  @Remote('retry')
+  retry(request: SessionRetryRequest, signal: AbortSignal): Promise<SessionRetryValue> {
+    signal.throwIfAborted()
+    return this.commands.retry(request)
   }
 
   /**

@@ -1166,4 +1166,24 @@ describe('coverage tails (branch duals)', () => {
     })
   })
 
+  it('session.retry forwards payload and signal to api.sessions.retry', async () => {
+    const b = bench()
+    await feedList(b, [{ id: 's1' }])
+    const session = b.svc.binding(sid('s1'))!.session
+    b.api.onRetry = (_payload) => {
+      return Promise.resolve(ok({ accepted: true as const }))
+    }
+    const controller = new AbortController()
+    const result = await session.retry(2, 'cp-1' as never, controller.signal)
+    expect(result).toEqual({ ok: true, value: { accepted: true } })
+    const retryCall = b.api.calls.find(c => c.method === 'session.retry')
+    expect(retryCall).toMatchObject({
+      payload: {
+        sessionId: 's1',
+        messageSeq: 2,
+        checkpointId: 'cp-1',
+      },
+    })
+  })
+
 })

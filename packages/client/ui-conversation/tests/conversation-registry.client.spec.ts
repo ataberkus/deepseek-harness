@@ -55,6 +55,7 @@ function fakeSession(): SessionFace {
     cancel: () => Promise.reject(new Error('unused fake Session operation')),
     rename: () => Promise.reject(new Error('unused fake Session operation')),
     edit: () => Promise.reject(new Error('unused fake Session operation')),
+    retry: () => Promise.reject(new Error('unused fake Session operation')),
     activate: () => Promise.reject(new Error('unused fake Session operation')),
     loadOlder: () => Promise.reject(new Error('unused fake Session operation')),
     loadThrough: () => Promise.reject(new Error('unused fake Session operation')),

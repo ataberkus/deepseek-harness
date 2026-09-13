@@ -133,6 +133,19 @@ export interface ISession {
     signal?: AbortSignal,
   ): Promise<RemoteResult<{ sessionId: SessionId }>>
   /**
+   * Restore the pre-turn workspace checkpoint and re-run the failed message
+   * in the same session.
+   * @param messageSeq - durable sequence of the failed direct user message.
+   * @param checkpointId - usable checkpoint immediately before that message's turn.
+   * @param signal - optional caller cancellation before the retry starts.
+   * @returns acceptance, or the Host error.
+   */
+  retry(
+    messageSeq: number,
+    checkpointId: CheckpointView['id'],
+    signal?: AbortSignal,
+  ): Promise<RemoteResult<{ accepted: true }>>
+  /**
    * Restore the latest usable checkpoint for this idle session.
    * @returns restore status and selected checkpoint, or the Host error.
    */

@@ -386,6 +386,19 @@ export class Session implements SessionFace {
     }, signal)
   }
 
+  /** Retry one failed turn in place after restoring its pre-turn checkpoint. */
+  async retry(
+    messageSeq: number,
+    checkpointId: CheckpointView['id'],
+    signal?: AbortSignal,
+  ): Promise<RemoteResult<{ accepted: true }>> {
+    return this.remote.session.retry({
+      sessionId: this.sessionId,
+      messageSeq,
+      checkpointId,
+    }, signal)
+  }
+
   /** Ask Host to activate this Session's latest usable workspace checkpoint. */
   async activate(): Promise<RemoteResult<{
     restored: boolean
