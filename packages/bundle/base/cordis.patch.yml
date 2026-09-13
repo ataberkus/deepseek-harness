@@ -107,6 +107,15 @@
     - id: llm-pi-ai
       name: '@deepseek-ai/dsh-llm-pi-ai'
 
+    # Settings-driven MCP fleet, mounted dormant: zero servers (and no extra
+    # model tools) until an `mcp:` settings section supplies server entries —
+    # then one mcp-client child per enabled entry registers live, and drops
+    # again when the section empties or an entry is disabled. The Plugins page
+    # writes this section. Which servers run is the user's settings document;
+    # direct `dsh-mcp-client` rows remain supported for deployment-pinned servers.
+    - id: mcp-manager
+      name: '@deepseek-ai/dsh-mcp-manager'
+
     - id: session-persistence-jsonl
       name: '@deepseek-ai/dsh-session-persistence-jsonl'
       config:

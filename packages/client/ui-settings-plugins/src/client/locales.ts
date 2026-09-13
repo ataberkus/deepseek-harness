@@ -19,6 +19,10 @@ export type PluginsSettingsLocaleKey =
   | 'subagentModelSelectionRequired' | 'subagentModelSelectionConflict' | 'subagentModelSelectionOff'
   | 'workspaceCheckpointTitle' | 'workspaceCheckpointDescription'
   | 'workspaceCheckpointEnabled' | 'workspaceCheckpointEnabledHint'
+  | 'mcpTitle' | 'mcpDescription' | 'mcpEmpty' | 'mcpEnable' | 'mcpDisable' | 'mcpRemove'
+  | 'mcpAddTitle' | 'mcpName' | 'mcpTransport' | 'mcpTransportStdio' | 'mcpTransportHttp'
+  | 'mcpCommand' | 'mcpArgs' | 'mcpUrl' | 'mcpAdd' | 'mcpAdvancedHint' | 'mcpConflict'
+  | 'mcpNameRequired' | 'mcpNameInvalid' | 'mcpCommandRequired' | 'mcpUrlRequired' | 'mcpUrlInvalid'
 
 /** English copy. */
 export const en: Record<PluginsSettingsLocaleKey, string> = {
@@ -77,6 +81,28 @@ export const en: Record<PluginsSettingsLocaleKey, string> = {
   workspaceCheckpointDescription: 'Keep a recoverable snapshot of workspace files alongside conversation checkpoints.',
   workspaceCheckpointEnabled: 'Enable workspace checkpoints',
   workspaceCheckpointEnabledHint: 'When enabled, the host captures workspace files at session and turn boundaries.',
+  mcpTitle: 'MCP servers',
+  mcpDescription: 'External tool servers the model can call as native tools.',
+  mcpEmpty: 'No MCP servers are configured.',
+  mcpEnable: 'Enable',
+  mcpDisable: 'Disable',
+  mcpRemove: 'Remove',
+  mcpAddTitle: 'Add a server',
+  mcpName: 'Server name',
+  mcpTransport: 'Transport',
+  mcpTransportStdio: 'Stdio',
+  mcpTransportHttp: 'Streamable HTTP',
+  mcpCommand: 'Command',
+  mcpArgs: 'Arguments, one per line',
+  mcpUrl: 'Endpoint URL',
+  mcpAdd: 'Stage server',
+  mcpAdvancedHint: 'Timeouts, environment, headers, and reconnect tuning live in settings.yaml.',
+  mcpConflict: 'Settings changed elsewhere. Discard your draft and try again.',
+  mcpNameRequired: 'Enter a server name.',
+  mcpNameInvalid: 'Use 1-32 letters, digits, dashes, or underscores.',
+  mcpCommandRequired: 'Enter the executable used to start the server.',
+  mcpUrlRequired: 'Enter the MCP endpoint URL.',
+  mcpUrlInvalid: 'Enter an absolute http(s) URL.',
   subagentModelSelectionConflict: 'Settings changed elsewhere. Discard your draft and try again.',
   subagentModelSelectionOff: 'Subagents use configured defaults or inherit the parent agent\'s model. Saved model choices are retained.',
 }
@@ -140,4 +166,26 @@ export const zh: Record<PluginsSettingsLocaleKey, string> = {
   workspaceCheckpointDescription: '在对话检查点旁保存可恢复的工作区文件快照。',
   workspaceCheckpointEnabled: '启用工作区检查点',
   workspaceCheckpointEnabledHint: '启用后，主机会在会话和回合边界捕获工作区文件。',
+  mcpTitle: 'MCP 服务器',
+  mcpDescription: '模型可以作为原生工具调用的外部工具服务器。',
+  mcpEmpty: '尚未配置任何 MCP 服务器。',
+  mcpEnable: '启用',
+  mcpDisable: '禁用',
+  mcpRemove: '移除',
+  mcpAddTitle: '添加服务器',
+  mcpName: '服务器名称',
+  mcpTransport: '传输方式',
+  mcpTransportStdio: 'Stdio',
+  mcpTransportHttp: 'Streamable HTTP',
+  mcpCommand: '启动命令',
+  mcpArgs: '参数，每行一个',
+  mcpUrl: '端点 URL',
+  mcpAdd: '暂存服务器',
+  mcpAdvancedHint: '超时、环境变量、请求头与重连调优请在 settings.yaml 中完成。',
+  mcpConflict: '设置已在其他位置更新。请放弃修改后重试。',
+  mcpNameRequired: '请输入服务器名称。',
+  mcpNameInvalid: '请使用 1-32 个字母、数字、中划线或下划线。',
+  mcpCommandRequired: '请输入启动服务器的可执行文件。',
+  mcpUrlRequired: '请输入 MCP 端点 URL。',
+  mcpUrlInvalid: '请输入绝对 http(s) URL。',
 }

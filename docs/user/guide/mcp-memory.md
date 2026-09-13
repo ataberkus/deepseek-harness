@@ -32,6 +32,8 @@ Replace the filename with `mcp-reference-memory.cordis.yml` or `engram.cordis.ym
 
 To keep the selection across runs, merge the chosen file's single `insert` patch into a user patch layer — `$DSH_HOME/profiles/<name>/cordis.patch.yml` for one profile, or `$DSH_HOME/cordis.patch.yml` for every profile on the machine. Do not copy over an existing file: it may already contain unrelated user patches.
 
+To manage the server from settings instead — the Plugins page card or the `mcp:` section of `settings.yaml` — translate the chosen row into one fleet entry keyed by its `serverName` (see [`@deepseek-ai/dsh-mcp-manager`](../../../packages/mcp/mcp-manager/README.md)). The overlay path above remains the choice for deployment-pinned servers.
+
 ## Provider setup
 
 ### Memorix

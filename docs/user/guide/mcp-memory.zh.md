@@ -32,6 +32,8 @@ dsh web --patch "$PWD/apps/cli/config/examples/mcp-memory/memorix.cordis.yml"
 
 如果要跨次运行保留所选配置，请将对应文件中的单个 `insert` patch 合并到用户 patch 层：只对一个 profile 生效则写入 `$DSH_HOME/profiles/<name>/cordis.patch.yml`，对本机所有 profile 生效则写入 `$DSH_HOME/cordis.patch.yml`。不要覆盖已有文件，其中可能已经包含无关的用户 patch。
 
+如果想改用设置来管理该服务器——插件页卡片或 `settings.yaml` 的 `mcp:` 分节——请把所选配置行按其 `serverName` 翻译成一条舰队条目（见 [`@deepseek-ai/dsh-mcp-manager`](../../../packages/mcp/mcp-manager/README.zh.md)）。上面的 overlay 路径仍适用于固定部署的服务器。
+
 ## 提供方设置
 
 ### Memorix

@@ -23,6 +23,7 @@ import type {} from '@deepseek-ai/dsh-api-remotes/client'
 import { AgentLoopCard } from './AgentLoopCard.tsx'
 import { BashCard } from './BashCard.tsx'
 import { ConfigurablePluginsTab } from './ConfigurablePluginsTab.tsx'
+import { McpCard } from './McpCard.tsx'
 import { PluginsSettingsSection } from './PluginsSettingsSection.tsx'
 import type { PluginsSettingsSectionInjected, PluginsSettingsTabEntry } from './PluginsSettingsSection.tsx'
 import { SubagentModelSelectionCard } from './SubagentModelSelectionCard.tsx'
@@ -30,6 +31,7 @@ import { WebSearchCard } from './WebSearchCard.tsx'
 import { WorkspaceCheckpointCard } from './WorkspaceCheckpointCard.tsx'
 import { AGENT_LOOP_NS, AgentLoopCardController } from './agent-loop-card-controller.ts'
 import { SHELL_NS, BashCardController } from './bash-card-controller.ts'
+import { MCP_NS, McpCardController } from './mcp-card-controller.ts'
 import { ConfigurablePluginsTabController } from './tab-store.ts'
 import {
   SUBAGENT_MODEL_SELECTION_NS, SubagentModelSelectionCardController,
@@ -51,6 +53,7 @@ export type {
 } from './card-form.ts'
 export type { AgentLoopCardFace, AgentLoopCardState } from './agent-loop-card-controller.ts'
 export type { BashCardFace, BashCardState } from './bash-card-controller.ts'
+export type { McpCardFace, McpCardState, McpServerView } from './mcp-card-controller.ts'
 export type { WebSearchCardFace, WebSearchCardState } from './web-search-card-controller.ts'
 export type {
   WorkspaceCheckpointCardFace, WorkspaceCheckpointCardState,
@@ -83,6 +86,7 @@ export function apply(ctx: ClientContext): void {
   const workspaceCheckpoint = new WorkspaceCheckpointCardController(
     ctx.settingsScope.bind({ namespace: WORKSPACE_CHECKPOINT_NS }),
   )
+  const mcp = new McpCardController(ctx.settingsScope.bind({ namespace: MCP_NS }))
 
   // The credential a card reports is not part of any settings section, so its
   // scope publishes nothing when one is written. This is the only signal that
@@ -104,6 +108,7 @@ export function apply(ctx: ClientContext): void {
     'ui-settings-plugins: subagent connection generation',
   )
   ctx.effect(() => () => { subagentModelSelection.dispose() }, 'ui-settings-plugins: subagent preference')
+  ctx.effect(() => () => { mcp.dispose() }, 'ui-settings-plugins: mcp fleet')
 
   // The shared SettingsScope mirror updates after document commits and reconnects.
   const configurable = new ConfigurablePluginsTabController(
@@ -205,5 +210,11 @@ export function apply(ctx: ClientContext): void {
       locale: NS,
       inject: () => workspaceCheckpoint.inject(),
     }, WorkspaceCheckpointCard)
+    yield ctx.slots.register({
+      name: 'settings.plugin.item',
+      key: MCP_NS,
+      locale: NS,
+      inject: () => mcp.inject(),
+    }, McpCard)
   })
 }
