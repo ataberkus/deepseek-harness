@@ -383,12 +383,14 @@ describe('mergeCodexCatalogs', () => {
     })
   })
 
-  it('appends a Daybreak row from the template with zero cost', async () => {
+  it('appends a Daybreak row billed like GPT-5.6 Sol', async () => {
     stubCodexModels([{ models: [DAYBREAK_BLUE] }])
     const merged = mergeCodexCatalogs((await fetchCodexModels({ accessToken: 'token' })) ?? [], installed())
     const blue = merged.find(model => model.id === 'gpt-daybreak-blue-latest')
     const template = installed()[0]
     if (template === undefined) throw new Error('expected an installed catalog model')
+    const sol = installedById().get('gpt-5.6-sol')
+    if (sol === undefined) throw new Error('expected the sol catalog model')
     expect(blue).toMatchObject({
       name: 'Daybreak Blue',
       provider: OPENAI_CODEX_PROVIDER,
@@ -397,12 +399,31 @@ describe('mergeCodexCatalogs', () => {
       compat: template.compat,
       reasoning: true,
       input: ['text', 'image'],
-      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+      cost: { ...sol.cost },
       contextWindow: 372_000,
       maxTokens: 128_000,
     })
     expect(merged.map(model => model.id).indexOf('gpt-daybreak-blue-latest')).toBe(0)
     expect(merged.slice(1).map(model => model.id)).toEqual(installed().map(model => model.id))
+  })
+
+  it('bills a Daybreak worker sibling like its plain counterpart', () => {
+    const sol = installedById().get('gpt-5.6-sol')
+    if (sol === undefined) throw new Error('expected the sol catalog model')
+    const merged = mergeCodexCatalogs(
+      [live({ id: 'gpt-daybreak-blue-latest-wm', name: 'Daybreak Blue WM', reasoning: true })],
+      installed(),
+    )
+    expect(merged[0]).toMatchObject({ cost: { ...sol.cost } })
+  })
+
+  it('zeroes a mapped SKU when its cost source is not installed', () => {
+    const withoutSol = installed().filter(model => model.id !== 'gpt-5.6-sol')
+    const merged = mergeCodexCatalogs(
+      [live({ id: 'gpt-daybreak-blue-latest', name: 'Daybreak Blue', reasoning: true })],
+      withoutSol,
+    )
+    expect(merged[0]).toMatchObject({ cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 } })
   })
 
   it('floors stale Luna windows and honors reports above the floor', () => {
@@ -460,6 +481,11 @@ describe('mergeCodexCatalogs', () => {
   it('sizes an unknown live-only id from the generic default', () => {
     const merged = mergeCodexCatalogs([live({ id: 'gpt-9-future', reasoning: true })], [])
     expect(merged[0]).toMatchObject({ contextWindow: 272_000, maxTokens: 128_000 })
+  })
+
+  it('zeroes an unmapped live-only id', () => {
+    const merged = mergeCodexCatalogs([live({ id: 'gpt-9-future', reasoning: true })], installed())
+    expect(merged[0]).toMatchObject({ cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 } })
   })
 
   it('keeps a mapless installed descriptor mapless', () => {

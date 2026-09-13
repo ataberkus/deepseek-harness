@@ -16,7 +16,7 @@ Status: implemented
 
 归一化后的行携带注册表 slug、显示名、推理能力声明、已声明的输入模态与上报窗口。推理等级以裸名或 `{ effort }` 对象到达，并映射到规范 pi-ai 等级；只声明 `none` 的行不提供选择器。未声明的模态保持未声明，合并时绝不虚构图片能力。上报窗口优先；缺省时，已知 id 沿用目录容量，纯新增 id 取代系默认值（GPT-5.6 世代含 Daybreak 别名为 372K，其余为 272K）。Luna、Sol 与 Terra 保底为注册表仍低报的 1M 订阅窗口，高于保底的上报值按原值采用。输出上限为 `min(128K, window)`。
 
-`mergeCodexCatalogs` 先按后端顺序提供实时行，再按目录顺序追加仅目录中的 id。实时行保留注册表名称与容量。已知 id 保留目录价格；纯新增 id 克隆首个已安装模型的协议、端点与兼容性并计零价格，因为订阅制没有按 token 计费事实。实时 effort 映射替换快照映射；否则已安装描述符原样保留。显式 profile `models` 列表永远不进入合并。抓取、解析或凭据的任何失败都回答已安装目录，因此选择器永远不会放空。
+`mergeCodexCatalogs` 先按后端顺序提供实时行，再按目录顺序追加仅目录中的 id。实时行保留注册表名称与容量。已知 id 保留目录价格；纯新增 id 克隆首个已安装模型的协议、端点与兼容性，计零价格，除非该 SKU 按目录 SKU 价格计费（Daybreak Blue 与 GPT-5.6 Sol 同价）。实时 effort 映射替换快照映射；否则已安装描述符原样保留。显式 profile `models` 列表永远不进入合并。抓取、解析或凭据的任何失败都回答已安装目录，因此选择器永远不会放空。
 
 列表读取直接从凭据存储取令牌且永不刷新：过期令牌会收到 401、回退到已安装目录，而请求路径仍在 pi-ai 锁下刷新并在失败时明确报错。单测禁止访问注册表网络并 stub 抓取，与托管 Cursor 列表做法一致。
 
@@ -36,7 +36,7 @@ Status: implemented
 
 ## 后果
 
-登录账号无需改 `settings.yaml` 即可在选择器看到 Daybreak Blue 及其他滚动别名，且选中可用，因为请求路径会路由注册表公布的任何 id。以显式 `models` 列表收窄路由仍会隐藏列表之外的一切。纯新增模型在 token 用量中记零花费；已知 id 保留目录价格。注册表结构漂移只需改 `src/codex/models.ts`；Codex Responses 传输仍是 pi-ai。[Codex OAuth 宿主](2026-08-18-openai-codex-oauth-host.zh.md)仍拥有登录、存储与刷新。
+登录账号无需改 `settings.yaml` 即可在选择器看到 Daybreak Blue 及其他滚动别名，且选中可用，因为请求路径会路由注册表公布的任何 id。以显式 `models` 列表收窄路由仍会隐藏列表之外的一切。纯新增模型在 token 用量中记零花费，已映射到目录 SKU 价格的除外（Daybreak Blue）；已知 id 保留目录价格。注册表结构漂移只需改 `src/codex/models.ts`；Codex Responses 传输仍是 pi-ai。[Codex OAuth 宿主](2026-08-18-openai-codex-oauth-host.zh.md)仍拥有登录、存储与刷新。
 
 ## 测试
 

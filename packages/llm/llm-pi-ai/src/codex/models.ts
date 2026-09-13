@@ -22,7 +22,7 @@
  * @module dsh-llm-pi-ai/codex/models
  */
 
-import type { Api, Model, ModelThinkingLevel, ThinkingLevelMap } from '@earendil-works/pi-ai'
+import type { Api, Model, ModelCost, ModelThinkingLevel, ThinkingLevelMap } from '@earendil-works/pi-ai'
 import { attributionHeaders } from '@deepseek-ai/dsh-llm'
 import { OPENAI_CODEX_PROVIDER } from '../oauth-hosts.ts'
 import { attachThinking, listingEffortToLevel, thinkingLevelMapFromOffered } from '../thinking-levels.ts'
@@ -71,6 +71,16 @@ const GPT_5_6_FAMILY = /^(gpt-5\.6|gpt-daybreak)/
 
 /** Pricing for a live-only model the installed catalog does not describe. */
 const NO_COST = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }
+
+/**
+ * Live-only SKUs billed at another catalog SKU's rates. The registry never
+ * reports pricing; Daybreak Blue spends like GPT-5.6 Sol, and its `-wm` worker
+ * sibling bills like its plain counterpart.
+ */
+const CODEX_COST_SOURCE_BY_ID: ReadonlyMap<string, string> = new Map([
+  ['gpt-daybreak-blue-latest', 'gpt-5.6-sol'],
+  ['gpt-daybreak-blue-latest-wm', 'gpt-5.6-sol'],
+])
 
 /** Injectable listing HTTP so tests pin scripted replies without hitting OpenAI. */
 export const codexListingInternals = {
@@ -326,14 +336,31 @@ function codexCapacities(
 }
 
 /**
+ * Billing for a live-only row. Known ids never reach here; they keep their own
+ * catalog cost.
+ * @param rowId - registry slug.
+ * @param installedById - installed catalog by id.
+ * @returns the mapped catalog SKU's rates, or `undefined` for zero cost.
+ */
+function codexLiveCost(
+  rowId: string,
+  installedById: ReadonlyMap<string, Model<Api>>,
+): ModelCost | undefined {
+  const sourceId = CODEX_COST_SOURCE_BY_ID.get(rowId)
+  if (sourceId === undefined) return undefined
+  return installedById.get(sourceId)?.cost
+}
+
+/**
  * Merge live rows over the installed catalog. Live rows come first in backend
  * order; installed-only ids follow in catalog order. A live row keeps its
  * registry name and reported capacities (an omitted window keeps the known
  * id's catalog capacity); a live-only id clones the first installed model's
- * protocol, endpoint, and compatibility with zero cost (a subscription has no
- * per-token billing fact to carry), while a known id keeps its catalog cost.
- * A live effort map replaces the snapshot map; otherwise the installed
- * descriptor (including its map) survives untouched.
+ * protocol, endpoint, and compatibility, with zero cost unless the SKU is
+ * billed at a catalog SKU's rates (Daybreak Blue spends like GPT-5.6 Sol),
+ * while a known id keeps its catalog cost. A live effort map replaces the
+ * snapshot map; otherwise the installed descriptor (including its map)
+ * survives untouched.
  * @param live - normalized registry rows.
  * @param installed - models the route already serves.
  * @returns the union the picker and the request path share.
@@ -363,7 +390,7 @@ export function mergeCodexCatalogs(
       name: row.name,
       reasoning: row.reasoning || base.reasoning,
       input: row.input ?? base.input,
-      ...same === undefined ? { cost: { ...NO_COST } } : {},
+      ...same === undefined ? { cost: { ...(codexLiveCost(row.id, installedById) ?? NO_COST) } } : {},
       ...capacities,
     }
     if (row.thinkingLevelMap === undefined) {
