@@ -94,6 +94,11 @@ export interface PiAiAdapterOptions {
    * every request no matter how often the human signed in.
    */
   auth: PiAiAuthInjection
+  /**
+   * Routes injected solely by stored provider logins, not settings. Provider
+   * metadata reports each route's login method to selectors.
+   */
+  loginInjected?: () => ReadonlyMap<string, 'oauth' | 'api-key'>
   /** Resolve the optional durable attachment service at request time. */
   resolveAttachments?: () => AttachmentStore | undefined
   /** Bridge one attachment reference into the current model-tool execution world. */
@@ -285,7 +290,12 @@ export class PiAiAdapter extends LlmAdapter {
     // The configured name, not the route key: `displayName` exists so a
     // deployment can label a route, and a label only the configuration surface
     // reads would leave every selector showing the raw key.
-    return { id: provider, name: this.current().profiles.get(provider)?.displayName ?? provider }
+    const auth = this.config.loginInjected?.().get(provider)
+    return {
+      id: provider,
+      name: this.current().profiles.get(provider)?.displayName ?? provider,
+      ...auth === undefined ? {} : { auth },
+    }
   }
 
   override providerRetryPolicy(provider: string): ResolvedRetryPolicy | undefined {
