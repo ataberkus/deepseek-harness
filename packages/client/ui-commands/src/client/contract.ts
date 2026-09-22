@@ -1,13 +1,11 @@
 /**
  * Frozen contract of the client command surface. Types only. The
  * CommandUiRuntime (`ctx.commandUi`) implements this face; business packages
- * consume `register` alone.
+ * consume its registration and dismissal operations.
  */
 import type { ComponentType } from 'react'
 import type { Context as ClientContext } from '@deepseek-ai/cordis'
-import type {
-  SubmitAttachment, SubmitOutcome, ClientSessionContext,
-} from '@deepseek-ai/dsh-client-ui-input-trigger/client'
+import type { ClientSessionContext } from '@deepseek-ai/dsh-client-ui-input-trigger/client'
 import type { IconProps } from '@deepseek-ai/dsh-client-ui-primitives'
 
 /** Copy for an option that must be acknowledged before onSelect can run. */
@@ -23,7 +21,15 @@ export interface SelectConfirmation {
 export interface SelectOption {
   readonly id: string
   readonly label: string
+  /** Optional short marker rendered as a superscript beside the label. */
+  readonly badge?: string
   readonly detail?: string
+  /**
+   * The row the shell's highlight parks on when the panel opens, so an accept
+   * gesture made without looking confirms the value in use. A business package
+   * that marks a row `active` for presentation alone would make that row the
+   * default pick.
+   */
   readonly active?: boolean
   /** Optional in-page risk gate owned by the shared popup shell. */
   readonly confirmation?: SelectConfirmation
@@ -110,25 +116,8 @@ export interface CommandUiContract {
    * Duplicate names throw at registration.
    */
   decorate(decoration: CommandDecoration): () => void
-  /**
-   * Execute one slash command through the Host command dispatcher.
-   *
-   * This is the shared submission seam for client decorations that need to
-   * turn a popup choice into a normal command line.
-   */
-  execute(
-    session: ClientSessionContext,
-    line: string,
-    attachments?: readonly SubmitAttachment[],
-  ): Promise<SubmitOutcome>
-  /**
-   * Prepare the hosted-OAuth browser destination under the caller's user
-   * gesture. Web opens a reusable blank tab; Desktop later delegates the
-   * forwarded authorize URL to its system-browser bridge. Surfaces that start
-   * sign-in outside the composer call this in the click handler. Safe to call
-   * when no sign-in follows.
-   */
-  prepareOAuthLoginTab(): void
+  /** Close this command's open popups and confirmations without consuming composer drafts. */
+  dismiss(name: string): void
   /** Resolve the per-session popup controller for one session scope (wiring/overlay layer). */
   popupFor(actx: ClientContext): unknown
 }

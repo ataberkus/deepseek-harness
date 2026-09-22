@@ -5,9 +5,10 @@ import { cleanup, render } from '@testing-library/react'
 import { bindSnapshotSelector, makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import { zh as commonZh } from '@deepseek-ai/dsh-client-locale/src/locales/zh.ts'
 import { AssistantMarkdown, type AssistantMarkdownProps } from '../src/client/chat/AssistantMarkdown.tsx'
+import { useDetailedPresentation } from './presentation-fixture.client.ts'
+import { useDisclosure } from '../src/client/chat/use-disclosure.ts'
 import { StatsPills } from '../src/client/chat/StatsPills.tsx'
 import { zh } from '../src/client/locale.ts'
-import { statsSessionFixture } from './stats-session-fixture.client.ts'
 import { chatSnapshotFixture } from './chat-snapshot-fixture.client.ts'
 
 const t: AssistantMarkdownProps['t'] = makeTranslate(zh, commonZh)
@@ -22,7 +23,8 @@ afterEach(() => {
 describe('render branch tails', () => {
   it('AssistantMarkdown reasoning row is ok-state when not the streaming tail', () => {
     const view = render(
-      <AssistantMarkdown
+      <AssistantMarkdown useDisclosure={useDisclosure}
+        usePresentation={useDetailedPresentation}
         t={t}
         blocks={[{ kind: 'reasoning', text: 'done thinking' }, { kind: 'text', text: 'answer' }]}
         streaming
@@ -47,7 +49,7 @@ describe('render branch tails', () => {
     const source = { getSnapshot: () => snap, subscribe: () => () => {} }
     const view = render(
       <StatsPills
-        {...statsSessionFixture()}
+        usePerformanceUsage={selector => selector('detailed')}
         t={t}
         useChat={bindSnapshotSelector(source)}
         useProjection={() => undefined}
@@ -60,7 +62,8 @@ describe('render branch tails', () => {
 
   it('AssistantMarkdown reasoning as the streaming tail renders the running ring', () => {
     const view = render(
-      <AssistantMarkdown
+      <AssistantMarkdown useDisclosure={useDisclosure}
+        usePresentation={useDetailedPresentation}
         t={t}
         blocks={[{ kind: 'reasoning', text: 'still thinking' }]}
         streaming

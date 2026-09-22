@@ -1,16 +1,15 @@
 /** Browser-safe request, result, and lifecycle vocabulary for the Session Remote service. */
+import type { NativeFileApplication } from '@deepseek-ai/dsh-native-command/types'
 
 import type {
   AttachmentIdType, ImageAttachmentLimits, ImageAttachmentRef, ImageMediaType,
 } from '@deepseek-ai/dsh-attachment'
 import type { Branded } from '@deepseek-ai/dsh-brand'
 import type { LlmAttemptId, MessageId } from '@deepseek-ai/dsh-llm/brand'
-import type { ContentBlock } from '@deepseek-ai/dsh-llm'
+import type { TextBlock } from '@deepseek-ai/dsh-llm'
 import type { SessionId, SessionSeqCursor } from '@deepseek-ai/dsh-session/types'
 import type { SessionProjectionMap } from '@deepseek-ai/dsh-session-projection/types'
-import type { JobId } from '@deepseek-ai/dsh-jobs/brand'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
-import type { CheckpointOperationView, CheckpointView } from '@deepseek-ai/dsh-workspace-checkpoint/types'
 import type { WorkspaceId } from '@deepseek-ai/dsh-workspace/types'
 
 declare module '@deepseek-ai/dsh-session-projection/types' {
@@ -50,10 +49,24 @@ export interface SessionListMetadata {
   readonly lastPromptAt: number | null
 }
 
-/** Every available cached wire value used as partial, possibly stale Session-list hints. */
+/**
+ * Every available wire value a Session-list row carries as partial, possibly
+ * stale hints. `kind` and `asOfSeq` are independent facts: `kind` says which
+ * sequence space `asOfSeq` belongs to, and therefore how a client may merge
+ * the block; `asOfSeq` is the producer's watermark in that space.
+ */
 export interface SessionProjectionHints {
+  /**
+   * `sequenced`: the Host's live registry produced the block for an attached
+   * Session, so `asOfSeq` is comparable with baselines and frames of the same
+   * connection. `cached`: a header-only listing viewed the block from the
+   * persisted projection cache, so `asOfSeq` is the stored record's own
+   * watermark and must not be compared with the connected Session's values.
+   */
+  readonly kind: 'cached' | 'sequenced'
+  /** Watermark of the block in the sequence space named by `kind`. */
   readonly asOfSeq: number
-  /** Provider-validated values present in the cache; omitted keys remain unknown. */
+  /** Provider-validated values present in the block; omitted keys remain unknown. */
   readonly values: SessionProjectionValues
 }
 
@@ -155,11 +168,15 @@ export type QueueAction =
   | {
     readonly kind: 'edit'
     /** Non-empty text-only replacement content. */
-    readonly content: readonly ContentBlock[]
+    readonly content: readonly TextBlock[]
   }
   | { readonly kind: 'remove' }
   | { readonly kind: 'steer' }
+
+/** One Session list entry. */
 export interface SessionSummary {
+  /** Whether this Session currently owns a live Agent. */
+  readonly agentAvailable: boolean
   readonly sessionId: SessionId
   readonly updatedAt: number
   readonly running: boolean
@@ -167,11 +184,6 @@ export interface SessionSummary {
   readonly parentSessionId?: SessionId
   readonly origin?: 'subagent'
   readonly cwd?: string
-  readonly agentPreset?: string
-  /** User-facing checkpoint ordinal for this branch, when checkpoint state is known. */
-  readonly checkpointLabelIndex?: number
-  /** Whether this session has a known usable workspace-file checkpoint. */
-  readonly workspaceResumable?: boolean
   readonly projections?: SessionProjectionHints
 }
 
@@ -195,6 +207,8 @@ declare module '@deepseek-ai/dsh-typert-protocol' {
       readonly requestedCwd: string
       readonly existingCwd?: string
     }
+    'session/projections-unavailable': Record<string, never>
+    'session/writer-held': { readonly sessionId: SessionId }
     'session/agent-busy': { readonly reason: string }
     'session/invalid-time-zone': { readonly value: string }
     'session/workspace-attach-failed': { readonly sessionId: SessionId; readonly workspaceId: string }
@@ -208,14 +222,6 @@ declare module '@deepseek-ai/dsh-typert-protocol' {
     'session/steer-unavailable': { readonly itemId: MessageId }
     'session/title-invalid': { readonly sessionId: SessionId }
     'session/fork-unavailable': { readonly sessionId: SessionId }
-    'checkpoint-disabled': { readonly sessionId: SessionId }
-    'checkpoint-recovery-required': { readonly sessionId: SessionId; readonly reason: string }
-    'checkpoint-unavailable': {
-      readonly sessionId: SessionId
-      readonly checkpointId: CheckpointView['id']
-    }
-    'edit-not-editable': { readonly sessionId: SessionId; readonly messageSeq: number }
-    'retry-not-retryable': { readonly sessionId: SessionId; readonly messageSeq: number }
     'subagent/not-found': {
       readonly parentSessionId: SessionId
       readonly childSessionId: SessionId
@@ -312,44 +318,8 @@ export interface SessionRenameValue {
 /** Session fork request. */
 export interface SessionForkRequest {
   readonly sessionId: SessionId
+  /** Exact inclusive source event seq; omission selects the latest completed-turn prefix. */
   readonly atSeq?: number
-}
-
-/** Session edit request: replace one settled direct user message from a checkpoint boundary. */
-export interface SessionEditRequest {
-  readonly sessionId: SessionId
-  readonly messageSeq: number
-  readonly checkpointId: CheckpointView['id']
-  readonly text: string
-}
-
-/** Identity of the new child Session created by an edit branch. */
-export interface SessionEditValue {
-  readonly sessionId: SessionId
-}
-
-/** Session retry request: restore the checkpoint before one failed turn and re-run its message in place. */
-export interface SessionRetryRequest {
-  readonly sessionId: SessionId
-  readonly messageSeq: number
-  readonly checkpointId: CheckpointView['id']
-}
-
-/** Acknowledgement that the failed turn was restored and re-queued in the same session. */
-export interface SessionRetryValue {
-  readonly accepted: true
-}
-
-/** Request to activate the latest usable workspace checkpoint for one Session. */
-export interface SessionActivateRequest {
-  readonly sessionId: SessionId
-}
-
-/** Result of attempting workspace checkpoint activation. */
-export interface SessionActivateValue {
-  readonly restored: boolean
-  readonly checkpointId?: CheckpointView['id']
-  readonly unavailable?: boolean
 }
 
 /** Identity of a newly forked Session. */
@@ -411,6 +381,8 @@ export interface SessionCancelValue {
 export interface SessionOpenWorkspacePathRequest {
   /** File-manager navigation when requested; omission uses the default application. */
   readonly action?: 'reveal'
+  /** Registered application identifier; ignored for reveal. Omission preserves the operating system default. */
+  readonly application?: string
   /** Path after best-effort Session workspace resolution, in Host filesystem syntax. */
   readonly path: string
 }
@@ -437,8 +409,16 @@ export type SessionAddress =
     readonly kind: 'subagent'
     readonly parentSessionId: SessionId
     readonly childSessionId: SessionId
-    readonly mode: 'one-shot' | 'continuable'
+    readonly mode: 'one-shot' | 'continuable' | 'unknown'
   }
+
+/** One non-activating Session projection read. */
+export interface SessionProjectionsRequest {
+  readonly sessionId: SessionId
+}
+
+/** Complete Session projection baseline; null when the Session does not exist. */
+export type SessionProjectionsValue = SessionProjectionBaseline | null
 
 /** One raw Session event in the Remote journal. */
 export interface SessionEventEntry {
@@ -574,34 +554,8 @@ export type SessionFollowFrame =
   | SessionEventEntry
   | { readonly type: 'assistant-stream'; readonly frame: SessionAssistantStreamFrame }
 
-/** One pending inbox occurrence in the authoritative queue snapshot. */
-export interface SessionQueuedItem {
-  readonly id: MessageId
-  readonly placement: 'queued' | 'steering' | 'context'
-  /** Prompt-RPC identity from the queued message's user source; clients retire the matching local submission echo on it. */
-  readonly rpcId?: SessionRequestId
-  /** JSON-safe message fields consumed by pending-queue presentation. */
-  readonly message: {
-    readonly id: MessageId
-    readonly content: readonly JsonValue[]
-  }
-}
-
-/** Browser-safe background-job row. */
-export interface SessionJob {
-  readonly id: JobId
-  readonly kind: string
-  readonly label: string
-  readonly status: 'running' | 'stopping' | 'completed' | 'killed' | 'failed'
-  readonly detail?: string
-  readonly startedAt: number
-  readonly finishedAt?: number
-}
-
 /** Complete live control baseline emitted once per control stream generation. */
 export interface SessionControlBaseline {
-  readonly queues: Readonly<Record<SessionId, readonly SessionQueuedItem[]>>
-  readonly jobs: Readonly<Record<SessionId, readonly SessionJob[]>>
   readonly projections: Readonly<Record<SessionId, SessionProjectionBaseline>>
 }
 
@@ -613,36 +567,18 @@ export interface SessionProjectionUpdate {
   readonly seq: number
 }
 
-/** Complete Host-owned workspace checkpoint metadata and edit/activation progress. */
-export interface SessionCheckpointFrame {
-  readonly type: 'session/checkpoints'
-  readonly sessionId: SessionId
-  readonly checkpoints: readonly CheckpointView[]
-  readonly enabled: boolean
-  readonly appliedCheckpointId?: CheckpointView['id']
-  readonly operation?: CheckpointOperationView
-  readonly branchCheckpoint?: CheckpointView
-  readonly branchLabelIndex?: number
-  readonly workspaceResumable?: boolean
-  readonly recoveryRequired?: string
-}
-
 /** Host-wide live state stream. Each generation starts with exactly one baseline. */
 export type SessionControlFrame =
   | { readonly type: 'baseline'; readonly value: SessionControlBaseline }
-  | { readonly type: 'queue'; readonly sessionId: SessionId; readonly items: readonly SessionQueuedItem[] }
-  | { readonly type: 'jobs'; readonly sessionId: SessionId; readonly jobs: readonly SessionJob[] }
-  | SessionCheckpointFrame
   | ({ readonly type: 'projection' } & SessionProjectionUpdate)
 
 declare module '@deepseek-ai/cordis' {
   interface Events {
-    /** A workspace checkpoint update for one Session. */
-    'session/checkpoints'(frame: SessionCheckpointFrame): void
     /**
-     * A Session became visible to Session list consumers.
+     * A Session became visible or its Agent was created or disposed.
+     * Consumers upsert the summary and replace its current running and availability state.
      * @mode emit
-     * @param summary - initial list row for the Session.
+     * @param summary - current list row for the Session.
      */
     'api-session/added'(summary: SessionSummary): void
     /**
@@ -677,3 +613,6 @@ declare module '@deepseek-ai/cordis' {
 
 /** JSON-compatible projection value accepted by list consumers. */
 export type SessionProjectionValue = JsonValue
+
+/** Application metadata returned by the serving desktop for one file. */
+export type SessionWorkspacePathApplication = NativeFileApplication

@@ -3,10 +3,10 @@
 
 import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from 'react'
 import {
-  IconBranchOutline16, IconCheckOutline16, IconCopyOutline16, IconEditOutline16, Tooltip, writeClipboard,
+  IconBranchOutlineRegular, IconCheckOutlineRegular, IconCopyOutlineRegular, Tooltip, writeClipboard,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { ChatViewSlotProps } from '../contract/slots.ts'
-import { formatLatencySeconds, formatMessageClock, formatRunDuration, formatTokensPerSecond } from './message-chrome.ts'
+import { formatMessageClock } from './message-chrome.ts'
 import { useCalendarDay } from './use-calendar-day.ts'
 import css from './MessageIconActions.module.css'
 
@@ -15,18 +15,10 @@ export interface MessageIconActionsProps {
   text: string
   /** Unix epoch ms for the clock label; omitted for transient messages. */
   time?: number | undefined
-  /** Turn wall time in ms, appended to the clock; omitted when the turn's start is unknown. */
-  runMs?: number | undefined
-  /** Turn first-step TTFT in ms, appended to the clock; omitted when unrecorded. */
-  ttftMs?: number | undefined
-  /** Turn decode throughput, appended to the clock; omitted when unrecorded. */
-  tokensPerSecond?: number | undefined
   /** Clock before icons (user) or after (assistant). */
   clock: 'start' | 'end'
   /** Fork the session at this message; omission hides the branch action. */
   onBranch?: (() => void) | undefined
-  /** Enter edit mode for a settled direct user message; omission hides the action. */
-  onEdit?: (() => void) | undefined
   /** The message is not a completed transcript tail, so branch stays visible but unavailable. */
   branchUnavailable?: boolean | undefined
   /** Parent layout class composed onto the actions row. */
@@ -51,8 +43,8 @@ export interface MessageIconActionsProps {
  * @returns The actions row element.
  */
 export function MessageIconActions({
-  text, time, runMs, ttftMs, tokensPerSecond, clock, onBranch, branchUnavailable = false, className,
-  onEdit, extraActions, usageAction, t,
+  text, time, clock, onBranch, branchUnavailable = false, className,
+  extraActions, usageAction, t,
 }: MessageIconActionsProps) {
   const day = useCalendarDay()
   const reasonId = useId()
@@ -82,59 +74,20 @@ export function MessageIconActions({
       }, 1000)
     })
   }, [copied, text])
-  // The dot is decorative and stays hidden, but its margins separate the
-  // readings only on screen: without the flanking spaces a reader hears one
-  // run-on string ("Ran for 13sTTFT 0.2s12 tok/s") instead of three facts.
   const clockEl = time === undefined ? null : (
     <span className={clock === 'start' ? css.timeStart : css.timeEnd}>
       {formatMessageClock(time, t, day)}
-      {runMs !== undefined && (
-        <>
-          {' '}
-          <span className={css.runTimeDot} aria-hidden>·</span>
-          {' '}
-          {t('message.ranFor', { duration: formatRunDuration(runMs, t) })}
-        </>
-      )}
-      {ttftMs !== undefined && (
-        <>
-          {' '}
-          <span className={css.runTimeDot} aria-hidden>·</span>
-          {' '}
-          {t('message.ttft', { seconds: formatLatencySeconds(ttftMs) })}
-        </>
-      )}
-      {tokensPerSecond !== undefined && (
-        <>
-          {' '}
-          <span className={css.runTimeDot} aria-hidden>·</span>
-          {' '}
-          {t('message.tokensPerSecond', { tps: formatTokensPerSecond(tokensPerSecond) })}
-        </>
-      )}
     </span>
   )
   return (
-    <div className={className === undefined ? css.actions : `${css.actions} ${className}`}>
+    <div className={className === undefined ? css.actions : `${css.actions} ${className}`} data-clock={clock}>
       {clock === 'start' ? clockEl : null}
       <Tooltip label={copied ? t('copied') : t('copy')} side="bottom">
         <button type="button" className={css.action} aria-label={copied ? t('copied') : t('copy')} onClick={onCopy}>
-          {copied ? <IconCheckOutline16 /> : <IconCopyOutline16 />}
+          {copied ? <IconCheckOutlineRegular /> : <IconCopyOutlineRegular />}
         </button>
       </Tooltip>
       {extraActions}
-      {onEdit !== undefined && (
-        <Tooltip label={t('message.edit')} side="bottom">
-          <button
-            type="button"
-            className={css.action}
-            aria-label={t('message.edit')}
-            onClick={onEdit}
-          >
-            <IconEditOutline16 />
-          </button>
-        </Tooltip>
-      )}
       {onBranch !== undefined && (
         <Tooltip label={branchUnavailable ? t('message.branchUnavailable') : t('message.branch')} side="bottom">
           {/* Native disabled buttons do not deliver the hover/focus events Tooltip needs. */}
@@ -147,15 +100,16 @@ export function MessageIconActions({
             data-unavailable={branchUnavailable || undefined}
             onClick={branchUnavailable ? undefined : onBranch}
           >
-            <IconBranchOutline16 />
+            <IconBranchOutlineRegular />
           </button>
         </Tooltip>
       )}
       {onBranch !== undefined && branchUnavailable && (
         <span id={reasonId} className={css.visuallyHidden}>{t('message.branchUnavailable')}</span>
       )}
-      {usageAction}
-      {clock === 'end' ? clockEl : null}
+      {clock === 'end'
+        ? <span className={css.endInfo}>{usageAction}{clockEl}</span>
+        : usageAction}
     </div>
   )
 }

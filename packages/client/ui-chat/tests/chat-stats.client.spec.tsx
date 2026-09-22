@@ -5,14 +5,12 @@ import { act, cleanup, fireEvent, render } from '@testing-library/react'
 import type {
   AssistantMessageNode, ChatSnapshot, LegacyConversationSlice, ToolResultNode,
 } from '@deepseek-ai/dsh-client-ui-chat/client'
-import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { bindSnapshotSelector, makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import { en as commonEn } from '@deepseek-ai/dsh-client-locale/src/locales/en.ts'
 import { zh as commonZh } from '@deepseek-ai/dsh-client-locale/src/locales/zh.ts'
-import { StatsPills, deriveStats, formatDuration, formatCost, type StatsPillsProps } from '../src/client/chat/StatsPills.tsx'
+import { StatsPills, deriveStats, formatDuration, type StatsPillsProps } from '../src/client/chat/StatsPills.tsx'
 import { formatTokens } from '../src/client/chat/token-format.ts'
 import { en, zh } from '../src/client/locale.ts'
-import { statsSessionFixture } from './stats-session-fixture.client.ts'
 import { chatSnapshotFixture } from './chat-snapshot-fixture.client.ts'
 
 const t: StatsPillsProps['t'] = makeTranslate(zh, commonZh)
@@ -121,10 +119,6 @@ describe('formatters', () => {
     expect(formatTokens(1_230_000, tEn)).toBe('1.2M')
   })
 
-  it('formats provider spend with useful precision for sub-cent values', () => {
-    expect(formatCost(0.005)).toBe('$0.0050')
-    expect(formatCost(0.125)).toBe('$0.1250')
-  })
   it('formats durations under and over a minute', () => {
     expect(formatDuration(45_230, tEn)).toBe('45.2s')
     expect(formatDuration(162_000, tEn)).toBe('2m42s')
@@ -151,7 +145,7 @@ describe('StatsPills', () => {
     source: { getSnapshot(): ChatSnapshot; subscribe(fn: () => void): () => void },
     values: Record<string, unknown> = { tokenUsage: USAGE },
   ): StatsPillsProps {
-    return { ...statsSessionFixture(), useChat: bindSnapshotSelector(source), useProjection: projections(values), t: tEn }
+    return { usePerformanceUsage: selector => selector('detailed'), useChat: bindSnapshotSelector(source), useProjection: projections(values), t: tEn }
   }
 
   function tokenUsage(cacheReadTokens: number, uncachedInputTokens: number) {
@@ -164,12 +158,30 @@ describe('StatsPills', () => {
     timing: { stepStartTime: 1_000, firstTokenTime: 1_800, completedTime: 4_800 },
   })
 
+  it('compact keeps only speed and cache hit, with no interactive statistics', () => {
+    const { source } = makeSource({ nodes: [timedStep()] })
+    const view = render(<StatsPills {...props(source)} usePerformanceUsage={selector => selector('compact')} />)
+    expect(view.container.textContent).toBe('20 tok/sCache hit 90%')
+    expect(view.queryByRole('button')).toBeNull()
+    fireEvent.mouseOver(view.getByText('20 tok/s'))
+    expect(view.queryByRole('dialog')).toBeNull()
+    view.rerender(<StatsPills {...props(source)} />)
+    expect(view.getAllByRole('button')).toHaveLength(2)
+    fireEvent.click(view.getAllByRole('button')[0]!)
+    expect(view.getByRole('dialog')).toBeTruthy()
+    view.rerender(<StatsPills {...props(source)} usePerformanceUsage={selector => selector('compact')} />)
+    expect(view.queryByRole('dialog')).toBeNull()
+  })
+
+  it('compact omits unavailable metrics instead of showing counts', () => {
+    const { source } = makeSource({ nodes: [assistant(1, 1)] })
+    const view = render(<StatsPills {...props(source, {})} usePerformanceUsage={selector => selector('compact')} />)
+    expect(view.container.textContent).toBe('')
+  })
+
   it('renders the counts reading and usage pill and hides a brand-new empty session', () => {
     const { source } = makeSource({ nodes: [assistant(1, 1)] })
     const view = render(<StatsPills {...props(source)} />)
-    // InputBar's `.root:has([data-composer-stats])` bottom-clearance rule keys
-    // off this attribute: present exactly while the row renders.
-    expect(view.container.querySelector('[data-composer-stats]')).toBeTruthy()
     // No timing on the fixture: the speed segment drops out and the dialog
     // would have no rows, so the counts reading stays a static pill (no button).
     expect(view.getByText('1 turns 1 steps').closest('button')).toBeNull()
@@ -185,7 +197,6 @@ describe('StatsPills', () => {
       contextPressure: {},
     })} />)
     expect(emptyView.container.textContent).toBe('')
-    expect(emptyView.container.querySelector('[data-composer-stats]')).toBeNull()
   })
 
   it.each([
@@ -453,33 +464,5 @@ describe('StatsPills', () => {
     act(() => { set({ partial: { turn: 1, step: 2, blocks: [{ kind: 'text', text: 'a' }] } }) })
     act(() => { set({ partial: { turn: 1, step: 2, blocks: [{ kind: 'text', text: 'ab' }] } }) })
     expect(renders).toBe(before)
-  })
-  it('shows provider spend without token counts and hides unknown spend', () => {
-    const { source } = makeSource()
-    const usage = { uncachedInputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 }
-    const view = render(<StatsPills {...props(source, { tokenUsage: { ...usage, costUsd: 0.005 } })} />)
-    expect(view.container.textContent).toBe('Cost $0.0050')
-    view.rerender(<StatsPills {...props(source, { tokenUsage: usage })} />)
-    expect(view.container.textContent).toBe('')
-  })
-
-  it('adds connected subagent spend to the owning session cost', () => {
-    const root = 's1' as SessionId
-    const child = 's1-child' as SessionId
-    const session = statsSessionFixture({
-      [root]: { id: root, displayTitle: root, running: false, blank: false, updatedAt: 0 },
-      [child]: {
-        id: child, displayTitle: child, running: false, blank: false, updatedAt: 0,
-        parentId: root, origin: 'subagent',
-        projectionValues: { tokenUsage: { ...USAGE, costUsd: 0.25 } },
-      },
-    }, root)
-    const { source } = makeSource({ nodes: [assistant(1, 1)] })
-    const view = render(<StatsPills
-      {...props(source, { tokenUsage: { ...USAGE, costUsd: 0.5 } })}
-      {...session}
-    />)
-
-    expect(view.container.textContent).toContain('Cost $0.75 (own $0.50)')
   })
 })

@@ -4,10 +4,10 @@
  * entry; this package only contributes the single occupant, so no SlotMap
  * merge lives here.
  */
+import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import type { ModelSelection } from '@deepseek-ai/dsh-api-remotes/client'
 import type { SnapshotStore } from '@deepseek-ai/dsh-client-store'
 import type { ModelDirectoryState } from './directory.ts'
-import type { ModelFavoritesState } from './favorites.ts'
 
 /** Injected business face of the composer model seat. */
 export interface ModelSelectInjected {
@@ -15,20 +15,12 @@ export interface ModelSelectInjected {
   available: boolean
   /** The session's shared directory store (same instance the /model popup reads). */
   directory: SnapshotStore<ModelDirectoryState>
-  /** Browser-local favorites shared with the /model popup (persisted, presentation-only). */
-  favorites: SnapshotStore<ModelFavoritesState>
   /** Ensure the shared advisory catalog is loaded (errors land on the store). */
   load: () => void
   /**
    * Select a complete provider/model/reasoning selection.
    * @param selection - model selection and optional adapter-owned effort.
-   * @returns whether the host accepted the selection.
+   * @returns the Host outcome, or undefined when this Session cannot select a model.
    */
-  select: (selection: ModelSelection) => Promise<boolean>
-  /**
-   * Toggle one model in the browser-local favorites list.
-   * @param providerId - provider id.
-   * @param modelId - provider-owned model id.
-   */
-  toggleFavorite: (providerId: string, modelId: string) => void
+  select: (selection: ModelSelection) => Promise<RemoteResult<void> | undefined>
 }

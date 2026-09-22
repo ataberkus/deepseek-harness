@@ -9,17 +9,19 @@
  * `rankByName`). A host/contribution name collision fails loud. Every
  * execute addresses the session's agent by sessionId — sessions are always
  * agent-backed.
+ * Catalog RPCs retain an existing Client Session through completion and
+ * wait for its initial history open to succeed before contacting the Host.
  */
 import { Service } from '@deepseek-ai/cordis'
 import type { Context } from '@deepseek-ai/cordis'
-// Type-only: pulls the ctx.remote merge and the forwarded-event keys
-// (`commands/change` and `commands/open-url` ride the allowlist) into this
-// program.
+// Type-only: pulls the ctx.remote merge and the forwarded-event key face
+// (`commands/change` rides the allowlist) into this program.
 import type {} from '@deepseek-ai/dsh-api-remotes/client'
 import type { CommandResult } from '@deepseek-ai/dsh-commands/types'
 import type { Context as ClientContext } from '@deepseek-ai/cordis'
-import type { ISessions } from '@deepseek-ai/dsh-api-session-controller/client'
+import type { ISessions, SessionBinding } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
+import { WeakMapWithValues } from '@deepseek-ai/dsh-util-values'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-locale/client'
 import { rankByName } from '@deepseek-ai/dsh-client-ui-primitives'
 import type {
@@ -33,6 +35,13 @@ import { PopupSelectController } from './popup.ts'
 import { builtinRowFace, sectionRows } from './presentation.ts'
 import { claimToken } from './resolution.ts'
 import type { TokenSegment } from './popup.ts'
+
+declare module '@deepseek-ai/dsh-api-session-controller/client' {
+  interface SessionReferenceSourceMap {
+    /** A command-catalog fetch waiting for initial history and its RPC result. */
+    commandCatalog: unknown
+  }
+}
 
 declare module '@deepseek-ai/cordis' {
   interface Events {
@@ -55,66 +64,12 @@ function submittedCommandName(line: string): string {
   const separator = trimmed.search(/\s/u)
   return (separator === -1 ? trimmed : trimmed.slice(0, separator)).slice(1)
 }
-/** Named tab reused for hosted OAuth so a second `/login` does not blank an in-progress authorize page. */
-const HOSTED_OAUTH_LOGIN_WINDOW = 'dsh-oauth-login'
-
-/**
- * `/login`, `/login openai-codex`, `/login cursor`, and
- * `/login google-antigravity` are hosted OAuth login lines. `/login anthropic`
- * and `/login-foo` are not.
- */
-function isHostedOAuthLoginLine(line: string): boolean {
-  const trimmed = line.trim()
-  const separator = trimmed.search(/\s/u)
-  const name = separator === -1 ? trimmed : trimmed.slice(0, separator)
-  if (name !== '/login') return false
-  const rest = separator === -1 ? '' : trimmed.slice(separator).trim()
-  return rest.length === 0
-    || rest === 'openai-codex'
-    || rest === 'cursor'
-    || rest === 'google-antigravity'
-    || rest === 'antigravity'
-    || rest === 'google-gemini-cli'
-}
-
-/** Authorize URLs are https; `javascript:` and other schemes are ignored. */
-function isHttpsUrl(url: string): boolean {
-  try {
-    return new URL(url).protocol === 'https:'
-  } catch {
-    return false
-  }
-}
-
-/** Open `url` in `name`, or `null` when this process has no `window` (Node tests). */
-function openBrowserWindow(url: string, name: string): Window | null {
-  if (typeof globalThis.window === 'undefined') return null
-  return globalThis.window.open(url, name)
-}
-
-/** Electron application-page bridge exposed by the Desktop preload. */
-interface DesktopOAuthBridge {
-  openOAuthUrl(url: string): Promise<void>
-}
-
-/**
- * Resolve the Desktop OAuth opener without adding an Electron dependency to
- * this browser package. Other renderers expose no callable method.
- */
-function desktopOAuthBridge(): DesktopOAuthBridge | undefined {
-  if (typeof globalThis.window === 'undefined') return undefined
-  const scope: unknown = globalThis.window
-  if (typeof scope !== 'object' || scope === null || !('dshDesktop' in scope)) return undefined
-  const bridge: unknown = scope.dshDesktop
-  if (typeof bridge !== 'object' || bridge === null || !('openOAuthUrl' in bridge)) return undefined
-  return typeof bridge.openOAuthUrl === 'function' ? bridge as DesktopOAuthBridge : undefined
-}
 
 /** Live mutable state in one holder (service methods run behind the caller-ctx tracker). */
 interface LiveState {
   readonly contributions: Map<string, CommandContribution>
   readonly decorations: Map<string, CommandDecoration>
-  readonly popups: Map<SessionId, PopupSelectController<ClientSessionContext>>
+  readonly popups: WeakMapWithValues<SessionBinding, PopupSelectController<ClientSessionContext>>
 }
 
 /** Command surface: session-keyed directory + '/' source + contribution registry + per-session popups. */
@@ -122,11 +77,14 @@ export class CommandUiRuntime extends Service implements CommandUiContract {
   static inject = ['inputTriggers', 'sessions', 'remote', 'remote.commands']
 
   private readonly directory: CommandDirectory
-  /** Captured at construction so public calls remain independent of the caller fiber's injected properties. */
-  private readonly remoteCommands: Context['remote']['commands']
-  private readonly live: LiveState = { contributions: new Map(), decorations: new Map(), popups: new Map() }
+  private readonly live: LiveState = {
+    contributions: new Map(),
+    decorations: new Map(),
+    popups: new WeakMapWithValues(),
+  }
   /** `command`-namespace translator (composer refusal notices). */
   private readonly t: TranslateNS<'command'>
+
   /**
    * @param ctx - owning root context (plugin fiber; the service registers
    * itself as `command` and follows that fiber's lifetime).
@@ -136,12 +94,21 @@ export class CommandUiRuntime extends Service implements CommandUiContract {
     const locale = ctx.get('locale')
     if (locale === undefined) throw new Error('ui-commands: locale service unavailable')
     this.t = locale.bind('command')
-    this.remoteCommands = ctx.remote.commands
     this.directory = new CommandDirectory(async (sessionId) => {
-      if (this.sessions().subagentAddress(sessionId) !== undefined) return []
-      const result = await ctx.remote.commands.list(sessionId)
-      if (!result.ok) throw new Error(`command.list failed: ${result.error.code}: ${result.error.message}`)
-      return result.value
+      const sessions = this.sessions()
+      if (sessions.subagentAddress(sessionId) !== undefined) return []
+      if (sessions.binding(sessionId) === undefined) {
+        throw new Error(`command catalog requires a retained session "${sessionId}"`)
+      }
+      return sessions.using(sessionId, { source: 'commandCatalog' }, async (reference) => {
+        const state = reference.binding.session.getSnapshot()
+        if (state.openState !== 'open') {
+          throw state.openError ?? new Error(`session "${sessionId}" is not open`)
+        }
+        const result = await ctx.remote.commands.list(sessionId)
+        if (!result.ok) throw new Error(`command.list failed: ${result.error.code}: ${result.error.message}`)
+        return result.value
+      })
     })
     const inputTriggers = ctx.get('inputTriggers')
     if (inputTriggers === undefined) throw new Error('ui-commands: slash service unavailable')
@@ -155,7 +122,6 @@ export class CommandUiRuntime extends Service implements CommandUiContract {
       warm: (session) => { this.directory.warm(session.sessionId) },
     }), 'command: slash source')
     ctx.remote.$on('commands/change', () => { this.directory.invalidateAll() })
-    ctx.remote.$on('commands/open-url', (url) => { this.navigateLoginTab(url) })
     // A preset switch changes which commands one session's agent resolves and
     // registers nothing globally. Drop that key's old composition before
     // prewarming so a newly opened menu waits for the replacement catalog.
@@ -196,102 +162,57 @@ export class CommandUiRuntime extends Service implements CommandUiContract {
       decorations.set(decoration.name, decoration)
       return () => { decorations.delete(decoration.name) }
     }, 'command.decorate()')
-
     return () => { void dispose() }
+  }
+
+  /**
+   * Close every open popup for a command whose options have become stale.
+   * Pending loads and confirmations lose their binding; drafts stay intact.
+   * @param name - command name without the leading slash.
+   */
+  dismiss(name: string): void {
+    for (const popup of this.live.popups.values) {
+      // A catalog that went stale underneath the card takes its rows away; the
+      // composer keeps the keyboard the card was holding, like every other
+      // dismissal path.
+      if (popup.state.getSnapshot().command === name) popup.dismiss({ focusComposer: true })
+    }
   }
 
   /**
    * Resolve the per-session popup controller (lazy; dies with the session
    * scope). The controller's consume callback dispatches the scoped
    * consume-token event back to this session; focusComposer reaches the
-   * composer through the overlay slot currency.
+   * session's composer through the conversation input face.
    * @param actx - session-scope ctx.
    * @returns the resident controller.
+   * @throws when the Context no longer belongs to a retained Session generation.
    */
   popupFor(actx: ClientContext): PopupSelectController<ClientSessionContext> {
     const sessions = this.sessions()
-    const id = sessions.scopeOf(actx)
-    if (id === undefined) throw new Error('command.popupFor requires a session scope')
+    const session = sessions.sessionOf(actx)
+    const binding = session === undefined ? undefined : sessions.binding(session.sessionId)
+    if (binding === undefined || binding.session !== session) {
+      throw new Error('command.popupFor requires a retained Session scope')
+    }
     const { popups } = this.live
-    const existing = popups.get(id)
+    const existing = popups.get(binding)
     if (existing !== undefined) return existing
     const controller = new PopupSelectController<ClientSessionContext>({
-      consume: segment => actx.bail(actx, 'slash/input-consume-token', {
+      consume: segment => binding.ctx.bail(binding.ctx, 'slash/input-consume-token', {
         guard: segment.via === 'menu'
           ? { kind: 'span', span: segment.span }
           : { kind: 'bare-token', token: segment.token },
       }) === true,
-      focusComposer: () => { this.focusHooks.get(id)?.() },
+      // The shell took the keyboard; the composer restores it, caret included.
+      focusComposer: () => { binding.ctx.get('conversation')?.input.for(binding.ctx).focus() },
     })
-    popups.set(id, controller)
-    actx.effect(() => () => {
+    popups.set(binding, controller)
+    binding.ctx.effect(() => () => {
       controller.dispose()
-      popups.delete(id)
-      this.focusHooks.delete(id)
+      popups.delete(binding)
     }, 'command: session popup')
     return controller
-  }
-
-  /** Composer focus hooks by session (the overlay wiring binds the textarea focus here). */
-  private readonly focusHooks = new Map<SessionId, () => void>()
-  /**
-   * Tab opened during the `/login` keystroke. Kept until the user closes it so a
-   * second `/login` reuses it instead of replacing an in-progress authorize page
-   * with `about:blank`.
-   */
-  private pendingLoginTab: Window | null = null
-
-  /**
-   * Open a blank tab under the user gesture that submitted `/login`. Popup
-   * blockers swallow a `window.open` that runs later, when the authorize URL
-   * arrives on the downlink.
-   */
-  private prepareLoginTab(): void {
-    if (this.pendingLoginTab !== null && !this.pendingLoginTab.closed) return
-    this.pendingLoginTab = openBrowserWindow('about:blank', HOSTED_OAUTH_LOGIN_WINDOW)
-  }
-
-  /**
-   * Open the shared hosted-OAuth blank tab under the caller's user gesture.
-   * See {@link CommandUiContract.prepareOAuthLoginTab} for the caller contract.
-   */
-  prepareOAuthLoginTab(): void {
-    this.prepareLoginTab()
-  }
-
-  /**
-   * Navigate the prepared tab to `url`, or open `url` if the gesture tab was
-   * blocked or already closed. Non-https values are ignored.
-   * @param url - authorize URL forwarded from the Host.
-   */
-  private navigateLoginTab(url: string): void {
-    if (!isHttpsUrl(url)) return
-    const desktop = desktopOAuthBridge()
-    if (desktop !== undefined) {
-      void desktop.openOAuthUrl(url).catch((error: unknown) => {
-        console.error('ui-commands: Desktop could not open the OAuth authorize URL', error)
-      })
-      return
-    }
-    if (this.pendingLoginTab !== null && !this.pendingLoginTab.closed) {
-      this.pendingLoginTab.location.href = url
-      return
-    }
-    this.pendingLoginTab = openBrowserWindow(url, HOSTED_OAUTH_LOGIN_WINDOW)
-  }
-
-
-  /**
-   * Bind one session's composer-focus hook (overlay slot wiring; unbind on unmount).
-   * @param id - session id.
-   * @param focus - textarea focus callback.
-   * @returns the unbind disposer.
-   */
-  bindComposerFocus(id: SessionId, focus: () => void): () => void {
-    this.focusHooks.set(id, focus)
-    return () => {
-      if (this.focusHooks.get(id) === focus) this.focusHooks.delete(id)
-    }
   }
 
   /**
@@ -477,13 +398,12 @@ export class CommandUiRuntime extends Service implements CommandUiContract {
    * composer keeps the draft and attachments for correction.
    * A refused call throws.
    */
-  async execute(
+  private async execute(
     session: ClientSessionContext,
     line: string,
     attachments: readonly SubmitAttachment[] = [],
   ): Promise<SubmitOutcome> {
-    if (isHostedOAuthLoginLine(line)) this.prepareLoginTab()
-    const result = await this.remoteCommands.execute(session.sessionId, line, attachments)
+    const result = await this.ctx.remote.commands.execute(session.sessionId, line, attachments)
     if (!result.ok) throw new Error(`command.execute failed: ${result.error.code}: ${result.error.message}`)
     if (result.value === undefined) return { kind: 'error', text: `unknown or malformed command: ${line}` }
     this.notifyExecuted(session.sessionId, submittedCommandName(line), result.value.result)

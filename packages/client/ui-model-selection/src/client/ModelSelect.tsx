@@ -5,18 +5,17 @@
  * each drilling into its own list — the provider-grouped model list over
  * the shared directory, and the effort levels. The trigger (313:14108's
  * ToggleButton) shows both: model name + effort in the caption tone.
- * Data and submission ride the SAME per-session ModelDirectory as the
- * /model popup; exact-model reasoning metadata and the selected effort come
- * from the Host rather than a client-owned vocabulary. The seat closes as
- * soon as a click is submitted; the directory echoes the selection so the
- * trigger updates without waiting for `session.selectModel`. The model pane
- * filters advertised groups locally as the user types; `/model` already
- * filters through the shared popupSelect shell. Favorited models pin a
- * Favorites group first with per-row stars; the same ids order the popup
- * first. Favorites are browser-local viewing state and never reach the
- * model request. A rejected selection announces through the shared transient
- * Toast anchored to the composer card; the in-menu strip with Retry remains
- * the catalog-load surface.
+ * While open, ↑/↓ move focus across the rows of the shown pane (wrapping; a
+ * step taken while the trigger still holds focus enters at the near end), Tab
+ * settles like Enter, and Escape and Shift+Tab leave a drilled pane first and
+ * otherwise close back to the trigger. A drilled pane hands focus to the row
+ * of the value in use, and returning to the root pane hands it back to the
+ * cell that opened it. Data and submission ride the SAME per-session
+ * ModelDirectory as the /model popup; exact-model reasoning metadata and the
+ * selected effort come from the Host rather than a client-owned vocabulary. A
+ * rejected selection announces through the shared transient Toast anchored to
+ * the composer card; the in-menu strip with Retry remains the catalog-load
+ * surface.
  */
 import {
   useEffect, useId, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore,
@@ -26,13 +25,11 @@ import { createPortal } from 'react-dom'
 import clsx from 'clsx'
 import type { ModelReasoningEffort, ModelSelection } from '@deepseek-ai/dsh-api-remotes/client'
 import {
-  IconCheckOutline16, IconChevronDownOutline14, IconChevronRightOutline14,
-  IconDataOutline16, IconWarningOutline16, Toast,
+  IconCheckOutlineRegular, IconChevronDownOutlineRegular, IconChevronRightOutlineRegular,
+  IconDataOutlineRegular, IconWarningOutlineRegular, Toast,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ModelSelectInjected } from './slots.ts'
-import { filterModelGroups } from './filter.ts'
-import { favoriteEntries, favoriteId, normalizeFavorites } from './favorites.ts'
 import css from './ModelSelect.module.css'
 
 /** Which pane the dropdown shows: the two-row root or one drilled-in list. */
@@ -51,24 +48,19 @@ const MEASURE_STYLE: CSSProperties = { visibility: 'hidden', left: 0, top: 0 }
 /**
  * Render the composer model seat.
  * @param props - owner share (locked) + injected face (shared directory
- * store/verbs plus the shared favorites list) + the standard locale seat.
+ * store/verbs) + the standard locale seat.
  * @returns the trigger and, while open, the two-level menu.
  */
 export function ModelSelect(
-  { locked, available, directory, favorites, load, select, toggleFavorite, t }:
+  { locked, available, directory, load, select, t }:
   ModelSelectInjected & { locked: boolean } & PropsLocale<'model'>,
 ) {
   const state = useSyncExternalStore(
     fn => directory.subscribe(fn),
     () => directory.getSnapshot(),
   )
-  const favoritesState = useSyncExternalStore(
-    fn => favorites.subscribe(fn),
-    () => favorites.getSnapshot(),
-  )
   const [open, setOpen] = useState(false)
   const [pane, setPane] = useState<Pane>('root')
-  const [query, setQuery] = useState('')
   // The in-menu error strip serves catalog loads (its Retry re-runs the
   // load); a rejected SELECTION announces through the transient toast
   // instead, so the strip renders only while the latest failure-capable
@@ -78,7 +70,6 @@ export function ModelSelect(
   const toastSeq = useRef(0)
   const rootRef = useRef<HTMLDivElement | null>(null)
   const triggerRef = useRef<HTMLButtonElement | null>(null)
-  const searchRef = useRef<HTMLInputElement | null>(null)
   const menuRef = useRef<HTMLDivElement | null>(null)
   const [menuPos, setMenuPos] = useState<CSSProperties | null>(null)
   const itemRefs = useRef<(HTMLButtonElement | null)[]>([])
@@ -96,19 +87,6 @@ export function ModelSelect(
           : { reasoningEffort: model.reasoning.defaultEffort },
       } satisfies ModelSelection,
     }))), [state.groups])
-  const filteredGroups = useMemo(
-    () => filterModelGroups(state.groups, query),
-    [state.groups, query],
-  )
-  const favoriteIds = useMemo(
-    () => normalizeFavorites(favoritesState.favorites),
-    [favoritesState],
-  )
-  const favoriteSet = useMemo(() => new Set(favoriteIds), [favoriteIds])
-  const filteredFavorites = useMemo(
-    () => favoriteEntries(filteredGroups, favoriteIds),
-    [filteredGroups, favoriteIds],
-  )
   const selectedIndex = state.current === null
     ? -1
     : choices.findIndex(c => c.selection.provider === state.current?.provider && c.selection.model === state.current.model)
@@ -146,16 +124,35 @@ export function ModelSelect(
       if (rootRef.current?.contains(event.target as Node) === true) return
       if (menuRef.current?.contains(event.target as Node) === true) return
       setOpen(false)
-      setPane('root')
-      setQuery('')
     }
     document.addEventListener('mousedown', closeOutside)
     return () => { document.removeEventListener('mousedown', closeOutside) }
   }, [open])
 
+  // A pane switch unmounts the row that had focus, which drops focus onto the
+  // page body — outside the card's subtree, where its key handling no longer
+  // sees a keystroke. Every switch therefore names where the keyboard lands:
+  // drilling on the pane's current value, coming back on the cell that opened
+  // the pane left.
+  const paneFocus = useRef<'drill' | 'model' | 'effort' | null>(null)
   useEffect(() => {
-    if (open && pane === 'model') searchRef.current?.focus()
+    const intent = paneFocus.current
+    paneFocus.current = null
+    if (!open || intent === null) return
+    if (intent === 'drill') {
+      // The checked row is the value in use; a pane without one opens on its
+      // first row.
+      const checked = menuRef.current?.querySelector<HTMLElement>('[role="menuitemradio"][aria-checked="true"]:not([disabled])')
+      const target = checked ?? itemRefs.current.find(item => item !== null && !item.disabled)
+      // Rows a selection in flight disabled cannot take the keyboard; the
+      // trigger does, so the card's keys still reach the menu.
+      ;(target ?? triggerRef.current)?.focus()
+      return
+    }
+    const cell = itemRefs.current[intent === 'effort' ? 1 : 0]
+    ;(cell !== null && cell !== undefined && !cell.disabled ? cell : triggerRef.current)?.focus()
   }, [open, pane])
+
   // Portaled placement (the Menu primitive's portal rules: fixed from the
   // anchor rect, measured before paint, clamped inside the viewport): above
   // the trigger, right edges aligned. Depends on pane and directory state
@@ -187,14 +184,13 @@ export function ModelSelect(
       window.removeEventListener('scroll', place, true)
       window.removeEventListener('resize', place)
     }
-  }, [open, pane, state, query, favoritesState])
+  }, [open, pane, state])
   /* jscpd:ignore-end */
 
   if (!available) return null
 
   const show = (): void => {
     setPane('root')
-    setQuery('')
     setOpen(true)
     reload()
   }
@@ -202,28 +198,30 @@ export function ModelSelect(
   const close = (restoreFocus = false): void => {
     setOpen(false)
     setPane('root')
-    setQuery('')
     if (restoreFocus) queueMicrotask(() => { triggerRef.current?.focus() })
   }
 
-  const showRoot = (): void => {
+  const drill = (next: Pane): void => {
+    paneFocus.current = 'drill'
+    setPane(next)
+  }
+
+  /** Leave a drilled pane for the root one, handing the keyboard back to its cell. */
+  const back = (from: Exclude<Pane, 'root'>): void => {
+    paneFocus.current = from
     setPane('root')
-    setQuery('')
   }
 
   const moveFocus = (offset: number): void => {
     const items = itemRefs.current.filter(item => item !== null)
     if (items.length === 0) return
     const active = items.findIndex(item => item === document.activeElement)
-    if (active === -1) {
-      items[offset > 0 ? 0 : items.length - 1]?.focus()
-      return
-    }
-    if (active === 0 && offset < 0 && pane === 'model' && searchRef.current !== null) {
-      searchRef.current.focus()
-      return
-    }
-    const next = (active + offset + items.length) % items.length
+    // Focus outside the rows (the trigger, which keeps it while the menu
+    // opens) enters at the end the step comes from: the first row forward,
+    // the last row backward.
+    const next = active === -1
+      ? (offset > 0 ? 0 : items.length - 1)
+      : (active + offset + items.length) % items.length
     items[next]?.focus()
   }
 
@@ -231,11 +229,38 @@ export function ModelSelect(
     if (event.key === 'Escape' && open) {
       event.preventDefault()
       // Escape backs out of a drilled pane first, then closes.
-      if (pane !== 'root') showRoot()
+      if (pane !== 'root') back(pane)
       else close(true)
       return
     }
     if (!open) return
+    // Tab settles like Enter and Shift+Tab leaves like Escape, so the menu's
+    // keys mean what they mean in the composer. Both are consumed: the card
+    // keeps the browser's focus traversal out while it is open.
+    if (event.key === 'Tab') {
+      if (event.shiftKey) {
+        event.preventDefault()
+        if (pane !== 'root') back(pane)
+        else close(true)
+        return
+      }
+      // Settling activates the row the keyboard is on; with focus still on the
+      // trigger, Tab enters the menu at the value in use instead. Any other
+      // control inside the card (a retry button) keeps the browser's traversal,
+      // so the keystroke stays unconsumed there.
+      const focused = document.activeElement
+      const rows = itemRefs.current.filter((item): item is HTMLButtonElement => item !== null)
+      if (focused instanceof HTMLButtonElement && rows.includes(focused)) {
+        event.preventDefault()
+        focused.click()
+        return
+      }
+      if (focused !== triggerRef.current) return
+      event.preventDefault()
+      const checked = menuRef.current?.querySelector<HTMLElement>('[role="menuitemradio"][aria-checked="true"]:not([disabled])')
+      ;(checked ?? rows.find(item => !item.disabled))?.focus()
+      return
+    }
     if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
       event.preventDefault()
       moveFocus(event.key === 'ArrowDown' ? 1 : -1)
@@ -250,16 +275,20 @@ export function ModelSelect(
     close()
   }
 
-  const settleSelection = (accepted: boolean): void => {
-    if (accepted) {
+  const settleSelection = (result: Awaited<ReturnType<ModelSelectInjected['select']>>): void => {
+    if (result === undefined) return
+    if (result.ok) {
       if (rootRef.current !== null) close(true)
       return
     }
-    const message = directory.getSnapshot().error
-    if (message !== null) {
-      toastSeq.current += 1
-      setToast({ seq: toastSeq.current, text: t('error.action', { message }) })
-    }
+    const { error } = result
+    toastSeq.current += 1
+    setToast({
+      seq: toastSeq.current,
+      text: error.code === 'session/writer-held'
+        ? t('error.sessionInUse')
+        : t('error.action', { message: `${error.code}: ${error.message}` }),
+    })
   }
 
   const choose = (selection: ModelSelection): void => {
@@ -268,7 +297,6 @@ export function ModelSelect(
       return
     }
     lastActionRef.current = 'select'
-    close(true)
     void select(selection).then(settleSelection)
   }
 
@@ -284,7 +312,6 @@ export function ModelSelect(
       ...effort === undefined ? {} : { reasoningEffort: effort },
     }
     lastActionRef.current = 'select'
-    close(true)
     void select(selection).then(settleSelection)
   }
 
@@ -308,49 +335,6 @@ export function ModelSelect(
     return (node: HTMLButtonElement | null) => { itemRefs.current[at] = node }
   }
 
-  const renderModelRow = (
-    groupId: string,
-    model: { id: string; name: string },
-    rowKey: string,
-  ) => {
-    const selected = state.current?.provider === groupId && state.current.model === model.id
-    const isFavorite = favoriteSet.has(favoriteId(groupId, model.id))
-    const starLabel = isFavorite
-      ? t('favorites.remove', { model: model.name })
-      : t('favorites.add', { model: model.name })
-    return (
-      <div className={css.optionRow} key={rowKey}>
-        <button
-          ref={itemRef()}
-          type="button"
-          role="menuitemradio"
-          aria-checked={selected}
-          className={clsx(css.option, selected && css.selected)}
-          title={model.name}
-          disabled={busy}
-          onClick={() => { choose({ provider: groupId, model: model.id }) }}
-        >
-          <span className={css.optionCopy}>
-            <span className={css.modelName}>{model.name}</span>
-          </span>
-          <span className={css.check}>
-            {selected ? <IconCheckOutline16 /> : null}
-          </span>
-        </button>
-        <button
-          type="button"
-          className={clsx(css.favorite, isFavorite && css.favoriteActive)}
-          aria-pressed={isFavorite}
-          aria-label={starLabel}
-          title={starLabel}
-          onClick={() => { toggleFavorite(groupId, model.id) }}
-        >
-          <span aria-hidden="true">{isFavorite ? '★' : '☆'}</span>
-        </button>
-      </div>
-    )
-  }
-
   return (
     <div ref={rootRef} className={css.root} onKeyDown={onRootKeyDown} onBlur={onBlur}>
       <button
@@ -371,10 +355,10 @@ export function ModelSelect(
           }
         }}
       >
-        <IconDataOutline16 className={css.triggerIcon} size={16} />
+        <IconDataOutlineRegular className={css.triggerIcon} size={16} />
         <span className={css.triggerLabel}>{modelLabel}</span>
         {effortLabel !== undefined && <span className={css.triggerEffort}>{effortLabel}</span>}
-        <IconChevronDownOutline14 className={clsx(css.chevron, open && css.chevronOpen)} />
+        <IconChevronDownOutlineRegular className={clsx(css.chevron, open && css.chevronOpen)} />
       </button>
 
       {/* Portaled to body (Menu primitive's portal mode) so the sidebar and
@@ -392,16 +376,16 @@ export function ModelSelect(
         >
           {pane === 'root' && (
             <>
-              <button ref={itemRef()} type="button" role="menuitem" className={css.cell} onClick={() => { setPane('model') }}>
+              <button ref={itemRef()} type="button" role="menuitem" className={css.cell} onClick={() => { drill('model') }}>
                 <span className={css.cellLabel}>{t('menu.model')}</span>
                 <span className={css.cellValue}>{modelLabel}</span>
-                <IconChevronRightOutline14 className={css.cellChevron} />
+                <IconChevronRightOutlineRegular className={css.cellChevron} />
               </button>
               {reasoning !== undefined && (
-                <button ref={itemRef()} type="button" role="menuitem" className={css.cell} onClick={() => { setPane('effort') }}>
+                <button ref={itemRef()} type="button" role="menuitem" className={css.cell} onClick={() => { drill('effort') }}>
                   <span className={css.cellLabel}>{t('menu.effort')}</span>
                   <span className={css.cellValue}>{effortLabel}</span>
-                  <IconChevronRightOutline14 className={css.cellChevron} />
+                  <IconChevronRightOutlineRegular className={css.cellChevron} />
                 </button>
               )}
             </>
@@ -409,16 +393,6 @@ export function ModelSelect(
 
           {pane === 'model' && (
             <>
-              <input
-                ref={searchRef}
-                className={css.search}
-                type="text"
-                value={query}
-                placeholder={t('search.placeholder')}
-                aria-label={t('search.aria')}
-                disabled={busy}
-                onChange={(event) => { setQuery(event.currentTarget.value) }}
-              />
               {state.status === 'loading' && (
                 <div className={css.status}>{t('status.loading')}</div>
               )}
@@ -435,31 +409,40 @@ export function ModelSelect(
                 </div>
               ))}
               <div className={clsx(css.groups, 'scrollable')}>
-                {filteredFavorites.length > 0 && (
-                  <section role="group" aria-labelledby={`${id}-favorites`} className={css.group}>
-                    <div className={css.groupTitle} id={`${id}-favorites`}>{t('favorites.title')}</div>
-                    {filteredFavorites.map(({ group, model }) => renderModelRow(
-                      group.id,
-                      model,
-                      `${group.id}/${model.id}`,
-                    ))}
-                  </section>
-                )}
-                {filteredGroups.map((group) => {
+                {state.groups.map((group) => {
                   const headingId = `${id}-${group.id}`
                   return (
                     <section role="group" aria-labelledby={headingId} className={css.group} key={group.id}>
                       <div className={css.groupTitle} id={headingId}>{group.name}</div>
-                      {group.models.map(model => renderModelRow(group.id, model, model.id))}
+                      {group.models.map((model) => {
+                        const selected = state.current?.provider === group.id && state.current.model === model.id
+                        return (
+                          <button
+                            ref={itemRef()}
+                            type="button"
+                            role="menuitemradio"
+                            aria-checked={selected}
+                            className={clsx(css.option, selected && css.selected)}
+                            key={model.id}
+                            title={model.name}
+                            disabled={busy}
+                            onClick={() => { choose({ provider: group.id, model: model.id }) }}
+                          >
+                            <span className={css.optionCopy}>
+                              <span className={css.modelName}>{model.name}</span>
+                            </span>
+                            <span className={css.check}>
+                              {selected ? <IconCheckOutlineRegular /> : null}
+                            </span>
+                          </button>
+                        )
+                      })}
                     </section>
                   )
                 })}
               </div>
               {state.status === 'ready' && choices.length === 0 && (
                 <div className={css.empty}>{t('empty.models')}</div>
-              )}
-              {state.status === 'ready' && choices.length > 0 && filteredGroups.length === 0 && (
-                <div className={css.empty}>{t('empty.search')}</div>
               )}
             </>
           )}
@@ -489,7 +472,7 @@ export function ModelSelect(
                       <span className={css.modelName}>{level.label}</span>
                     </span>
                     <span className={css.check}>
-                      {effectiveEffort === level.effort ? <IconCheckOutline16 /> : null}
+                      {effectiveEffort === level.effort ? <IconCheckOutlineRegular /> : null}
                     </span>
                   </button>
                 ))}
@@ -502,7 +485,7 @@ export function ModelSelect(
         <Toast
           key={toast.seq}
           text={toast.text}
-          icon={<IconWarningOutline16 />}
+          icon={<IconWarningOutlineRegular />}
           anchor={rootRef.current?.closest<HTMLElement>('[data-composer-card]') ?? null}
           onDone={() => { setToast(null) }}
         />

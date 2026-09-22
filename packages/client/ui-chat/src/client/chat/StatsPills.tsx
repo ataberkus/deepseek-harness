@@ -1,20 +1,18 @@
-// Session stats under the composer, split into two icon pills: a gauge pill
-// (turn/step counts + output speed) opening the time-and-speed dialog, and a
-// database pill (total tokens + cache hit) opening the token-usage dialog.
+// Composer statistics: Compact exposes speed and cache hit as plain readings;
+// Detailed exposes counts and totals with time and token-usage dialogs.
 // Settled-node identity prevents stream-delta updates from rerendering the row.
 // Mounted on 'conversation.composer.dock' so it sticks with the composer in the
 // active conversation scrollport (see ConversationRoot data-conversation-scroll).
 
 import { memo, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { IconDatabaseOutline16, IconGaugeOutline16 } from '@deepseek-ai/dsh-client-ui-primitives'
-import type { UseProjection, SessionListState, SessionSummary } from '@deepseek-ai/dsh-api-session-controller/client'
-import type { SessionId } from '@deepseek-ai/dsh-session/types'
-import type { SnapshotSelectorHook } from '@deepseek-ai/dsh-client-ui-slots'
+import { IconDatabaseOutlineRegular, IconGaugeOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
+import type { UseProjection } from '@deepseek-ai/dsh-api-session-controller/client'
+import type { InjectFace, SnapshotSelectorHook } from '@deepseek-ai/dsh-client-ui-slots'
 // Type-only: merges the sessionStats key into SessionProjectionMap for useProjection.
 import type {} from '@deepseek-ai/dsh-session-stats/client'
 import type { TokenUsageProjection } from '@deepseek-ai/dsh-token-meter/client'
-import type { ChatViewSlotProps } from '../contract/slots.ts'
+import type { ChatViewSlotProps, PerformanceUsageInjected } from '../contract/slots.ts'
 import type { ChatSnapshot } from '../contract/snapshot.ts'
 import { formatTokensPerSecond } from './message-chrome.ts'
 import { assistantStepReading } from '../contract/turn-metrics.ts'
@@ -101,17 +99,6 @@ export function formatDuration(ms: number, t: ChatViewSlotProps['t']): string {
 }
 
 /**
- * Format a positive session spend without displaying a misleading zero-cent total.
- * @param usd - cumulative provider-reported spend in US dollars.
- * @returns a dollar amount with four decimals for sub-cent precision and two otherwise.
- */
-export function formatCost(usd: number): string {
-  const cents = usd * 100
-  const hasSubCentPrecision = Math.abs(cents - Math.round(cents)) > 1e-9
-  return usd < 0.01 || hasSubCentPrecision ? `$${usd.toFixed(4)}` : `$${usd.toFixed(2)}`
-}
-
-/**
  * Display-ready cache-hit share of prompt-side input over the whole durable log.
  * @param usage - the session's token-usage projection value.
  * @returns integer text when integer rounding stays below 100, otherwise the
@@ -132,49 +119,10 @@ export function billedInputTokens(usage: TokenUsageProjection): number {
   return usage.uncachedInputTokens + usage.cacheReadTokens + usage.cacheWriteTokens
 }
 
-/** Return one positive provider-reported spend value, treating old data as unknown. */
-function positiveSpend(value: unknown): number {
-  return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : 0
-}
-
-/** Read one session summary's cumulative provider-reported spend. */
-function summarySpend(summary: SessionSummary | undefined): number {
-  return positiveSpend(summary?.projectionValues?.tokenUsage?.costUsd)
-}
-
-/** Sum descendants connected through uninterrupted subagent-origin lineage. */
-function subagentDescendantSpend(
-  summaries: Readonly<Record<SessionId, SessionSummary>>,
-  ownerId: SessionId,
-): number {
-  let total = 0
-  for (const descendant of Object.values(summaries)) {
-    if (descendant.origin !== 'subagent' || descendant.id === ownerId) continue
-    const spend = summarySpend(descendant)
-    if (spend === 0) continue
-    const seen = new Set<SessionId>()
-    let current: SessionSummary | undefined = descendant
-    while (current !== undefined && current.origin === 'subagent'
-      && current.parentId !== undefined && !seen.has(current.id)) {
-      seen.add(current.id)
-      if (current.parentId === ownerId) {
-        total += spend
-        break
-      }
-      current = summaries[current.parentId]
-    }
-  }
-  return total
-}
-
 /** Props: the conversation-snapshot selector plus the projection read seat. */
-export interface StatsPillsProps {
+export interface StatsPillsProps extends InjectFace<PerformanceUsageInjected> {
   useChat: SnapshotSelectorHook<ChatSnapshot>
   useProjection: UseProjection
-  /** Session-list selector used to include connected subagent spend. */
-  useSessions: SnapshotSelectorHook<SessionListState>
-  /** Current session identity used to root descendant spend. */
-  sessionId: SessionId
   /** The owning dock's locale seat. */
   t: ChatViewSlotProps['t']
 }
@@ -215,7 +163,7 @@ function TimePill({ stats, t, dialog }: {
     return (
       <span className={css.anchor}>
         <span className={css.pill}>
-          <IconGaugeOutline16 />
+          <IconGaugeOutlineRegular />
           {label}
         </span>
       </span>
@@ -231,7 +179,7 @@ function TimePill({ stats, t, dialog }: {
         aria-label={tps === null ? counts : `${counts} · ${tps}`}
         onClick={() => { setOpen(!open) }}
       >
-        <IconGaugeOutline16 />
+        <IconGaugeOutlineRegular />
         {label}
       </button>
       {open && createPortal(
@@ -244,7 +192,7 @@ function TimePill({ stats, t, dialog }: {
         >
           <div className={dialogCss.title}>
             <span className={dialogCss.titleLabel}>
-              <IconGaugeOutline16 />
+              <IconGaugeOutlineRegular />
               {t('stats.dialog.title')}
             </span>
           </div>
@@ -305,7 +253,7 @@ function UsagePill({ usage, t, dialog }: {
         aria-label={cacheHitText === null ? totalText : `${totalText} · ${cacheHitText}`}
         onClick={() => { setOpen(!open) }}
       >
-        <IconDatabaseOutline16 />
+        <IconDatabaseOutlineRegular />
         <span className={css.label}>
           {totalText}
           {cacheHitText !== null && (
@@ -326,7 +274,7 @@ function UsagePill({ usage, t, dialog }: {
         >
           <div className={dialogCss.title}>
             <span className={dialogCss.titleLabel}>
-              <IconDatabaseOutline16 />
+              <IconDatabaseOutlineRegular />
               {t('stats.dialog.usageTitle')}
             </span>
             <span className={dialogCss.titleValue}>{exactCount(total, t)}</span>
@@ -365,7 +313,8 @@ function UsagePill({ usage, t, dialog }: {
   )
 }
 
-export const StatsPills = memo(function StatsPills({ useChat, useProjection, useSessions, sessionId, t }: StatsPillsProps) {
+export const StatsPills = memo(function StatsPills({ useChat, useProjection, usePerformanceUsage, t }: StatsPillsProps) {
+  const mode = usePerformanceUsage(value => value)
   const settledNodes = useChat(s => s.legacy.nodes)
   const usage = useProjection('tokenUsage')
   // One exclusive slot for both dialogs: opening either pill closes the other.
@@ -376,27 +325,26 @@ export const StatsPills = memo(function StatsPills({ useChat, useProjection, use
   // while no projection value is served.
   const projected = useProjection('sessionStats')
   const stats = useMemo(() => projected ?? deriveStats(settledNodes), [projected, settledNodes])
-  const summaries = useSessions(list => list.byId)
-  const ownCostUsd = positiveSpend(usage?.costUsd)
-  const descendantCostUsd = useMemo(
-    () => subagentDescendantSpend(summaries, sessionId),
-    [summaries, sessionId],
-  )
-  const totalCostUsd = ownCostUsd + descendantCostUsd
-  const costLabel = totalCostUsd > 0
-    ? descendantCostUsd > 0
-      ? t('stats.costWithSubagents', {
-        cost: formatCost(totalCostUsd), own: formatCost(ownCostUsd),
-      })
-      : t('stats.cost', { cost: formatCost(ownCostUsd) })
-    : undefined
   // Gated on actual token activity: a session whose steps all settled without
   // billing (e.g. every request failed) shows its counts without a usage pill.
   const hasTokens = usage !== undefined
     && (billedInputTokens(usage) > 0 || usage.outputTokens > 0)
-  if (stats.steps === 0 && !hasTokens && costLabel === undefined) return null
-  // data-composer-stats: InputBar's `.root:has([data-composer-stats])` rule
-  // tightens the composer's bottom clearance only while this row renders.
+  if (mode === 'compact') {
+    const speed = stats.decodeMs > 0
+      ? t('message.tokensPerSecond', { tps: formatTokensPerSecond(stats.decodeTokens / (stats.decodeMs / 1_000)) })
+      : null
+    const cacheHit = hasTokens ? cacheHitPercent(usage) : null
+    if (speed === null && cacheHit === null) return null
+    return (
+      <div className={css.root} data-composer-stats>
+        {speed !== null && <span className={css.pill}><IconGaugeOutlineRegular />{speed}</span>}
+        {cacheHit !== null && (
+          <span className={css.pill}><IconDatabaseOutlineRegular />{t('stats.cacheHit', { percent: cacheHit })}</span>
+        )}
+      </div>
+    )
+  }
+  if (stats.steps === 0 && !hasTokens) return null
   return (
     <div className={css.root} data-composer-stats>
       {stats.steps > 0 && (
@@ -409,7 +357,6 @@ export const StatsPills = memo(function StatsPills({ useChat, useProjection, use
           }}
         />
       )}
-      {costLabel !== undefined && <span className={css.pill}>{costLabel}</span>}
       {hasTokens && (
         <UsagePill
           usage={usage}
