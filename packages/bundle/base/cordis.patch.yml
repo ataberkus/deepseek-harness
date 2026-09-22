@@ -309,6 +309,14 @@
       name: '@deepseek-ai/dsh-skill-badge'
       disabled: true
 
+    - id: skill-i-have-adhd
+      name: '@deepseek-ai/dsh-skill-i-have-adhd'
+      disabled: true
+
+    - id: skill-ponytail
+      name: '@deepseek-ai/dsh-skill-ponytail'
+      disabled: true
+
     - id: tool-skill
       name: '@deepseek-ai/dsh-tool-skill'
 

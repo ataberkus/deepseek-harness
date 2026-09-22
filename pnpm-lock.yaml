@@ -1997,6 +1997,12 @@ importers:
       '@deepseek-ai/dsh-skill-filesystem':
         specifier: workspace:^
         version: link:../../skill/skill-filesystem
+      '@deepseek-ai/dsh-skill-i-have-adhd':
+        specifier: workspace:^
+        version: link:../../skill/skill-i-have-adhd
+      '@deepseek-ai/dsh-skill-ponytail':
+        specifier: workspace:^
+        version: link:../../skill/skill-ponytail
       '@deepseek-ai/dsh-spill-local':
         specifier: workspace:^
         version: link:../../spill/spill-local
@@ -11365,6 +11371,15 @@ importers:
         specifier: workspace:^
         version: link:../skill
 
+  packages/skill/skill-i-have-adhd:
+    devDependencies:
+      '@deepseek-ai/cordis':
+        specifier: workspace:^
+        version: link:../../../vendor/cordis
+      '@deepseek-ai/dsh-skill':
+        specifier: workspace:^
+        version: link:../skill
+
   packages/skill/skill-office:
     dependencies:
       '@deepseek-ai/schemastery':
@@ -11383,6 +11398,15 @@ importers:
       '@deepseek-ai/cordis-plugin-loader':
         specifier: workspace:^
         version: link:../../../vendor/loader
+      '@deepseek-ai/dsh-skill':
+        specifier: workspace:^
+        version: link:../skill
+
+  packages/skill/skill-ponytail:
+    devDependencies:
+      '@deepseek-ai/cordis':
+        specifier: workspace:^
+        version: link:../../../vendor/cordis
       '@deepseek-ai/dsh-skill':
         specifier: workspace:^
         version: link:../skill

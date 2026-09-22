@@ -83,6 +83,8 @@
     "@deepseek-ai/dsh-skill": "workspace:^",
     "@deepseek-ai/dsh-skill-badge": "workspace:^",
     "@deepseek-ai/dsh-skill-filesystem": "workspace:^",
+    "@deepseek-ai/dsh-skill-i-have-adhd": "workspace:^",
+    "@deepseek-ai/dsh-skill-ponytail": "workspace:^",
     "@deepseek-ai/dsh-spill-local": "workspace:^",
     "@deepseek-ai/dsh-spill-policy": "workspace:^",
     "@deepseek-ai/dsh-storage": "workspace:^",
