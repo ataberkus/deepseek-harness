@@ -9,8 +9,8 @@
   en: 2c6b665adc256b4e
   zh: 2240e4c1573ebe9c
 /configure-models/add-a-third-party-provider:
-  en: b045aac6ba3425de
-  zh: 8757386f42a8c5e4
+  en: cf972c8a681438ac
+  zh: 597197d551dba48c
 /configure-models/connect-opencode-go:
   en: 47b719fcecd4580d
   zh: 4d6fd8bba17c37e1
@@ -23,6 +23,9 @@
 /configure-models/sign-in-to-antigravity:
   en: a420ee1f29327768
   zh: 2eb93ace9d560e12
+/configure-models/sign-in-to-claude:
+  en: c2865fa37594c012
+  zh: 13a8eed5ff9784d5
 /configure-models/add-a-custom-model-api:
   en: 17867305a3e1b52a
   zh: 876fedf1f6f563e4
@@ -45,5 +48,5 @@
   en: 6f52195d1502783e
   zh: 34dbbeacb541afd4
 /configure-models/troubleshooting:
-  en: 7ed9797bfeafd293
-  zh: 67be8b7086cac527
+  en: 7999ee8e96511d96
+  zh: 8ae5b92fe425231e

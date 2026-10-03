@@ -1,14 +1,14 @@
 /**
- * Provider-managed login for `openai-codex` (pi-ai browser PKCE), `cursor`
- * (loginDeepControl poll), and `google-antigravity` (Google auth-code on
- * 127.0.0.1:51121), plus the OpenCode Go API-key method. All persist in
- * {@link FileOAuthStore}.
+ * Provider-managed login for `openai-codex` (pi-ai browser PKCE), `anthropic`
+ * (pi-ai Claude Pro/Max PKCE on localhost:53692), `cursor` (loginDeepControl
+ * poll), and `google-antigravity` (Google auth-code on 127.0.0.1:51121), plus
+ * the OpenCode Go API-key method. All persist in {@link FileOAuthStore}.
  *
- * Codex keeps {@link createBrowserOAuthInteraction}: always choose browser
- * login, open the authorize URL, hang the manual-code prompt until the
- * localhost callback aborts it. Cursor and Gemini CLI notify `auth_url` and
- * wait; they never prompt `select` or `manual_code`, so the same interaction
- * only opens the URL.
+ * Codex and Claude keep {@link createBrowserOAuthInteraction}: open the
+ * authorize URL and hang the manual-code prompt until the localhost callback
+ * aborts it (Codex first selects browser login). Cursor and Gemini CLI notify
+ * `auth_url` and wait; they never prompt `select` or `manual_code`, so the
+ * same interaction only opens the URL.
  *
  * @module dsh-llm-pi-ai/oauth-login
  */
@@ -60,9 +60,10 @@ export const OPENCODE_GO_DISPLAY_NAME = 'OpenCode Go'
 /**
  * Settings-free profiles for OAuth credentials this host persists.
  *
- * Only hosted table ids (`openai-codex`, `cursor`, `google-antigravity`) are
- * injected: other catalog providers that offer OAuth beside an api-key method
- * stay on the key path the Models page already configures. Settings profiles
+ * Only hosted table ids (`openai-codex`, `cursor`, `google-antigravity`,
+ * `anthropic`) are injected: other catalog providers that offer OAuth beside
+ * an api-key method stay on the key path the Models page already configures.
+ * A settings profile for the same id replaces the injected one.
  * @param infos - non-secret store listing.
  * @returns a providers dict suitable for {@link resolveProfiles}.
  */
@@ -279,9 +280,9 @@ async function withLoginFlight(store: CredentialStore, operation: () => Promise<
 
 /**
  * Run hosted OAuth login against `store` and persist the credential.
- * @param id - hosted provider id (`openai-codex`, `cursor`, or `google-antigravity`).
+ * @param id - hosted provider id (`openai-codex`, `cursor`, `google-antigravity`, or `anthropic`).
  * @param store - the host credential store passed to `createModels`.
- * @param interaction - host {@link AuthInteraction}; Codex hangs `manual_code`, Cursor and Antigravity only need `auth_url`.
+ * @param interaction - host {@link AuthInteraction}; Codex and Claude hang `manual_code`, Cursor and Antigravity only need `auth_url`.
  */
 export async function loginHostedOAuth(
   id: string,
@@ -367,7 +368,7 @@ export function registerOAuthCommands(ctx: Context, deps: OAuthCommandDeps): voi
   ctx.inject(['commands'], (commandCtx) => {
     commandCtx.commands.register({
       name: 'login',
-      description: 'Sign in to OpenAI Codex, Cursor, or Antigravity',
+      description: 'Sign in to OpenAI Codex, Cursor, Antigravity, or Claude',
       input: { hint: OAUTH_COMMAND_HINT },
       handler: async ({ rawInput, signal }) => {
         const provider = parseOAuthProvider(rawInput)
@@ -404,7 +405,7 @@ export function registerOAuthCommands(ctx: Context, deps: OAuthCommandDeps): voi
     })
     commandCtx.commands.register({
       name: 'logout',
-      description: 'Sign out of OpenAI Codex, Cursor, or Antigravity',
+      description: 'Sign out of OpenAI Codex, Cursor, Antigravity, or Claude',
       handler: async ({ rawInput }) => {
         const provider = parseOAuthProvider(rawInput)
         if (provider === undefined) {

@@ -460,7 +460,9 @@ function Loaded({ injected, renderSlot }: { injected: ModelsSectionFace; renderS
                 ? t('oauthConfiguredCursor')
                 : row.entry.provider === 'google-antigravity' || row.entry.provider === 'google-gemini-cli'
                   ? t('oauthConfiguredAntigravity')
-                  : t('oauthConfigured')
+                  : row.entry.provider === 'anthropic'
+                    ? t('oauthConfiguredClaude')
+                    : t('oauthConfigured')
             const loginTarget: DeleteTarget = {
               provider: row.entry.provider,
               displayName: row.entry.displayName,

@@ -70,9 +70,9 @@ function submittedCommandName(line: string): string {
 const HOSTED_OAUTH_LOGIN_WINDOW = 'dsh-oauth-login'
 
 /**
- * `/login`, `/login openai-codex`, `/login cursor`, and
- * `/login google-antigravity` are hosted OAuth login lines. `/login anthropic`
- * and `/login-foo` are not.
+ * `/login`, `/login openai-codex`, `/login cursor`, `/login google-antigravity`,
+ * and `/login claude` (aliases `anthropic`, `claude-code`) are hosted OAuth
+ * login lines. `/login opencode-go` and `/login-foo` are not.
  */
 function isHostedOAuthLoginLine(line: string): boolean {
   const trimmed = line.trim()
@@ -86,6 +86,9 @@ function isHostedOAuthLoginLine(line: string): boolean {
     || rest === 'google-antigravity'
     || rest === 'antigravity'
     || rest === 'google-gemini-cli'
+    || rest === 'claude'
+    || rest === 'claude-code'
+    || rest === 'anthropic'
 }
 
 /** Authorize URLs are https; `javascript:` and other schemes are ignored. */

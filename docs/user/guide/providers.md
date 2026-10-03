@@ -16,7 +16,7 @@ Keys are write-only. The page receives a redacted descriptor after saving, never
 
 Choose **Add model provider**. The card opens on **Third-party model provider**: pick a provider dsh ships with — the list shows provider ids such as `anthropic`, `openai`, `moonshotai` for Kimi, or `zai` for GLM — enter its API key, and save. The installed catalog supplies the endpoint, protocol, and model list.
 
-Providers with native authentication need their native credentials instead. Bedrock, Vertex, and Azure use AWS credentials and a region, an ADC project, and an `api-version` respectively. Codex, Cursor, and Antigravity use their browser sign-ins. OpenCode Go uses its own API-key login. These providers appear as separate **Connect** cards instead of entries in **Add provider**.
+Providers with native authentication need their native credentials instead. Bedrock, Vertex, and Azure use AWS credentials and a region, an ADC project, and an `api-version` respectively. Codex, Cursor, and Antigravity use their browser sign-ins; a Claude subscription signs in with `/login claude` beside the `anthropic` key card. OpenCode Go uses its own API-key login. These providers appear as separate **Connect** cards instead of entries in **Add provider**.
 
 ## Connect OpenCode Go
 
@@ -51,6 +51,14 @@ Antigravity uses a Google account and Cloud Code Assist, not a Gemini API key. C
 The Web UI opens a new tab from that keystroke, the same way as Codex. A second `/login` while the first is still waiting is refused for any hosted provider.
 
 This unofficial Cloud Code Assist backend is not a public API; Google may change the wire or restrict accounts. Tokens live in the same `$DSH_HOME/oauth-credentials.json` file. The Models page offers a Connect card, not an Antigravity key card. This is not the installed `google` API-key catalog provider.
+
+## Sign in to Claude
+
+Claude Pro and Max subscriptions sign in through Anthropic's browser OAuth, the same login Claude Code uses. Run `/login claude` (aliases `claude-code` and `anthropic`) in Web, CLI, or ACP chat, complete login on claude.ai, then select an `anthropic` model. `/logout claude` deletes the stored tokens.
+
+The callback listens on `localhost:53692`, so the browser must run on the machine that serves dsh. Requests carry the subscription token with Claude Code identity headers and draw on the subscription's usage limits, not API credits. Tokens live in the same `$DSH_HOME/oauth-credentials.json` file as Codex.
+
+While signed in, the Models page shows a signed-in row in place of the `anthropic` API-key card; **Delete** signs out and restores the key card. An `anthropic` settings profile saved before login takes precedence over the subscription; delete it to use the subscription.
 
 ## Add a custom model API
 
@@ -225,7 +233,7 @@ Every switch, its accepted values, and the protocols that take it are listed und
 
 ## Troubleshooting
 
-- **`MISSING_CREDENTIAL`** — Store the provider key through the Models page, supply the referenced environment variable, or run `/login openai-codex` for Codex, `/login cursor` for Cursor, or `/login google-antigravity` for Antigravity.
+- **`MISSING_CREDENTIAL`** — Store the provider key through the Models page, supply the referenced environment variable, or run `/login openai-codex` for Codex, `/login cursor` for Cursor, `/login google-antigravity` for Antigravity, or `/login claude` for a Claude subscription.
 - **`UNKNOWN_MODEL`** — Select a configured model or add the missing model to the custom provider.
 - **Fetching available models returns 401** — Check the key. Model discovery calls the OpenAI-compatible `GET /models` endpoint; enter models manually for endpoints that do not provide it.
 - **Fetching available models reports neither a `data` array nor a `models` object** — The endpoint's listing is in a format discovery does not read. Enter the models by hand.

@@ -1259,17 +1259,27 @@ describe('openai-codex login tab', () => {
     expect(open).toHaveBeenCalledWith('about:blank', 'dsh-oauth-login')
   })
 
-  it('does not open a tab for /plan or /login anthropic', async () => {
+  it.each(['claude', 'claude-code', 'anthropic'])('opens a blank tab for /login %s', async (provider) => {
+    const tab = { closed: false, location: { href: 'about:blank' } }
+    const open = vi.fn(() => tab)
+    vi.stubGlobal('window', { open })
+    const { source, warm } = await loginBench()
+    await warm(proj('s1'))
+    await submitLogin(source, provider)
+    expect(open).toHaveBeenCalledWith('about:blank', 'dsh-oauth-login')
+  })
+
+  it('does not open a tab for /plan or /login opencode-go', async () => {
     const open = vi.fn()
     vi.stubGlobal('window', { open })
     const { source, warm, executeCalls } = await loginBench()
     await warm(proj('s1'))
     await source.matchEnter!(proj('s1'), '/plan', new AbortController().signal, { attachments: 0 })
-    await submitLogin(source, 'anthropic')
+    await submitLogin(source, 'opencode-go')
     expect(open).not.toHaveBeenCalled()
     expect(executeCalls).toEqual([
       { sessionId: sid('s1'), line: '/plan', images: [] },
-      { sessionId: sid('s1'), line: '/login anthropic', images: [] },
+      { sessionId: sid('s1'), line: '/login opencode-go', images: [] },
     ])
   })
 

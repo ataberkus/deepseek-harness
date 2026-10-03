@@ -77,7 +77,10 @@ describe('parseOAuthProvider', () => {
     expect(parseOAuthProvider('cursor')).toBe('cursor')
     expect(parseOAuthProvider('google-antigravity')).toBe('google-antigravity')
     expect(parseOAuthProvider('antigravity')).toBe('google-antigravity')
-    expect(parseOAuthProvider('anthropic')).toBeUndefined()
+    expect(parseOAuthProvider('claude')).toBe('anthropic')
+    expect(parseOAuthProvider('claude-code')).toBe('anthropic')
+    expect(parseOAuthProvider('anthropic')).toBe('anthropic')
+    expect(parseOAuthProvider('openai')).toBeUndefined()
   })
 })
 
@@ -105,6 +108,7 @@ describe('oauthProviderProfiles', () => {
       { providerId: 'cursor', type: 'oauth' },
       { providerId: 'google-antigravity', type: 'oauth' },
       { providerId: 'anthropic', type: 'oauth' },
+      { providerId: 'github-copilot', type: 'oauth' },
       { providerId: 'openai-codex', type: 'api_key' },
     ])).toEqual({
       'openai-codex': { displayName: catalog.catalogProvider('openai-codex')?.name ?? 'OpenAI Codex' },
@@ -112,6 +116,7 @@ describe('oauthProviderProfiles', () => {
       'google-antigravity': {
         displayName: catalog.catalogProvider('google-antigravity')?.name ?? 'Antigravity',
       },
+      anthropic: { displayName: catalog.catalogProvider('anthropic')?.name ?? 'Claude' },
     })
     expect(oauthProviderProfiles([])).toEqual({})
   })
@@ -473,6 +478,44 @@ describe('login and logout commands', () => {
       .toMatchObject({ settingsNs: 'llm-pi-ai', auth: 'oauth' })
   })
 
+  it('signs in with /login claude, swaps the anthropic key card for the live route, and restores it on logout', async () => {
+    const home = await isolateDshHome()
+    const provider = catalog.catalogProvider('anthropic')
+    if (provider?.auth.oauth === undefined) throw new Error('expected anthropic oauth')
+    vi.spyOn(provider.auth.oauth, 'login').mockResolvedValue({
+      type: 'oauth',
+      access: 'sk-ant-oat-test',
+      refresh: 'refresh-token',
+      expires: Date.now() + 60_000,
+    })
+    const ctx = new Context()
+    contexts.push(ctx)
+    await ctx.plugin(LlmRuntime)
+    await ctx.plugin(CommandRuntime)
+    await ctx.plugin(LlmPiAi, {})
+    const keyCard = () => ctx.llm.listConfigurableProviders().find(entry => entry.provider === 'anthropic')
+    // The catalog route takes a key, so it stays a key card rather than a Connect offer.
+    expect(keyCard()).toMatchObject({ settingsNs: 'llm-pi-ai' })
+    expect(keyCard()?.auth).toBeUndefined()
+
+    const agent = fakeAgent()
+    const login = await ctx.commands.execute(agent, '/login claude', [], AbortSignal.timeout(5_000))
+    expect(login?.result).toEqual({
+      kind: 'success',
+      text: 'Signed in to Claude. Select an anthropic model to use the Claude Pro/Max subscription.',
+    })
+    expect(ctx.llm.listProviders()).toEqual([{ id: 'anthropic', name: provider.name, auth: 'oauth' }])
+    expect(keyCard()).toBeUndefined()
+    expect((await ctx.llm.listModels('anthropic'))[0]?.provider).toBe('anthropic')
+    const stored = parseStoredCredentials(await readFile(join(home, OAUTH_CREDENTIALS_FILENAME), 'utf8'))
+    expect(stored['anthropic']).toMatchObject({ type: 'oauth', access: 'sk-ant-oat-test' })
+
+    const logout = await ctx.commands.execute(agent, '/logout claude-code', [], AbortSignal.timeout(5_000))
+    expect(logout?.result).toEqual({ kind: 'success', text: 'Signed out of Claude.' })
+    expect(ctx.llm.listProviders()).toEqual([])
+    expect(keyCard()?.auth).toBeUndefined()
+  })
+
   it('signs in with /login cursor, injects a live route, and restores the dormant offer on logout', async () => {
     const home = await isolateDshHome()
     const provider = catalog.catalogProvider('cursor')
@@ -569,7 +612,7 @@ describe('login and logout commands', () => {
       .toMatchObject({ settingsNs: 'llm-pi-ai', auth: 'oauth' })
   })
 
-  it('rejects login and logout for any provider other than openai-codex', async () => {
+  it('rejects login and logout for a catalog provider outside the hosted table', async () => {
     await isolateDshHome()
     const ctx = new Context()
     contexts.push(ctx)
@@ -577,9 +620,9 @@ describe('login and logout commands', () => {
     await ctx.plugin(CommandRuntime)
     await ctx.plugin(LlmPiAi, {})
     const agent = fakeAgent()
-    expect((await ctx.commands.execute(agent, '/login anthropic', [], AbortSignal.timeout(1_000)))?.result)
+    expect((await ctx.commands.execute(agent, '/login openai', [], AbortSignal.timeout(1_000)))?.result)
       .toEqual({ kind: 'error', text: OAUTH_LOGIN_UNSUPPORTED })
-    expect((await ctx.commands.execute(agent, '/logout anthropic', [], AbortSignal.timeout(1_000)))?.result)
+    expect((await ctx.commands.execute(agent, '/logout openai', [], AbortSignal.timeout(1_000)))?.result)
       .toEqual({ kind: 'error', text: OAUTH_LOGOUT_UNSUPPORTED })
   })
 

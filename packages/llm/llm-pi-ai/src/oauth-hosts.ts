@@ -1,6 +1,8 @@
 /**
- * Hosted OAuth-only provider routes this adapter logs in, not the rest of
- * pi-ai's catalog OAuth methods (those stay on the Models key path).
+ * Hosted OAuth provider routes this adapter logs in through `/login`, not the
+ * rest of pi-ai's catalog OAuth methods (those stay on the Models key path).
+ * `anthropic` is the one route here that also keeps its catalog key card: its
+ * OAuth login is the Claude Pro/Max subscription, and a settings key still wins.
  *
  * @module dsh-llm-pi-ai/oauth-hosts
  */
@@ -16,6 +18,12 @@ export const OPENAI_CODEX_PROVIDER = 'openai-codex'
 
 /** Fallback display name when the catalog provider is unavailable. */
 export const OPENAI_CODEX_DISPLAY_NAME = 'OpenAI Codex'
+
+/** Installed pi-ai provider id whose OAuth method signs in with a Claude Pro/Max subscription. */
+export const ANTHROPIC_PROVIDER = 'anthropic'
+
+/** Hosted-login display name for the Claude subscription route. */
+export const ANTHROPIC_DISPLAY_NAME = 'Claude'
 
 /** One hosted OAuth route this adapter will inject after login. */
 export interface HostedOAuthProvider {
@@ -60,6 +68,15 @@ const HOSTS: readonly HostedOAuthProvider[] = [
     loginFailed: 'Antigravity login failed',
     logoutFailed: 'Antigravity logout failed',
   },
+  {
+    id: ANTHROPIC_PROVIDER,
+    displayName: ANTHROPIC_DISPLAY_NAME,
+    signedIn:
+      'Signed in to Claude. Select an anthropic model to use the Claude Pro/Max subscription.',
+    signedOut: 'Signed out of Claude.',
+    loginFailed: 'Claude login failed',
+    logoutFailed: 'Claude logout failed',
+  },
 ]
 
 const BY_ID = new Map(HOSTS.map(host => [host.id, host]))
@@ -84,6 +101,8 @@ export function hostedOAuthProvider(id: string): HostedOAuthProvider | undefined
 const ALIASES: ReadonlyMap<string, string> = new Map([
   ['antigravity', GOOGLE_ANTIGRAVITY_PROVIDER],
   ['google-gemini-cli', GOOGLE_ANTIGRAVITY_PROVIDER],
+  ['claude', ANTHROPIC_PROVIDER],
+  ['claude-code', ANTHROPIC_PROVIDER],
 ])
 
 /**
@@ -103,12 +122,12 @@ export const OAUTH_LOGIN_IN_PROGRESS =
   'A login is already in progress. Finish or cancel the open browser tab, then run /login again.'
 
 /** Command remainder hint listing every hosted id. */
-export const OAUTH_COMMAND_HINT = '[openai-codex|cursor|google-antigravity]'
+export const OAUTH_COMMAND_HINT = '[openai-codex|cursor|google-antigravity|claude]'
 
 /** Error when `/login` names a route this host does not offer. */
 export const OAUTH_LOGIN_UNSUPPORTED =
-  'Only /login openai-codex, /login cursor, and /login google-antigravity are supported.'
+  'Only /login openai-codex, /login cursor, /login google-antigravity, and /login claude are supported.'
 
 /** Error when `/logout` names a route this host does not offer. */
 export const OAUTH_LOGOUT_UNSUPPORTED =
-  'Only /logout openai-codex, /logout cursor, and /logout google-antigravity are supported.'
+  'Only /logout openai-codex, /logout cursor, /logout google-antigravity, and /logout claude are supported.'

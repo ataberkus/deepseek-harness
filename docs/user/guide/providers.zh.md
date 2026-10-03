@@ -16,7 +16,7 @@
 
 选择**添加模型提供商**。卡片默认打开在**第三方模型提供商**：选取 dsh 自带的提供商——列表显示的是提供商 id，例如 `anthropic`、`openai`、Kimi 对应的 `moonshotai`、GLM 对应的 `zai`——输入其 API 密钥并保存。已安装目录会提供端点、协议和模型列表。
 
-使用原生认证的提供方需要各自的原生凭据。Bedrock、Vertex 和 Azure 分别使用 AWS 凭据与区域、ADC 项目和 `api-version`。Codex、Cursor 与 Antigravity 使用各自的浏览器登录，OpenCode Go 使用其自有 API 密钥登录。这些提供方显示为独立的**连接**卡片，而不会出现在**添加提供方**中。
+使用原生认证的提供方需要各自的原生凭据。Bedrock、Vertex 和 Azure 分别使用 AWS 凭据与区域、ADC 项目和 `api-version`。Codex、Cursor 与 Antigravity 使用各自的浏览器登录，Claude 订阅在 `anthropic` 密钥卡片之外通过 `/login claude` 登录，OpenCode Go 使用其自有 API 密钥登录。这些提供方显示为独立的**连接**卡片，而不会出现在**添加提供方**中。
 
 ## 连接 OpenCode Go
 
@@ -51,6 +51,14 @@ Antigravity 使用 Google 账号和 Cloud Code Assist，而不是 Gemini API 密
 Web UI 会像 Codex 一样在这次按键手势里打开新标签。第一次登录仍在等待时，第二次 `/login` 对任一托管提供方都会被拒绝。
 
 这条非官方 Cloud Code Assist 后端不是公开 API；Google 可能改协议或限制账号。token 与 Codex 共用 `$DSH_HOME/oauth-credentials.json`。模型页提供连接卡片，而非 Antigravity 密钥卡片。这不是已安装的 `google` API 密钥 catalog 提供方。
+
+## 登录 Claude
+
+Claude Pro 与 Max 订阅通过 Anthropic 的浏览器 OAuth 登录，与 Claude Code 使用的登录相同。在 Web、CLI 或 ACP 对话中运行 `/login claude`（别名 `claude-code` 与 `anthropic`），在 claude.ai 完成登录后选择一个 `anthropic` 模型。`/logout claude` 删除已存储的 token。
+
+回调监听 `localhost:53692`，因此浏览器必须运行在提供 dsh 服务的机器上。请求携带订阅 token 与 Claude Code 身份请求头，消耗订阅的用量额度而非 API 余额。token 与 Codex 共用 `$DSH_HOME/oauth-credentials.json`。
+
+登录期间，模型页以已登录行取代 `anthropic` API 密钥卡片；**删除**会退出登录并恢复密钥卡片。登录前已保存的 `anthropic` settings profile 优先于订阅；删除它即可使用订阅。
 
 ## 添加自定义模型 API
 
@@ -225,7 +233,7 @@ DeepSeek 将省略的 `inputModalities` 视为纯文本，并拒绝空列表。�
 
 ## 排错
 
-- **`MISSING_CREDENTIAL`**：通过模型页存储提供商密钥，提供被引用的环境变量，或对 Codex 运行 `/login openai-codex`，对 Cursor 运行 `/login cursor`，对 Antigravity 运行 `/login google-antigravity`。
+- **`MISSING_CREDENTIAL`**：通过模型页存储提供商密钥，提供被引用的环境变量，或对 Codex 运行 `/login openai-codex`，对 Cursor 运行 `/login cursor`，对 Antigravity 运行 `/login google-antigravity`，对 Claude 订阅运行 `/login claude`。
 - **`UNKNOWN_MODEL`**：选择已配置的模型，或向自定义提供商添加缺失的模型。
 - **获取可用模型返回 401**：检查密钥。模型发现会调用 OpenAI 兼容的 `GET /models` 端点；对于不提供该端点的服务，请手动输入模型。
 - **获取可用模型提示既没有 `data` 数组也没有 `models` 对象**：端点返回的列表格式不在探测的读取范围内。请手动输入模型。
