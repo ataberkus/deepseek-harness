@@ -33,6 +33,8 @@ kind: "package-reference"
 
 从设置导航打开 Models 页面，即可看到每个已配置的提供方都有一行。其配置键未在任何位置配置的整分节提供方会渲染为其展开的设置卡片而非一行，但仅限首次运行姿态，且仅持续到用户关闭该卡片为止。每一类卡片各自持有自己的展开状态，因此关掉其中一张绝不会丢弃另一张里的草稿。
 
+提供方自有登录在未连接时显示为连接卡片，连接后显示为带断开操作的已连接行。Codex、Cursor 与 Antigravity 运行命名空间的 `llm/loginOAuth` 入口，并在登录标签页打开授权 URL。通过 `/login claude` 登录的 Claude 订阅没有连接卡片：登录期间，其已连接行取代 `anthropic` 密钥卡片。OpenCode Go 渲染密码遮罩的密钥字段并运行 `llm/loginApiKey`；提交的密钥会立即从浏览器状态清除，且绝不进入 settings。
+
 存在已存储目录错误的提供商仍显示诊断以及编辑、删除入口。添加操作只面向已注册的 settings 命名空间，因此不可用的命名空间不会留下无法打开编辑器的按钮。保存被拒绝时，编辑器保持打开并展示 Host 诊断。
 
 Host 配置 `credentialOnboarding` 默认为 `true`。Electron preload 标记会抑制自动凭证引导和 Web 欢迎须知；模型设置页与显式 API Key 编辑仍然可用。[账号插件](../ui-settings-account/README.zh.md#desktop-onboarding)负责 Desktop 引导。其他原生壳可以通过 `credentialOnboarding: false` 仅禁用凭证步骤。Host 通过 `webserver/index-inject` 发布这个公开的布尔值，Client 在注册弹窗前校验它。它是页面初始化数据，不是持久化的完成标记。

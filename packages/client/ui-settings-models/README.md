@@ -33,7 +33,7 @@ DeepSeek Account appears first and DeepSeek second in the provider list; third-p
 
 Open the Models page from the Settings navigation to see every configured provider as a row. A whole-section provider whose key is not configured anywhere renders as its open setup card instead, but only in the first-run posture and only until the user closes that card. Each card kind owns its own open state, so closing one never discards a draft in another.
 
-Provider-owned logins appear as Connect cards while disconnected and as live rows with a disconnect action once connected. Codex, Cursor, and Antigravity run the namespace `llm/loginOAuth` offer and open an authorize URL in the login tab. OpenCode Go renders a password-masked key field and runs `llm/loginApiKey`; the submitted secret is cleared from browser state immediately and never enters settings.
+Provider-owned logins appear as Connect cards while disconnected and as live rows with a disconnect action once connected. Codex, Cursor, and Antigravity run the namespace `llm/loginOAuth` offer and open an authorize URL in the login tab. A Claude subscription signed in with `/login claude` has no Connect card: its live row replaces the `anthropic` key card while signed in. OpenCode Go renders a password-masked key field and runs `llm/loginApiKey`; the submitted secret is cleared from browser state immediately and never enters settings.
 
 A provider with a stored catalog error remains visible with its diagnostic and edit/delete actions. Add actions are offered only for registered settings namespaces, so an unavailable namespace cannot leave a button that opens no editor. A rejected save leaves the editor open and displays the Host diagnostic.
 

@@ -513,6 +513,7 @@ describe('login and logout commands', () => {
     const logout = await ctx.commands.execute(agent, '/logout claude-code', [], AbortSignal.timeout(5_000))
     expect(logout?.result).toEqual({ kind: 'success', text: 'Signed out of Claude.' })
     expect(ctx.llm.listProviders()).toEqual([])
+    expect(keyCard()).toMatchObject({ settingsNs: 'llm-pi-ai' })
     expect(keyCard()?.auth).toBeUndefined()
   })
 
