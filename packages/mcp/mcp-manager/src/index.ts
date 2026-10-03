@@ -1,9 +1,9 @@
 /**
- * Settings-driven fleet manager for MCP servers. One manager instance owns the
- * `mcp` settings section and mounts one `@deepseek-ai/dsh-mcp-client` child
- * per enabled server entry, so operators add, edit, disable, or remove servers
- * from `settings.yaml` or the Plugins settings card instead of editing
- * `cordis.yml`.
+ * Config-driven fleet manager for MCP servers. One manager instance owns the
+ * `mcp` profile entry's `servers` dict and mounts one
+ * `@deepseek-ai/dsh-mcp-client` child per enabled entry, so operators add,
+ * edit, disable, or remove servers from the Plugins settings card (which
+ * edits the active profile) instead of editing `cordis.yml` by hand.
  *
  * The settings dict key IS the server name: it namespaces the server's tools
  * as `mcp__<serverName>__<tool>` and must match `[A-Za-z0-9_-]{1,32}`. An entry
@@ -14,21 +14,20 @@
  * @module @deepseek-ai/dsh-mcp-manager
  */
 
-import type { Context, Fiber } from '@deepseek-ai/cordis'
+import type { Context, Fiber, Volatile } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import { MAX_TIMER_DELAY_MS } from '@deepseek-ai/dsh-timeout'
 import { deepEqualJson } from '@deepseek-ai/dsh-util-values'
 import * as McpClient from '@deepseek-ai/dsh-mcp-client'
-import type {} from '@deepseek-ai/dsh-settings'
+// Type-only: pulls the Loader's entry and `loader/volatile-update` merges into
+// this program so live config commits can re-reconcile the fleet.
+import type {} from '@deepseek-ai/cordis-plugin-loader'
 
 /** Cordis plugin name used by loader diagnostics. */
 export const name = 'mcp-manager'
 
 /** Services required by this plugin. */
 export const inject = ['tools']
-
-/** Settings namespace carrying the fleet description. */
-export const MCP_SETTINGS_NAMESPACE = 'mcp'
 
 /** Valid server names, matching the client bridge namespace budget. */
 const SERVER_NAME_PATTERN = /^[A-Za-z0-9_-]{1,32}$/
@@ -97,16 +96,26 @@ export interface Config {
   servers?: Record<string, McpServerEntry>
 }
 
-/** Resolved manager configuration after schemastery applied the defaults. */
-type ResolvedConfig = { servers: Record<string, ResolvedEntry> }
+/**
+ * Resolved manager configuration after schemastery applied the defaults.
+ * `servers` is volatile: a settings edit commits a new snapshot without
+ * remounting the manager, so the fleet is read from the reference each time.
+ */
+type ResolvedConfig = {
+  /** Servers by name with schema defaults applied; read from the volatile reference per reconcile. */
+  servers: Volatile<Record<string, ResolvedEntry>>
+}
 
 /** One resolved entry with defaults applied. */
 type ResolvedEntry = (
   | Omit<McpStdioServerEntry, 'enabled' | 'args' | 'env' | 'cwd' | 'toolCallTimeoutMs' | 'failOnStartupError'>
   | Omit<McpHttpServerEntry, 'enabled' | 'headers' | 'toolCallTimeoutMs' | 'failOnStartupError'>
 ) & {
+  /** Whether this entry mounts a child; a disabled entry keeps its name reserved but serves no tools. */
   enabled: boolean
+  /** Ceiling for one tool call on this server's child before the call fails loud. */
   toolCallTimeoutMs: number
+  /** Whether a startup failure refuses the request instead of logging and continuing without the child. */
   failOnStartupError: boolean
 } & Record<string, unknown>
 
@@ -141,16 +150,16 @@ const HttpEntry = z.object({
 
 /** Schema for the `mcp` settings section and the manager composition entry. */
 export const Config: z<Config, ResolvedConfig> = z.object({
-  servers: z.dict(z.union([StdioEntry, HttpEntry]) as unknown as z<McpServerEntry>).default({}),
+  servers: z.dict(z.union([StdioEntry, HttpEntry]) as unknown as z<McpServerEntry>).default({}).volatile(),
 }) as unknown as z<Config, ResolvedConfig>
 
 /**
- * Reject a resolved section the fleet could not mount. The schema validates
- * each entry's fields; only the dict keys escape it, so an illegal server name
- * is refused where it is written instead of failing one child at sync time.
- * @param value - the resolved section, schema-valid by construction.
+ * Reject a fleet the manager could not mount. The schema validates each entry's
+ * fields; only the dict keys escape it, so an illegal server name is refused
+ * here instead of failing one child at sync time.
+ * @param value - the resolved fleet section.
  */
-export function assertServiceableMcpConfig(value: ResolvedConfig): void {
+export function assertServiceableMcpConfig(value: { servers: Record<string, unknown> }): void {
   for (const serverName of Object.keys(value.servers)) {
     if (!SERVER_NAME_PATTERN.test(serverName)) {
       throw new Error(
@@ -188,7 +197,8 @@ function toClientConfig(serverName: string, entry: ResolvedEntry): McpClient.Con
  * @param config - composition entry used as the settings base layer.
  */
 export function apply(ctx: Context, config: ResolvedConfig): void {
-  let current: () => ResolvedConfig = () => config
+  const servers = (): Record<string, ResolvedEntry> => config.servers.get()
+  assertServiceableMcpConfig({ servers: servers() })
   const live = new Map<string, LiveChild>()
   let closed = false
   ctx.effect(() => () => {
@@ -203,10 +213,16 @@ export function apply(ctx: Context, config: ResolvedConfig): void {
    */
   const reconcile = async (): Promise<void> => {
     if (closed) return
-    const resolved = current()
     const desired = new Map<string, McpClient.Config>()
-    for (const [serverName, entry] of Object.entries(resolved.servers)) {
-      if (entry.enabled === false) continue
+    for (const [serverName, entry] of Object.entries(servers())) {
+      if (!entry.enabled) continue
+      // A live edit can name a server the tool namespace budget cannot carry;
+      // skip that entry rather than mounting a child whose tools could not be
+      // addressed.
+      if (!SERVER_NAME_PATTERN.test(serverName)) {
+        ctx.logger.error(`mcp-manager: refusing server "${serverName}": the name must match [A-Za-z0-9_-]{1,32}`)
+        continue
+      }
       desired.set(serverName, toClientConfig(serverName, entry))
     }
     for (const [serverName, child] of [...live]) {
@@ -220,6 +236,7 @@ export function apply(ctx: Context, config: ResolvedConfig): void {
         }
       }
     }
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- dispose() can flip this during the await.
     if (closed) return
     for (const [serverName, next] of desired) {
       const prev = live.get(serverName)
@@ -240,10 +257,12 @@ export function apply(ctx: Context, config: ResolvedConfig): void {
           ctx.logger.error(`mcp-manager: disposing server "${serverName}" before remount failed`)
           ctx.logger.error(error)
         }
+        // oxlint-disable-next-line typescript/no-unnecessary-condition -- dispose() can flip this during the await.
         if (closed) return
       }
       try {
         const fiber = await ctx.plugin(McpClient, parsed)
+        // oxlint-disable-next-line typescript/no-unnecessary-condition -- dispose() can flip this during the await.
         if (closed) {
           await fiber.dispose().catch((error: unknown) => {
             ctx.logger.error(`mcp-manager: disposing late-mounted server "${serverName}" failed`)
@@ -273,16 +292,8 @@ export function apply(ctx: Context, config: ResolvedConfig): void {
       }
     })
   }
-  ctx.inject(['settings'], (settingsCtx) => {
-    settingsCtx.settings.installSection(ctx, MCP_SETTINGS_NAMESPACE, Config, config, {
-      validate: assertServiceableMcpConfig,
-      setSource: (source) => {
-        current = source as () => ResolvedConfig
-      },
-      onChange: () => {
-        schedule()
-      },
-    })
-  })
+  // A volatile-only config commit reaches the running instance through the
+  // Loader; re-reconcile against the committed snapshot without remounting.
+  ctx.on('loader/volatile-update', () => { schedule() })
   schedule()
 }

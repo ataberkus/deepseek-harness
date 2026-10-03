@@ -55,7 +55,12 @@ export function bundleRoster(
   const entries = applyEntryPatches([], layers.flatMap(layer => layer.patches), (message: string, ...args: unknown[]) => {
     throw new Error(`client-test-runtime: bundle patch ${describe(message, args)}`)
   })
-  const anchors = layers.map(layer => layer.manifestPath)
+  // Bundle manifests first, so a row resolves against the dependency
+  // directories the bundle is assembled from. The reader's own anchor follows:
+  // a bundle may declare a row for itself (`dsh-web-app` mounts its own runtime
+  // glue), and that name is only reachable through the reader's dependency
+  // directory, never through the bundle's own node_modules.
+  const anchors = [...layers.map(layer => layer.manifestPath), anchor]
   const rows: ClientRosterRow[] = []
   const seen = new Set<string>()
   for (const { entry, disabled } of flattenGroups(entries)) {

@@ -3,38 +3,38 @@
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/mcp/mcp-manager/README.md
 /:
-  en: d45d4a646518dbdc
-  zh: 5b3e08b3ea86a875
+  en: 12affcf83958a310
+  zh: 6549e52eb85d1e43
 /deepseek-ai-dsh-mcp-manager:
   en: 4aaba88431d337f0
   zh: dbeb71a252aa7748
 /deepseek-ai-dsh-mcp-manager/summary:
-  en: cfcfe25a7c48dac7
-  zh: 9ebbfc847362b0aa
+  en: 38db9ef34c3d7bd6
+  zh: 11842876c6b1f8bf
 /deepseek-ai-dsh-mcp-manager/table-of-contents:
   en: d152484eb41ac6b4
-  zh: d152484eb41ac6b4
+  zh: ffab54373e9e61f0
 /deepseek-ai-dsh-mcp-manager/use-this-package:
-  en: 577d009433fdaad4
-  zh: f976ca301556e7ea
+  en: 85b2ca7b1a911716
+  zh: 29f0b324503d5aff
 /deepseek-ai-dsh-mcp-manager/use-this-package/minimal-configuration:
-  en: 8f113f27b666e55a
-  zh: c08b2f39d5812551
+  en: 0e3ca3f7a6583943
+  zh: 520350033eea21c4
 /deepseek-ai-dsh-mcp-manager/understand-the-implementation:
   en: 323157f0b573a5eb
   zh: 323157f0b573a5eb
 /deepseek-ai-dsh-mcp-manager/understand-the-implementation/design-philosophy:
-  en: fd79823b0af417e6
-  zh: 5510ac45d7747463
+  en: 26411ef3697f0574
+  zh: 4eeb169e5b8844d1
 /deepseek-ai-dsh-mcp-manager/understand-the-implementation/source-map:
-  en: a015629ad7f50ff9
-  zh: c39f555cbb748b95
+  en: 3b8a7bad783684ab
+  zh: bb1c89adb7b065cf
 /deepseek-ai-dsh-mcp-manager/understand-the-implementation/lifecycle-and-sync:
-  en: f0b03d4d4fa00c7c
-  zh: c8d066511689a135
+  en: 75042311f6dab5e9
+  zh: b14a200baa4d3e29
 /deepseek-ai-dsh-mcp-manager/further-exploration:
-  en: ef9064c7926cb94a
-  zh: 6782c70968fde6fd
+  en: d475cba52fd7516a
+  zh: befa9984239e7d28
 /deepseek-ai-dsh-mcp-manager/model-experience:
   en: 2e3305dde87195c2
   zh: 2e3305dde87195c2
@@ -42,8 +42,8 @@
   en: 7cc01d26d3957104
   zh: 7cc01d26d3957104
 /deepseek-ai-dsh-mcp-manager/known-limitations-and-deferred-work:
-  en: 515e66af2601ea51
-  zh: c7199da79c367576
+  en: 84a828280f122230
+  zh: 5832bb15ed854458
 /deepseek-ai-dsh-mcp-manager/known-limitations-and-deferred-work/dev-note:
-  en: 2de53e8e8bc71d7a
-  zh: 2d2947e65444df05
+  en: 47ca3c844c2854cb
+  zh: f8e1b2372346b941

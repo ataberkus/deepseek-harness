@@ -1,35 +1,55 @@
-/** Staged fleet editor for the Host-owned `mcp` settings section. */
+/**
+ * The MCP page's staged fleet editor over the `mcp-manager` entry's volatile
+ * `servers` field.
+ *
+ * The page stages a whole fleet and writes it in one revision-fenced `set` of
+ * that field, so a save is one document write whatever the user changed. Only
+ * the fields this page edits ride: an entry it updates keeps everything else
+ * another writer stored (env, headers, timeouts, reconnect).
+ */
 
 import { createSnapshotStore, type SnapshotStore } from '@deepseek-ai/dsh-client-store'
-import type { SettingsScope } from '@deepseek-ai/dsh-client-ui-settings/client'
+import type { SettingsFormShell } from '@deepseek-ai/dsh-client-ui-primitives'
+import type { ConfigForm } from '@deepseek-ai/dsh-client-ui-settings/client'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
-import type { CardShell } from './card-form.ts'
 
 /**
- * Namespace of the Host-owned MCP fleet. Spelled here rather than imported: a
- * client package must not depend on a Host package.
+ * Profile entry whose volatile fleet this page edits. Spelled here rather than
+ * imported: a client package must not depend on a Host package.
  */
-export const MCP_NS = 'mcp'
+export const MCP_MANAGER_ENTRY = 'mcp-manager'
 
 /** Server names must match the tool namespace budget the Host enforces. */
 const SERVER_NAME_PATTERN = /^[A-Za-z0-9_-]{1,32}$/
 
-/** Settings fields stored for the fleet; server entries stay structurally open. */
+/** Transport one stored server entry speaks. */
+export type McpTransport = 'stdio' | 'streamable-http'
+
+/** One stored server entry, structurally open so fields this page does not edit survive an update. */
+export type McpServerEntry = { [field: string]: JsonValue }
+
+/** The fleet the `mcp-manager` entry stores. */
 export interface McpFleetSettings {
   /** Fleet keyed by server name. */
-  servers?: Record<string, Record<string, unknown>>
+  servers?: Record<string, McpServerEntry>
 }
 
-/** One server row the card renders. */
+/** One server row the page renders. */
 export interface McpServerView {
   /** Dict key namespacing the server's tools. */
   name: string
-  /** Transport, or `unknown` when the stored entry names none the card knows. */
-  transport: 'stdio' | 'streamable-http' | 'unknown'
+  /** Transport, or `unknown` when the stored entry names none the page knows. */
+  transport: McpTransport | 'unknown'
   /** Whether the draft enables this server. */
   enabled: boolean
   /** One-line endpoint summary (command line or URL). */
   detail: string
+  /** Stdio executable, as the row's edit form seeds it. */
+  command: string
+  /** Stdio arguments, one per line, as the row's edit form seeds them. */
+  argsText: string
+  /** Streamable HTTP endpoint, as the row's edit form seeds it. */
+  url: string
 }
 
 /** Validation failure for a staged server entry. */
@@ -40,14 +60,14 @@ export type McpServerValidation =
   | 'urlRequired'
   | 'urlInvalid'
 
-/** Structured server entry staged by the card's add form. */
+/** Structured server entry staged by the page's add form. */
 export interface McpServerDraft {
   /** Dict key; when `previousName` differs the old key is renamed. */
   name: string
   /** Previous key for a rename; omission adds or updates `name` in place. */
   previousName?: string
   /** Transport selecting which endpoint fields apply. */
-  transport: 'stdio' | 'streamable-http'
+  transport: McpTransport
   /** Whether the staged entry mounts. */
   enabled: boolean
   /** Stdio executable. */
@@ -58,19 +78,19 @@ export interface McpServerDraft {
   url: string
 }
 
-/** State rendered by the staged fleet card. */
-export interface McpCardState extends CardShell {
-  /** Draft fleet rows in registration order. */
+/** State rendered by the fleet page. */
+export interface McpServersCardState extends SettingsFormShell {
+  /** Draft fleet rows, ordered by name. */
   servers: readonly McpServerView[]
   /** Whether a newer Host revision invalidated the current draft. */
   conflicted: boolean
 }
 
-/** Registration-side face for the fleet card. */
-export interface McpCardFace {
+/** Registration-side face for the fleet page. */
+export interface McpServersCardFace {
   hooks: {
-    /** Card snapshot bound by the renderer as useMcpCard. */
-    mcpCard: SnapshotStore<McpCardState>
+    /** Page snapshot bound by the renderer as useMcpServersCard. */
+    mcpServersCard: SnapshotStore<McpServersCardState>
   }
   /** Stage an enabled flip for one server. */
   toggleEnabled: (name: string) => void
@@ -94,9 +114,18 @@ export interface McpCardFace {
  * @param field - field to read.
  * @returns the string value, or an empty string when absent or mistyped.
  */
-function stringField(entry: Record<string, unknown>, field: string): string {
+function stringField(entry: McpServerEntry, field: string): string {
   const value = entry[field]
   return typeof value === 'string' ? value : ''
+}
+
+/**
+ * Split the form's argument text.
+ * @param text - one trimmed argument per line.
+ * @returns the arguments, blank lines dropped.
+ */
+function argsOf(text: string): string[] {
+  return text.split('\n').map(line => line.trim()).filter(line => line.length > 0)
 }
 
 /**
@@ -105,30 +134,28 @@ function stringField(entry: Record<string, unknown>, field: string): string {
  * @param entry - stored server entry.
  * @returns the rendered row.
  */
-export function toServerView(name: string, entry: Record<string, unknown>): McpServerView {
+export function toServerView(name: string, entry: McpServerEntry): McpServerView {
   const transport = entry['transport']
-  const enabled = entry['enabled']
+  const enabled = entry['enabled'] !== false
   if (transport === 'streamable-http') {
-    return {
-      name,
-      transport,
-      enabled: enabled !== false,
-      detail: stringField(entry, 'url'),
-    }
+    const url = stringField(entry, 'url')
+    return { name, transport, enabled, detail: url, command: '', argsText: '', url }
   }
   if (transport === 'stdio') {
+    const args = entry['args']
+    const parts = Array.isArray(args) ? args.filter((arg): arg is string => typeof arg === 'string') : []
     const command = stringField(entry, 'command')
-    const args = Array.isArray(entry['args'])
-      ? (entry['args'] as unknown[]).filter((arg): arg is string => typeof arg === 'string')
-      : []
     return {
       name,
       transport,
-      enabled: enabled !== false,
-      detail: [command, ...args].filter(part => part.length > 0).join(' '),
+      enabled,
+      detail: [command, ...parts].filter(part => part.length > 0).join(' '),
+      command,
+      argsText: parts.join('\n'),
+      url: '',
     }
   }
-  return { name, transport: 'unknown', enabled: enabled !== false, detail: '' }
+  return { name, transport: 'unknown', enabled, detail: '', command: '', argsText: '', url: '' }
 }
 
 /**
@@ -140,61 +167,46 @@ export function validateServerDraft(draft: McpServerDraft): McpServerValidation 
   if (draft.name.trim().length === 0) return 'nameRequired'
   if (!SERVER_NAME_PATTERN.test(draft.name.trim())) return 'nameInvalid'
   if (draft.transport === 'stdio') {
-    if (draft.command.trim().length === 0) return 'commandRequired'
-    return undefined
+    return draft.command.trim().length === 0 ? 'commandRequired' : undefined
   }
   if (draft.url.trim().length === 0) return 'urlRequired'
   try {
-    const parsed = new URL(draft.url.trim())
-    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return 'urlInvalid'
-  } catch (_invalidUrl) {
+    const protocol = new URL(draft.url.trim()).protocol
+    return protocol === 'http:' || protocol === 'https:' ? undefined : 'urlInvalid'
+  } catch (invalidUrl) {
+    if (!(invalidUrl instanceof TypeError)) throw invalidUrl
     return 'urlInvalid'
   }
-  return undefined
 }
 
 /**
- * Project a staged entry into the stored shape. Only the card's simple fields
- * ride: advanced tuning (env, headers, timeouts, reconnect) stays in
- * `settings.yaml` and survives because staged updates merge per server.
+ * Project a staged entry into the stored shape. Only the page's simple fields
+ * ride: advanced tuning (env, headers, timeouts, reconnect) stays with the
+ * profile and survives because staged updates merge per server.
  * @param draft - validated structured entry.
  * @returns the stored server entry.
  */
-export function toStoredEntry(draft: McpServerDraft): Record<string, unknown> {
-  const name = draft.name.trim()
-  void name
+export function toStoredEntry(draft: McpServerDraft): McpServerEntry {
   if (draft.transport === 'stdio') {
-    const args = draft.argsText.split('\n').map(line => line.trim()).filter(line => line.length > 0)
-    return {
-      transport: 'stdio' as const,
-      enabled: draft.enabled,
-      command: draft.command.trim(),
-      args,
-    }
+    return { transport: 'stdio', enabled: draft.enabled, command: draft.command.trim(), args: argsOf(draft.argsText) }
   }
-  return {
-    transport: 'streamable-http' as const,
-    enabled: draft.enabled,
-    url: draft.url.trim(),
-  }
+  return { transport: 'streamable-http', enabled: draft.enabled, url: draft.url.trim() }
 }
 
-/** Bridges one settings scope onto a staged fleet card. */
-export class McpCardController {
-  private draftServers: Map<string, Record<string, unknown>> | undefined
+/** Bridges one settings form onto the staged fleet page. */
+export class McpServersCardController {
+  private draftServers: Map<string, McpServerEntry> | undefined
   private draftRevision: number | undefined
   private saving = false
   private failed = false
   private conflicted = false
   private disposed = false
   private saveGeneration = 0
-  private readonly store: SnapshotStore<McpCardState>
+  private readonly store: SnapshotStore<McpServersCardState>
   private readonly unsubscribe: () => void
 
-  /**
-   * @param scope - bound `mcp` settings scope.
-   */
-  constructor(private readonly scope: SettingsScope<McpFleetSettings>) {
+  /** @param scope - the bound form for the `mcp-manager` entry. */
+  constructor(private readonly scope: ConfigForm<McpFleetSettings>) {
     this.store = createSnapshotStore(this.projection())
     this.unsubscribe = scope.subscribe(() => {
       if (!this.saving && this.draftServers !== undefined
@@ -206,7 +218,7 @@ export class McpCardController {
     })
   }
 
-  /** Stop observing settings and suppress late write settlements. */
+  /** Stop observing the entry and suppress late write settlements. */
   dispose(): void {
     this.disposed = true
     this.saveGeneration += 1
@@ -214,12 +226,12 @@ export class McpCardController {
   }
 
   /**
-   * Build the renderer face for this card.
-   * @returns the snapshot and staged card actions injected into the renderer.
+   * Build the renderer face for this page.
+   * @returns the snapshot and staged fleet actions injected into the renderer.
    */
-  inject(): McpCardFace {
+  inject(): McpServersCardFace {
     return {
-      hooks: { mcpCard: this.store },
+      hooks: { mcpServersCard: this.store },
       toggleEnabled: (name) => { this.toggleEnabled(name) },
       removeServer: (name) => { this.removeServer(name) },
       saveServer: draft => this.saveServer(draft),
@@ -228,12 +240,12 @@ export class McpCardController {
     }
   }
 
-  private currentServers(): Map<string, Record<string, unknown>> {
+  private currentServers(): Map<string, McpServerEntry> {
     const servers = this.scope.getSnapshot().value?.servers ?? {}
-    return new Map(Object.entries(servers).map(([name, entry]) => [name, { ...(entry as Record<string, unknown>) }]))
+    return new Map(Object.entries(servers).map(([name, entry]) => [name, { ...entry }]))
   }
 
-  private desiredServers(): Map<string, Record<string, unknown>> {
+  private desiredServers(): Map<string, McpServerEntry> {
     return this.draftServers ?? this.currentServers()
   }
 
@@ -248,7 +260,7 @@ export class McpCardController {
     return true
   }
 
-  private beginDraft(): Map<string, Record<string, unknown>> {
+  private beginDraft(): Map<string, McpServerEntry> {
     if (this.draftServers === undefined) {
       this.draftServers = this.currentServers()
       this.draftRevision = this.scope.getSnapshot().revision
@@ -263,37 +275,41 @@ export class McpCardController {
     this.conflicted = false
   }
 
-  private toggleEnabled(name: string): void {
+  /** @returns whether a staged edit may be accepted right now. */
+  private editable(): boolean {
     const snapshot = this.scope.getSnapshot()
-    if (this.disposed || snapshot.status !== 'ready' || !snapshot.writable || this.saving) return
+    if (this.disposed || this.saving) return false
+    return snapshot.status === 'ready' && snapshot.writable
+  }
+
+  private toggleEnabled(name: string): void {
+    if (!this.editable()) return
     const draft = this.beginDraft()
     const entry = draft.get(name)
     if (entry === undefined) return
-    draft.set(name, { ...entry, enabled: entry['enabled'] !== false ? false : true })
+    const enabled = entry['enabled'] !== false
+    draft.set(name, { ...entry, enabled: !enabled })
     this.failed = false
     this.publish()
   }
 
   private removeServer(name: string): void {
-    const snapshot = this.scope.getSnapshot()
-    if (this.disposed || snapshot.status !== 'ready' || !snapshot.writable || this.saving) return
+    if (!this.editable()) return
     const draft = this.beginDraft()
-    if (!draft.has(name)) return
-    draft.delete(name)
+    if (!draft.delete(name)) return
     this.failed = false
     this.publish()
   }
 
-  private saveServer(draft: McpServerDraft): McpServerValidation | undefined {
-    const snapshot = this.scope.getSnapshot()
-    if (this.disposed || snapshot.status !== 'ready' || !snapshot.writable || this.saving) return undefined
-    const failure = validateServerDraft(draft)
+  private saveServer(input: McpServerDraft): McpServerValidation | undefined {
+    if (!this.editable()) return undefined
+    const failure = validateServerDraft(input)
     if (failure !== undefined) return failure
     const servers = this.beginDraft()
-    const name = draft.name.trim()
-    const previous = draft.previousName?.trim()
+    const name = input.name.trim()
+    const previous = input.previousName?.trim()
     if (previous !== undefined && previous.length > 0 && previous !== name) servers.delete(previous)
-    const stored = toStoredEntry(draft)
+    const stored = toStoredEntry(input)
     const existing = servers.get(name)
     servers.set(name, existing === undefined ? stored : { ...existing, ...stored })
     this.failed = false
@@ -308,10 +324,8 @@ export class McpCardController {
   }
 
   private async save(): Promise<void> {
-    const snapshot = this.scope.getSnapshot()
-    if (this.disposed || snapshot.status !== 'ready' || !snapshot.writable || this.saving) return
-    if (this.draftServers === undefined || this.sameAsCurrent()) return
-    if (snapshot.revision !== this.draftRevision) {
+    if (!this.editable() || this.draftServers === undefined || this.sameAsCurrent()) return
+    if (this.scope.getSnapshot().revision !== this.draftRevision) {
       this.conflicted = true
       this.publish()
       return
@@ -321,8 +335,8 @@ export class McpCardController {
     this.failed = false
     this.conflicted = false
     this.publish()
-    const desired = Object.fromEntries([...this.draftServers.entries()])
-    await this.scope.mutate([{ op: 'set', path: ['servers'], value: desired as unknown as JsonValue }], this.draftRevision)
+    const desired = Object.fromEntries(this.draftServers.entries())
+    await this.scope.mutate([{ op: 'set', path: ['servers'], value: desired }], this.draftRevision)
     if (generation !== this.saveGeneration) return
     const landed = this.sameAsCurrent()
     this.saving = false
@@ -331,7 +345,7 @@ export class McpCardController {
     this.publish()
   }
 
-  private projection(): McpCardState {
+  private projection(): McpServersCardState {
     const snapshot = this.scope.getSnapshot()
     const servers = [...this.desiredServers().entries()].map(([name, entry]) => toServerView(name, entry))
       .sort((left, right) => left.name.localeCompare(right.name))

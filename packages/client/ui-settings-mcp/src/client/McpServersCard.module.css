@@ -1,0 +1,85 @@
+/* The MCP fleet page: the server rows above the add form. */
+
+.heading {
+  margin: 0 0 8px;
+  font: var(--dsw-font-body-medium);
+  color: var(--dsw-alias-text-secondary);
+}
+
+.notice,
+.error {
+  margin: 0 0 8px;
+  color: var(--dsw-alias-text-danger);
+  font: var(--dsw-font-body-small);
+}
+
+.empty {
+  margin: 0 0 12px;
+  color: var(--dsw-alias-text-tertiary);
+  font: var(--dsw-font-body-small);
+}
+
+.rows {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0 0 16px;
+  padding: 0;
+  list-style: none;
+}
+
+.row {
+  display: grid;
+  grid-template-columns: minmax(120px, auto) max-content 1fr max-content max-content;
+  align-items: center;
+  gap: 8px;
+}
+
+.transport {
+  color: var(--dsw-alias-text-tertiary);
+  font: var(--dsw-font-body-small);
+}
+
+.detail {
+  overflow: hidden;
+  color: var(--dsw-alias-text-secondary);
+  font: var(--dsw-font-code-small);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 12px;
+  border-top: 1px solid var(--dsw-alias-border-subtle);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.hint {
+  margin: 0;
+  color: var(--dsw-alias-text-tertiary);
+  font: var(--dsw-font-body-small);
+}
+
+.args {
+  min-height: 64px;
+  padding: 6px 8px;
+  color: var(--dsw-alias-text-primary);
+  font: var(--dsw-font-code-small);
+  background: var(--dsw-alias-background-secondary);
+  border: 1px solid var(--dsw-alias-border-subtle);
+  border-radius: 6px;
+  resize: vertical;
+}
+
+.actions {
+  display: flex;
+  gap: 8px;
+}

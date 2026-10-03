@@ -2,42 +2,45 @@
 # section, a hash of its English and Chinese blocks outside code blocks and generated regions.
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-09-13-mcp-settings-fleet.md
-/agent-note-settings-driven-mcp-fleet:
-  en: dfff9ce04a359733
-  zh: 97574232129ab1f4
-/agent-note-settings-driven-mcp-fleet/problem:
-  en: f4498760bdde8b1f
-  zh: f5612d8236e45cde
-/agent-note-settings-driven-mcp-fleet/decision:
+/agent-note-a-live-editable-mcp-fleet-on-the-plugin-entry:
+  en: d3da6da3d43dc7fa
+  zh: 926c75609d0b84b5
+/agent-note-a-live-editable-mcp-fleet-on-the-plugin-entry/problem:
+  en: faea1e9f483ca018
+  zh: 3dcdafb1768391f3
+/agent-note-a-live-editable-mcp-fleet-on-the-plugin-entry/decision:
   en: a15c7c13f167e5ac
   zh: a15c7c13f167e5ac
-/agent-note-settings-driven-mcp-fleet/decision/fleet-manager-package:
-  en: 3849d2e38b3f26b3
-  zh: a92343782b49c38f
-/agent-note-settings-driven-mcp-fleet/decision/lifecycle:
-  en: 22ede76d94a60f01
-  zh: c503480ae7d770cb
-/agent-note-settings-driven-mcp-fleet/decision/browser-card:
-  en: 5eebf1d6c455bb13
-  zh: 87131e8ce08d9e05
-/agent-note-settings-driven-mcp-fleet/alternatives-considered:
+/agent-note-a-live-editable-mcp-fleet-on-the-plugin-entry/decision/fleet-manager-package:
+  en: eeabf8ff7ce8d804
+  zh: 05e40b756874d1e2
+/agent-note-a-live-editable-mcp-fleet-on-the-plugin-entry/decision/lifecycle:
+  en: ec943b01ca35419e
+  zh: 7c229fcb9d2fd5b0
+/agent-note-a-live-editable-mcp-fleet-on-the-plugin-entry/decision/browser-page:
+  en: 325372e404d8ece3
+  zh: 9f6138d9885d697a
+/agent-note-a-live-editable-mcp-fleet-on-the-plugin-entry/alternatives-considered:
   en: 6119e2aff3b6be5a
   zh: 6119e2aff3b6be5a
-/agent-note-settings-driven-mcp-fleet/alternatives-considered/per-server-settings-sections:
+/agent-note-a-live-editable-mcp-fleet-on-the-plugin-entry/alternatives-considered/settings-section-fleet:
+  en: 703aa225f7d2c3ee
+  zh: 4ccebda4b2c902da
+/agent-note-a-live-editable-mcp-fleet-on-the-plugin-entry/alternatives-considered/per-server-settings-sections:
   en: d084e0b9355b5492
   zh: 4e3abbf7409bc2f5
-/agent-note-settings-driven-mcp-fleet/alternatives-considered/manager-owning-connections-directly:
+/agent-note-a-live-editable-mcp-fleet-on-the-plugin-entry/alternatives-considered/manager-owning-connections-directly:
   en: f3b648249205a420
   zh: 6b950806ef7f0f0a
-/agent-note-settings-driven-mcp-fleet/alternatives-considered/credential-references-for-fleet-secrets:
-  en: c144838c523e9a16
-  zh: 9a745bf180008554
-/agent-note-settings-driven-mcp-fleet/alternatives-considered/array-valued-fleet:
-  en: 787d0dcd9c808a9a
-  zh: 78b996fd1488cc7c
-/agent-note-settings-driven-mcp-fleet/testing:
-  en: 61a6a971684ffb1f
-  zh: eb24939c52353e32
-/agent-note-settings-driven-mcp-fleet/consequences:
-  en: f66dba708d00edd2
-  zh: 76b9628f660920b0
+/agent-note-a-live-editable-mcp-fleet-on-the-plugin-entry/alternatives-considered/credential-references-for-fleet-secrets:
+  en: 7e5f79612a0ea7a3
+  zh: a3306e6f6e45ca39
+/agent-note-a-live-editable-mcp-fleet-on-the-plugin-entry/alternatives-considered/array-valued-fleet:
+  en: 3e77c7db5d630aeb
+  zh: 0e3e892a7f8bc411
+/agent-note-a-live-editable-mcp-fleet-on-the-plugin-entry/testing:
+  en: 47a937f1d07ea3e9
+  zh: c1a2b75c4cf59a7b
+/agent-note-a-live-editable-mcp-fleet-on-the-plugin-entry/consequences:
+  en: 24f3ad32dd617b70
+  zh: 9ffa96ba751439cd
