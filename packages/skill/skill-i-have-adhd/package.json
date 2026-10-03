@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-skill-i-have-adhd",
   "description": "Bundled i-have-adhd skill provider for DeepSeek Harness",
-  "version": "0.1.5-rc.2",
+  "version": "0.2.1-alpha.1",
   "publishConfig": {
     "access": "public"
   },

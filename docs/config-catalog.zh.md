@@ -1612,7 +1612,7 @@ export interface Config extends ProtocolConfig {
 
 - `inject`: `llm`
 - `refs`: `Api` (`@earendil-works/pi-ai`) · `CacheRetention` (`@earendil-works/pi-ai`) · `Model` (`@earendil-works/pi-ai`) · `ModelThinkingLevel` (`@earendil-works/pi-ai`) · `OpenAICompletionsCompat` (`@earendil-works/pi-ai`) · [`RetryPolicyConfig`](../packages/llm/llm/src/index.ts) · `ThinkingBudgets` (`@earendil-works/pi-ai`) · `Transport` (`@earendil-works/pi-ai`) · `Volatile` (`@deepseek-ai/cordis`)
-- `source`: [`packages/llm/llm-pi-ai/src/config.ts:222`](../packages/llm/llm-pi-ai/src/config.ts)
+- `source`: [`packages/llm/llm-pi-ai/src/config.ts:233`](../packages/llm/llm-pi-ai/src/config.ts)
 
 ```ts config-catalog
 /** Plugin configuration: the provider routes this instance owns. */
@@ -1629,19 +1629,21 @@ export interface Config {
 export interface PiAiProviderProfile {
   /** Credential reference (environment-variable name) resolved per request through `ctx.credentials`. */
   apiKeyEnv?: string
-  /** Name shown by configuration surfaces; defaults to the route key. */
+  /** Name shown by configuration surfaces; LM Studio defaults to its product name, other routes to the route key. */
   displayName?: string
   /**
    * Wire protocol every model on this route speaks. Omission keeps each
    * installed catalog model's own protocol, which is why a catalog route needs
-   * no protocol at all; a route the catalog does not ship must name one.
+   * no protocol at all; LM Studio supplies its OpenAI-compatible default, and every
+   * other route the catalog does not ship must name one.
    */
   api?: string
-  /** Endpoint for this route's models; defaults to the installed catalog's endpoint. */
+  /** Endpoint for this route's models; LM Studio defaults locally, other catalog routes use their installed endpoint. */
   baseURL?: string
   /**
    * This route's model catalog. Omission serves the installed catalog for the
-   * route unchanged; an explicit list replaces it, each entry defaulting its
+   * route unchanged, except that LM Studio requires an explicit list; an explicit
+   * list replaces it, each entry defaulting its
    * unset fields from the installed model of the same id.
    */
   models?: PiAiModelProfile[]
@@ -2095,6 +2097,93 @@ export interface ReconnectConfig {
 }
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-mcp-client -->
+
+<!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-mcp-manager -->
+<a id="deepseek-aidsh-mcp-manager"></a>
+
+## `@deepseek-ai/dsh-mcp-manager`
+
+- `inject`: `tools`
+- `refs`: `Volatile` (`@deepseek-ai/cordis`)
+- `source`: [`packages/mcp/mcp-manager/src/index.ts:104`](../packages/mcp/mcp-manager/src/index.ts)
+
+```ts config-catalog
+/**
+ * Resolved manager configuration after schemastery applied the defaults.
+ * `servers` is volatile: a settings edit commits a new snapshot without
+ * remounting the manager, so the fleet is read from the reference each time.
+ */
+type ResolvedConfig = {
+  /** Servers by name with schema defaults applied; read from the volatile reference per reconcile. */
+  servers: Volatile<Record<string, ResolvedEntry>>
+}
+
+/** One resolved entry with defaults applied. */
+type ResolvedEntry = (
+  | Omit<McpStdioServerEntry, 'enabled' | 'args' | 'env' | 'cwd' | 'toolCallTimeoutMs' | 'failOnStartupError'>
+  | Omit<McpHttpServerEntry, 'enabled' | 'headers' | 'toolCallTimeoutMs' | 'failOnStartupError'>
+) & {
+  /** Whether this entry mounts a child; a disabled entry keeps its name reserved but serves no tools. */
+  enabled: boolean
+  /** Ceiling for one tool call on this server's child before the call fails loud. */
+  toolCallTimeoutMs: number
+  /** Whether a startup failure refuses the request instead of logging and continuing without the child. */
+  failOnStartupError: boolean
+} & Record<string, unknown>
+
+/** One stdio server entry; the dict key supplies `serverName`. */
+export interface McpStdioServerEntry {
+  /** Selects child-process stdio transport. */
+  transport: 'stdio'
+  /** False keeps the configuration but mounts nothing. */
+  enabled?: boolean
+  /** Executable used to start the server. */
+  command: string
+  /** Arguments passed directly, without shell interpolation. */
+  args?: string[]
+  /** Extra env vars merged on top of scrubbed ambient env, stored in plain text. */
+  env?: Record<string, string>
+  /** Working directory for the child process. */
+  cwd?: string
+  /** Per-tool-call timeout in milliseconds. */
+  toolCallTimeoutMs?: number
+  /** Fail plugin activation when the initial connection or tool synchronization fails. */
+  failOnStartupError?: boolean
+  /** Automatic reconnect policy after a lost connection; omission uses the defaults. */
+  reconnect?: McpReconnectEntry
+}
+
+/** One Streamable HTTP server entry; the dict key supplies `serverName`. */
+export interface McpHttpServerEntry {
+  /** Selects Streamable HTTP transport. */
+  transport: 'streamable-http'
+  /** False keeps the configuration but mounts nothing. */
+  enabled?: boolean
+  /** MCP endpoint URL. */
+  url: string
+  /** Additional headers attached to MCP requests, stored in plain text. */
+  headers?: Record<string, string>
+  /** Per-tool-call timeout in milliseconds. */
+  toolCallTimeoutMs?: number
+  /** Fail plugin activation when the initial connection or tool synchronization fails. */
+  failOnStartupError?: boolean
+  /** Automatic reconnect policy after a lost connection; omission uses the defaults. */
+  reconnect?: McpReconnectEntry
+}
+
+/** Automatic reconnect policy for one settings-driven server entry. */
+export interface McpReconnectEntry {
+  /** Reconnect automatically after a lost connection. */
+  enabled?: boolean
+  /** First reconnect delay in milliseconds; doubles per consecutive failed attempt. */
+  initialDelayMs?: number
+  /** Backoff ceiling in milliseconds; also the uptime after which the attempt budget resets. */
+  maxDelayMs?: number
+  /** Consecutive failed attempts per outage before giving up for good. */
+  maxAttempts?: number
+}
+```
+<!-- END GENERATED config-catalog:@deepseek-ai/dsh-mcp-manager -->
 
 <!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-message-feedback -->
 <a id="deepseek-aidsh-message-feedback"></a>
@@ -4384,6 +4473,7 @@ export interface Config {
 | `@deepseek-ai/dsh-client-ui-settings` | — | [`packages/client/ui-settings/src/index.ts`](../packages/client/ui-settings/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-settings-agent-loop` | — | [`packages/client/ui-settings-agent-loop/src/index.ts`](../packages/client/ui-settings-agent-loop/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-settings-general` | — | [`packages/client/ui-settings-general/src/index.ts`](../packages/client/ui-settings-general/src/index.ts) |
+| `@deepseek-ai/dsh-client-ui-settings-mcp` | — | [`packages/client/ui-settings-mcp/src/index.ts`](../packages/client/ui-settings-mcp/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-settings-plugin-inventory` | — | [`packages/client/ui-settings-plugin-inventory/src/index.ts`](../packages/client/ui-settings-plugin-inventory/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-settings-plugins` | — | [`packages/client/ui-settings-plugins/src/index.ts`](../packages/client/ui-settings-plugins/src/index.ts) |
 | `@deepseek-ai/dsh-client-ui-settings-session-log` | — | [`packages/client/ui-settings-session-log/src/index.ts`](../packages/client/ui-settings-session-log/src/index.ts) |
@@ -4436,6 +4526,8 @@ export interface Config {
 | `@deepseek-ai/dsh-session-turn-outline` | `sessionProjections` | [`packages/session/session-turn-outline/src/index.ts`](../packages/session/session-turn-outline/src/index.ts) |
 | `@deepseek-ai/dsh-settings` | `configEditor` · `profileContext` | [`packages/settings/settings/src/index.ts`](../packages/settings/settings/src/index.ts) |
 | `@deepseek-ai/dsh-skill-badge` | `skills` | [`packages/skill/skill-badge/src/index.ts`](../packages/skill/skill-badge/src/index.ts) |
+| `@deepseek-ai/dsh-skill-i-have-adhd` | `skills` | [`packages/skill/skill-i-have-adhd/src/index.ts`](../packages/skill/skill-i-have-adhd/src/index.ts) |
+| `@deepseek-ai/dsh-skill-ponytail` | `skills` | [`packages/skill/skill-ponytail/src/index.ts`](../packages/skill/skill-ponytail/src/index.ts) |
 | `@deepseek-ai/dsh-storage` | — | [`packages/storage/storage/src/index.ts`](../packages/storage/storage/src/index.ts) |
 | `@deepseek-ai/dsh-subprocess-local` | — | [`packages/subprocess/subprocess-local/src/index.ts`](../packages/subprocess/subprocess-local/src/index.ts) |
 | `@deepseek-ai/dsh-subprocess-ssh` | `ssh` | [`packages/ssh/subprocess-ssh/src/index.ts`](../packages/ssh/subprocess-ssh/src/index.ts) |

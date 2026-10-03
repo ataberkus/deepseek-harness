@@ -6,7 +6,7 @@ English | [中文](2026-09-14-bundled-third-party-skills.zh.md)
 
 ## Problem
 
-`dsh-skill-badge` is the only bundled skill provider, so deployments that want the popular third-party skill sets `i-have-adhd` (ADHD-friendly output style) and `ponytail` (lazy-senior-dev minimal-diff coding) must hand-copy upstream `SKILL.md` files into a local skill root with no version record, no composition gating, and no shared provenance. Hand copies also collide silently with user skills of the same name instead of resolving through provider ranks.
+`dsh-skill-badge` is the only bundled skill provider, so deployments that want the popular third-party skill sets `i-have-adhd` (ADHD-friendly output style) and `ponytail` (lazy-senior-dev minimal-diff coding) must hand-copy upstream `SKILL.md` files into a local skill root with no version record, no composition gating, and no single owner for the upstream version. Hand copies also collide silently with user skills of the same name instead of resolving through provider ranks.
 
 ## Decision
 
@@ -24,7 +24,7 @@ Both plugins ship as `disabled: true` rows in the `dsh-base` bundle beside `skil
 
 ### Hand-copied filesystem skills
 
-Rejected. Copies into project or user skill roots carry no upstream version, bypass composition gating, and lose provider-rank resolution against same-name skills. The bundled providers keep provenance, pinning, and enablement in one place.
+Rejected. Copies into project or user skill roots carry no upstream version, bypass composition gating, and lose provider-rank resolution against same-name skills. The bundled providers keep the upstream version, pinning, and enablement in one place.
 
 ### One combined package for both upstreams
 

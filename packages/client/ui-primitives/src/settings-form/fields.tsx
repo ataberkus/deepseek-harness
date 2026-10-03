@@ -120,7 +120,7 @@ export function SettingsValueField(props: Omit<SettingsFieldProps, 'hint'> & {
  * @param props - the field's copy, staged boolean text, and edit actions.
  * @returns the labelled checkbox.
  */
-export function BooleanField(props: FieldProps) {
+export function BooleanField(props: SettingsFieldProps) {
   const checked = props.text.trim().toLowerCase() === 'true'
   return (
     <div className={css.field}>

@@ -175,7 +175,7 @@ export function settingsNumberField(field: string): SettingsFieldSpec {
  * @param field - field name inside the namespace section.
  * @returns the field's conversion spec.
  */
-export function booleanField(field: string): CardFieldSpec {
+export function booleanField(field: string): SettingsFieldSpec {
   return {
     field,
     format: value => typeof value === 'boolean' ? String(value) : '',
