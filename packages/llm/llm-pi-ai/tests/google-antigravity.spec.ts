@@ -30,9 +30,15 @@ import {
   refreshAntigravity,
   toAntigravityAuth,
 } from '../src/google-antigravity/provider.ts'
-import { buildAntigravityRequest } from '../src/google-antigravity/request.ts'
-import { antigravityStreamInternals, streamAntigravity } from '../src/google-antigravity/stream.ts'
+import { buildAntigravityRequest, type AntigravityRequest } from '../src/google-antigravity/request.ts'
+import { antigravityStreamInternals, streamAntigravity as streamAntigravityTranscript } from '../src/google-antigravity/stream.ts'
 import { catalogModels, catalogProvider, catalogProviderTakesApiKey } from '../src/catalog.ts'
+import { normalizeContext } from '@earendil-works/pi-ai/utils/transcript'
+
+/** Antigravity streams as pi-ai's `Models.streamSimple` calls them: with the normalized transcript. */
+function streamAntigravity(model: Model<Api>, context: PiContext, options?: Parameters<typeof streamAntigravityTranscript>[2]) {
+  return streamAntigravityTranscript(model, normalizeContext(context), options)
+}
 
 const originalOAuthFetch = antigravityOAuthInternals.fetch
 const originalSleep = antigravityOAuthInternals.sleep
@@ -536,6 +542,23 @@ describe('antigravity streamSimple', () => {
     expect(done?.message.content).toEqual([{ type: 'text', text: 'Hello, world!' }])
     expect(done?.message.stopReason).toBe('stop')
     expect(done?.message.usage.totalTokens).toBe(15)
+  })
+
+  it('sends the system instruction and tools carried by the normalized transcript', async () => {
+    let body = ''
+    antigravityStreamInternals.fetch = async (_input, init) => {
+      body = typeof init?.body === 'string' ? init.body : ''
+      return sseResponse([{ response: { candidates: [{ content: { parts: [{ text: 'ok' }] }, finishReason: 'STOP' }] } }])
+    }
+    await collectEvents(streamAntigravity(model(), {
+      systemPrompt: 'dsh transcript prompt',
+      messages: [{ role: 'user', content: 'Hi', timestamp: 0 }],
+      tools: [{ name: 'dsh_transcript_tool', description: 'run', parameters: Type.Object({}) }],
+    }, { apiKey: 'test-token', headers: { [GOOGLE_ANTIGRAVITY_PROJECT_HEADER]: 'test-project' } }))
+    const request = (JSON.parse(body) as AntigravityRequest).request
+    expect(request.systemInstruction?.parts[0]?.text).toBe('dsh transcript prompt')
+    expect(JSON.stringify(request.tools)).toContain('dsh_transcript_tool')
+    expect(request.contents).toHaveLength(1)
   })
 
   it('streams thinking deltas from reasoning SSE parts', async () => {

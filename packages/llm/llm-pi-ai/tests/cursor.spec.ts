@@ -75,7 +75,7 @@ import {
   storeBlob,
   streamMaxMode,
 } from '../src/cursor/request.ts'
-import { resetCursorSessions, streamCursor } from '../src/cursor/stream.ts'
+import { resetCursorSessions, streamCursor as streamCursorTranscript } from '../src/cursor/stream.ts'
 import { toStreamChunks } from '../src/stream.ts'
 import { hostedOAuthProvider, hostedOAuthProviders } from '../src/oauth-hosts.ts'
 import { FileOAuthStore, OAUTH_CREDENTIALS_FILENAME } from '../src/oauth-store.ts'
@@ -84,6 +84,12 @@ import { resolveProfiles } from '../src/config.ts'
 import { mkdtemp } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { normalizeContext } from '@earendil-works/pi-ai/utils/transcript'
+
+/** Cursor streams as pi-ai's `Models.streamSimple` calls them: with the normalized transcript. */
+function streamCursor(model: Model<Api>, context: PiContext, options?: Parameters<typeof streamCursorTranscript>[2]) {
+  return streamCursorTranscript(model, normalizeContext(context), options)
+}
 
 const ZERO_USAGE = {
   input: 0,
@@ -1240,6 +1246,23 @@ describe('cursor streamSimple', () => {
     expect(types).toContain('text_delta')
     expect(types).toContain('toolcall_end')
     expect(types.at(-1)).toBe('done')
+  })
+
+  it('sends the system prompt and tools carried by the normalized transcript', async () => {
+    let body: Uint8Array = new Uint8Array()
+    cursorConnectInternals.request = async function* (request) {
+      body = request.body
+      yield frameConnectMessage(interactionUpdate(14, new Uint8Array()))
+    }
+    await collect(streamCursor(MODEL, {
+      systemPrompt: 'dsh transcript prompt',
+      messages: [{ role: 'user', content: 'hi', timestamp: 0 }],
+      tools: [{ name: 'dsh_transcript_tool', description: 'run', parameters: { type: 'object' } }],
+    }, { headers: { authorization: 'Bearer tok' } }))
+    const text = new TextDecoder().decode(body)
+    expect(text).toContain('dsh transcript prompt')
+    expect(text).toContain('dsh_transcript_tool')
+    expect(text).not.toContain('You are a helpful assistant.')
   })
 
   it('answers a Cursor interaction query over the open Run stream', async () => {

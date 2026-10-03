@@ -188,7 +188,7 @@ export function buildRootPromptMessagesJson(
         const json = JSON.stringify({ role: 'assistant', content: parts })
         blobIds.push(storeBlob(blobStore, new TextEncoder().encode(json)))
       }
-    } else {
+    } else if (msg.role === 'toolResult') {
       const resultText = userContentText(msg.content)
       const json = JSON.stringify({
         role: 'tool',
@@ -547,6 +547,7 @@ export function flattenContextText(context: Context): string {
       if (body.length > 0) parts.push(body)
       continue
     }
+    if (message.role !== 'toolResult') continue
     const result = message.content.map(block => userContentText([block])).join('\n')
     parts.push(`${message.toolName}: ${result.length === 0 ? '(no output)' : result}`)
   }

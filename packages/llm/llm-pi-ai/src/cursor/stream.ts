@@ -16,11 +16,14 @@ import type {
   AssistantMessage,
   AssistantMessageEventStream,
   Context,
+  JsonObject,
+  JsonValue,
   Model,
   SimpleStreamOptions,
   TextContent,
   ThinkingContent,
   ToolCall,
+  TranscriptContext,
   Usage,
 } from '@earendil-works/pi-ai'
 import {
@@ -29,6 +32,7 @@ import {
   CURSOR_RUN_PATH,
 } from './constants.ts'
 import { connectStream } from './connect.ts'
+import { contextFromTranscript } from '../transcript-context.ts'
 import {
   concat,
   decodeFields,
@@ -83,17 +87,17 @@ export function resetCursorSessions(): void {
 /**
  * Cursor `stream` / `streamSimple` implementation.
  * @param model - Cursor model descriptor.
- * @param context - harness-converted pi-ai context.
+ * @param context - transcript pi-ai passes to registered providers.
  * @param options - auth headers, abort, session id, reasoning.
  * @returns a pi-ai assistant event stream.
  */
 export function streamCursor(
   model: Model<Api>,
-  context: Context,
+  context: TranscriptContext,
   options?: Omit<SimpleStreamOptions, 'toolChoice'>,
 ): AssistantMessageEventStream {
   const stream = createAssistantMessageEventStream()
-  void runCursorStream(stream, model, context, options)
+  void runCursorStream(stream, model, contextFromTranscript(context), options)
   return stream
 }
 
@@ -465,27 +469,27 @@ function mcpToolCall(toolCall: Uint8Array, fallbackId: string): ToolCall | undef
   const name = fieldString(argsFields, 1)
   if (name.length === 0) return undefined
   const id = fieldString(argsFields, 3) || fallbackId || randomUUID()
-  const args: Record<string, unknown> = {}
+  const args: JsonObject = {}
   for (const [key, value] of fieldMapBytes(argsFields, 2)) {
     args[key] = decodeJsonValue(value)
   }
   return { type: 'toolCall', id, name, arguments: args }
 }
 
-function decodeJsonValue(bytes: Uint8Array): unknown {
+function decodeJsonValue(bytes: Uint8Array): JsonValue {
   const text = new TextDecoder().decode(bytes)
   try {
-    return JSON.parse(text) as unknown
+    return JSON.parse(text) as JsonValue
   } catch {
     return text
   }
 }
 
-function parseJsonObject(text: string): Record<string, unknown> {
+function parseJsonObject(text: string): JsonObject {
   try {
-    const parsed: unknown = JSON.parse(text)
+    const parsed = JSON.parse(text) as JsonValue
     if (parsed !== null && typeof parsed === 'object' && !Array.isArray(parsed)) {
-      return parsed as Record<string, unknown>
+      return parsed as JsonObject
     }
   } catch {
     // Partial JSON from a delta; keep a recoverable raw payload.

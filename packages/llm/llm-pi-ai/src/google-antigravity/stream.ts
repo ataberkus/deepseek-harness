@@ -10,10 +10,12 @@ import type {
   AssistantMessage,
   AssistantMessageEventStream,
   Context,
+  JsonObject,
   Model,
   SimpleStreamOptions,
   StopReason,
   ToolCall,
+  TranscriptContext,
   Usage,
 } from '@earendil-works/pi-ai'
 import {
@@ -23,6 +25,7 @@ import {
 } from './constants.ts'
 import { antigravityHeaders } from './headers.ts'
 import { buildAntigravityRequest } from './request.ts'
+import { contextFromTranscript } from '../transcript-context.ts'
 
 const ZERO_USAGE: Usage = {
   input: 0,
@@ -41,17 +44,17 @@ export const antigravityStreamInternals = {
 /**
  * Antigravity `stream` / `streamSimple` implementation.
  * @param model - hosted Antigravity model.
- * @param context - harness-converted pi-ai context.
+ * @param context - transcript pi-ai passes to registered providers.
  * @param options - credentials, sampling, and cancellation.
  * @returns an event stream yielding assistant message deltas.
  */
 export function streamAntigravity(
   model: Model<Api>,
-  context: Context,
+  context: TranscriptContext,
   options?: Omit<SimpleStreamOptions, 'toolChoice'>,
 ): AssistantMessageEventStream {
   const stream = createAssistantMessageEventStream()
-  void runAntigravityStream(stream, model, context, options)
+  void runAntigravityStream(stream, model, contextFromTranscript(context), options)
   return stream
 }
 
@@ -242,7 +245,7 @@ async function runAntigravityStream(
   }
 }
 
-function functionCallPart(call: { name?: string; args?: Record<string, unknown>; id?: string }): ToolCall {
+function functionCallPart(call: { name?: string; args?: JsonObject; id?: string }): ToolCall {
   return {
     type: 'toolCall',
     id: call.id ?? `call_${Math.random().toString(36).slice(2, 10)}`,
@@ -284,7 +287,7 @@ interface CloudCodeAssistChunk {
         parts?: Array<{
           text?: string
           thought?: boolean
-          functionCall?: { name?: string; args?: Record<string, unknown>; id?: string }
+          functionCall?: { name?: string; args?: JsonObject; id?: string }
         }>
       }
       finishReason?: string

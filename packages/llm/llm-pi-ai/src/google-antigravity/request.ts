@@ -8,6 +8,7 @@
 
 import { createHash, randomBytes, randomUUID } from 'node:crypto'
 import { convertMessages, convertTools } from '@earendil-works/pi-ai/api/google-shared'
+import { normalizeContext } from '@earendil-works/pi-ai/utils/transcript'
 import type { Api, Context, Model, SimpleStreamOptions, ThinkingLevel } from '@earendil-works/pi-ai'
 
 /** Wire thinking level Cloud Code Assist accepts for reasoning models. */
@@ -94,7 +95,7 @@ export function buildAntigravityRequest(
   options?: SimpleStreamOptions,
 ): AntigravityRequest {
   const conversionModel = { ...model, api: 'google-generative-ai' } as Model<'google-generative-ai'>
-  const contents = convertMessages(conversionModel, context)
+  const contents = convertMessages(conversionModel, normalizeContext(context))
   const isClaude = model.id.toLowerCase().includes('claude')
   const trajectoryId = randomUUID()
   const agentId = randomUUID()
