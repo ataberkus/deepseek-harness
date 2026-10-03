@@ -362,6 +362,11 @@ interface TokenUsage {
   cacheReadTokens?: number
   cacheWriteTokens?: number
   reasoningTokens?: number
+  /**
+   * Adapter-reported USD for this call; pi-ai copies `usage.cost.total` from
+   * catalog rates; omit when the adapter has no rates or the priced total is 0.
+   */
+  costUsd?: number
 }
 ```
 
@@ -715,10 +720,10 @@ interface ToolSchema {
  */
 interface LlmModelDiscoveryRequest {
   /**
-   * Route the draft is editing, when it edits an existing one. A route whose
-   * adapter already knows its models answers from that knowledge instead of
-   * asking the endpoint — the adapter's own registry is the better answer, and
-   * it costs no network call.
+   * Route the draft is editing, when it edits an existing one. A catalog
+   * route answers from the installed registry, plus any live listing the
+   * owning adapter overlays; a route the catalog does not describe is asked
+   * over the wire.
    */
   provider?: string
   /**

@@ -38,6 +38,7 @@ import type {
   SimpleStreamOptions,
   ThinkingLevel,
 } from '@earendil-works/pi-ai'
+import { createModels, getSupportedThinkingLevels } from './models.ts'
 import {
   attributionHeaders,
   contentHasImage,
@@ -58,11 +59,24 @@ import type {
 } from '@deepseek-ai/dsh-llm'
 import type { AttachmentStore, ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
 import { idleWatchdog, timeoutOf } from '@deepseek-ai/dsh-timeout'
-import type { ResolvedPiAiProviderProfile } from './config.ts'
+import {
+  DEFAULT_CONTEXT_WINDOW,
+  DEFAULT_MAX_TOKENS,
+  type ResolvedPiAiProviderProfile,
+} from './config.ts'
 import { toPiContext } from './context.ts'
-import { createModels, getSupportedThinkingLevels } from './models.ts'
+import {
+  catalogListingTarget,
+  fetchModelListing,
+  overlayLiveCatalogModels,
+} from './listing.ts'
+import { CURSOR_PROVIDER } from './cursor/constants.ts'
+import { listCursorModels } from './cursor/models.ts'
+import { listCodexModels } from './codex/models.ts'
+import { OPENAI_CODEX_PROVIDER } from './oauth-hosts.ts'
 import { OPENCODE_GO_PROVIDER } from './oauth-login.ts'
-import { toStreamChunks } from './stream.ts'
+import { advertisedDefaultEffort } from './thinking-levels.ts'
+import { rethrowPiAiError, toStreamChunks } from './stream.ts'
 
 /** One resolution's frozen view: the profiles and the collection built from them. */
 interface PiAiSnapshot {
@@ -70,6 +84,11 @@ interface PiAiSnapshot {
   profiles: ReadonlyMap<string, ResolvedPiAiProviderProfile>
   /** Providers for exactly those profiles; never mutated once published. */
   models: Models
+  /**
+   * Served model lists memoized for this immutable snapshot. Live listing
+   * overlays are asynchronous, so each route shares one in-flight resolution.
+   */
+  served: Map<string, Promise<readonly Model<Api>[]>>
 }
 
 /** Constructor options for {@link PiAiAdapter}: the two resolution hooks the plugin owns. */
@@ -99,6 +118,8 @@ export interface PiAiAdapterOptions {
    * metadata reports each route's login method to selectors.
    */
   loginInjected?: () => ReadonlyMap<string, 'oauth' | 'api-key'>
+  /** Delete a provider-managed credential and refresh the adapter's route set. */
+  logoutManagedLogin?: (provider: string) => Promise<void>
   /** Resolve the optional durable attachment service at request time. */
   resolveAttachments?: () => AttachmentStore | undefined
   /** Bridge one attachment reference into the current model-tool execution world. */
@@ -197,13 +218,15 @@ function reasoningInfo(
 ): Pick<LlmResolvedModelInfo, 'reasoning'> | Record<string, never> {
   if (!model.reasoning) return {}
   const levels = getSupportedThinkingLevels(model)
+  const advertised = describableReasoningLevel(model, advertisedDefaultEffort(model))
+  const resolvedDefault = defaultLevel ?? advertised
   return {
     reasoning: {
       efforts: levels.map(level => ({
         id: ReasoningEffortId(level),
         name: `${level.charAt(0).toUpperCase()}${level.slice(1)}`,
       })),
-      ...defaultLevel === undefined ? {} : { defaultEffort: ReasoningEffortId(defaultLevel) },
+      ...resolvedDefault === undefined ? {} : { defaultEffort: ReasoningEffortId(resolvedDefault) },
     },
   }
 }
@@ -260,7 +283,7 @@ export class PiAiAdapter extends LlmAdapter {
     for (const profile of profiles.values()) {
       if (profile.piProvider !== undefined) models.setProvider(profile.piProvider)
     }
-    this.snapshot = { profiles, models }
+    this.snapshot = { profiles, models, served: new Map() }
     return this.snapshot
   }
 
@@ -273,13 +296,91 @@ export class PiAiAdapter extends LlmAdapter {
     return profile
   }
 
+  /**
+   * Resolve the model list currently served by one route. Explicit profile
+   * lists stay authoritative; catalog OpenRouter routes use a bounded live
+   * listing, while hosted Cursor and Codex use their OAuth-backed listings.
+   */
+  private async servedModels(snapshot: PiAiSnapshot, provider: string): Promise<readonly Model<Api>[]> {
+    const cached = snapshot.served.get(provider)
+    if (cached !== undefined) return cached
+    const pending = this.loadServedModels(snapshot, provider)
+    snapshot.served.set(provider, pending)
+    try {
+      return await pending
+    } catch (error) {
+      if (snapshot.served.get(provider) === pending) snapshot.served.delete(provider)
+      throw error
+    }
+  }
+
+  private async loadServedModels(snapshot: PiAiSnapshot, provider: string): Promise<readonly Model<Api>[]> {
+    const profile = this.profileOf(snapshot, provider)
+    const installed = snapshot.models.getModels(provider)
+    if (!profile.servesInstalledCatalog) return installed
+    if (provider === CURSOR_PROVIDER) {
+      const token = await hostedAccessToken(this.config.auth.credentials, CURSOR_PROVIDER)
+      if (token === undefined) return installed
+      return listCursorModels(token)
+    }
+    if (provider === OPENAI_CODEX_PROVIDER) {
+      return this.loadCodexModels(profile, installed)
+    }
+    const target = catalogListingTarget(provider, {
+      ...profile.api === undefined ? {} : { api: profile.api },
+      ...profile.baseURL === undefined ? {} : { baseURL: profile.baseURL },
+    })
+    if (target === undefined) return installed
+    let apiKey: string | undefined
+    try {
+      apiKey = await this.config.resolveApiKey(provider, profile)
+    } catch (listingCredential) {
+      if (!(listingCredential instanceof LlmError)
+        || (listingCredential.code !== 'MISSING_CREDENTIAL' && listingCredential.code !== 'INVALID_CREDENTIAL')) {
+        throw listingCredential
+      }
+    }
+    try {
+      const live = await fetchModelListing({
+        baseURL: target.baseURL,
+        ...apiKey === undefined ? {} : { apiKey },
+      })
+      return overlayLiveCatalogModels(installed, live, {
+        contextWindow: profile.defaultContextWindow ?? DEFAULT_CONTEXT_WINDOW,
+        maxTokens: profile.defaultMaxTokens ?? DEFAULT_MAX_TOKENS,
+      })
+    } catch {
+      return installed
+    }
+  }
+
+  /**
+   * Resolve the Codex models the signed-in account may use. The token is read
+   * straight from the store — listing never refreshes; a missing token, a store
+   * failure, and any registry failure all keep the installed catalog, while the
+   * request path still refreshes under pi-ai's lock and fails loud there.
+   */
+  private async loadCodexModels(
+    profile: ResolvedPiAiProviderProfile,
+    installed: readonly Model<Api>[],
+  ): Promise<readonly Model<Api>[]> {
+    let accessToken: string | undefined
+    try {
+      accessToken = await hostedAccessToken(this.config.auth.credentials, OPENAI_CODEX_PROVIDER)
+    } catch {
+      accessToken = undefined
+    }
+    if (accessToken === undefined) return installed
+    return listCodexModels(accessToken, installed, profile.baseURL)
+  }
+
   /** The configured descriptor for one exact route/model pair within one snapshot. */
-  private modelOf(snapshot: PiAiSnapshot, provider: string, model: string): Model<Api> {
+  private async modelOf(snapshot: PiAiSnapshot, provider: string, model: string): Promise<Model<Api>> {
     const profile = this.profileOf(snapshot, provider)
     const failure = profile.modelErrors.get(model)
       ?? (profile.piProvider === undefined ? profile.catalogError : undefined)
     if (failure !== undefined) throw new LlmError(failure, 'INVALID_CONFIG')
-    const resolved = snapshot.models.getModel(provider, model)
+    const resolved = (await this.servedModels(snapshot, provider)).find(entry => entry.id === model)
     if (resolved === undefined) {
       throw new LlmError(`pi-ai provider "${provider}" has no configured model "${model}"`, 'UNKNOWN_MODEL')
     }
@@ -298,37 +399,47 @@ export class PiAiAdapter extends LlmAdapter {
     }
   }
 
+  override async logout(provider: string): Promise<void> {
+    const logout = this.config.logoutManagedLogin
+    if (logout === undefined) {
+      throw new LlmError(
+        `pi-ai provider "${provider}" does not support logout`,
+        'UNSUPPORTED_OPTION',
+      )
+    }
+    await logout(provider)
+  }
+
   override providerRetryPolicy(provider: string): ResolvedRetryPolicy | undefined {
     return this.current().profiles.get(provider)?.retryPolicy
   }
 
-  override listModels(provider: string): Promise<readonly LlmModelInfo[]> {
-    return Promise.resolve().then(() => {
-      const snapshot = this.current()
-      this.profileOf(snapshot, provider)
-      return snapshot.models.getModels(provider).map(model => ({
-        provider,
-        id: model.id,
-        name: model.name,
-        inputModalities: [...model.input],
-      }))
-    })
+  override async listModels(provider: string): Promise<readonly LlmModelInfo[]> {
+    const snapshot = this.current()
+    const models = await this.servedModels(snapshot, provider)
+    return models.map(model => ({
+      provider,
+      id: model.id,
+      name: model.name,
+      inputModalities: [...model.input],
+    }))
   }
 
-  override resolveModel(
+  override async resolveModel(
     provider: string,
     model: string,
     _signal?: AbortSignal,
   ): Promise<LlmResolvedModelInfo> {
-    return Promise.resolve().then(() => {
-      const snapshot = this.current()
-      return this.modelInfo(snapshot, provider, model)
-    })
+    return this.modelInfo(this.current(), provider, model)
   }
 
-  private modelInfo(snapshot: PiAiSnapshot, provider: string, model: string): LlmResolvedModelInfo {
+  private async modelInfo(
+    snapshot: PiAiSnapshot,
+    provider: string,
+    model: string,
+  ): Promise<LlmResolvedModelInfo> {
     const profile = this.profileOf(snapshot, provider)
-    const resolvedModel = this.modelOf(snapshot, provider, model)
+    const resolvedModel = await this.modelOf(snapshot, provider, model)
     const defaultLevel = describableReasoningLevel(resolvedModel, profile.reasoning)
     // Only a cap the deployment configured is a request default; the
     // catalog's `maxTokens` sizes the model and stops there.
@@ -344,16 +455,20 @@ export class PiAiAdapter extends LlmAdapter {
     }
   }
 
-  override prepareCall(provider: string, model: string, _signal?: AbortSignal): Promise<PreparedAdapterCall> {
+  override async prepareCall(
+    provider: string,
+    model: string,
+    _signal?: AbortSignal,
+  ): Promise<PreparedAdapterCall> {
     const snapshot = this.current()
-    return Promise.resolve({
-      model: this.modelInfo(snapshot, provider, model),
+    return {
+      model: await this.modelInfo(snapshot, provider, model),
       stream: options => this.streamWithSnapshot(options, snapshot),
-    })
+    }
   }
 
-  stream(options: GenerateOptions): AsyncIterable<StreamChunk> {
-    return this.streamWithSnapshot(options, this.current())
+  async * stream(options: GenerateOptions): AsyncIterable<StreamChunk> {
+    yield* this.streamWithSnapshot(options, this.current())
   }
 
   private async * streamWithSnapshot(
@@ -369,13 +484,12 @@ export class PiAiAdapter extends LlmAdapter {
     // mid-request builds a separate snapshot, so this request finishes under
     // the one it started with and the next call picks up the new one.
     const profile = this.profileOf(snapshot, options.provider)
-    const model = this.modelOf(snapshot, options.provider, options.model)
+    const model = await this.modelOf(snapshot, options.provider, options.model)
     const reasoning = resolveReasoningLevel(
       model,
       options.reasoningEffort ?? profile.reasoning,
     )
     const apiKey = await this.config.resolveApiKey(options.provider, profile)
-
     const consumer = new AbortController()
     const upstream = options.signal === undefined
       ? consumer.signal
@@ -412,8 +526,8 @@ export class PiAiAdapter extends LlmAdapter {
         ...options.maxTokens === undefined ? {} : { maxTokens: options.maxTokens },
         ...options.sessionId === undefined ? {} : { sessionId: String(options.sessionId) },
         signal: watchdog.signal,
-        // Profile headers are deployment-owned; attribution names are
-        // Harness-owned and therefore win collisions.
+        // Profile headers are deployment-owned; Harness attribution and
+        // provider routing identities therefore win collisions.
         headers: requestHeaders(profile.headers, options.provider, options.sessionId),
       })
       const iterator = toStreamChunks(events, model.contextWindow, options.signal, model.id)[Symbol.asyncIterator]()
@@ -434,7 +548,7 @@ export class PiAiAdapter extends LlmAdapter {
           consumer.abort('pi-ai stream consumer stopped')
           try {
             await iterator.return(undefined)
-          } catch (_abortedSdkTeardown) {
+          } catch {
             // The stable signal already owns SDK termination; return-time abort cannot add an outcome.
           }
         }
@@ -446,9 +560,25 @@ export class PiAiAdapter extends LlmAdapter {
       if (options.signal?.aborted) {
         throw new LlmError('pi-ai request aborted by caller', 'ABORTED', { cause: error })
       }
-      throw error
+      rethrowPiAiError(error)
     } finally {
       consumer.abort('pi-ai stream consumer stopped')
     }
   }
+}
+
+/**
+ * Read a hosted OAuth access token from the collection credential store. Listing
+ * reads the stored record directly and never refreshes; the request path owns
+ * refresh under pi-ai's lock.
+ * @param store - durable pi-ai credential store.
+ * @param provider - hosted route key the credential was stored under.
+ * @returns a non-empty access token, or `undefined` when no OAuth record exists.
+ */
+async function hostedAccessToken(store: CredentialStore, provider: string): Promise<string | undefined> {
+  const credential = await store.read(provider)
+  if (credential?.type !== 'oauth') return undefined
+  const access = credential.access.trim()
+  return access.length === 0 ? undefined : access
+
 }

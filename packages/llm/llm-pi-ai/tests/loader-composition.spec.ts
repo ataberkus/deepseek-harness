@@ -39,6 +39,9 @@ afterEach(async () => {
 /** Boot the dormant composition: a bare `llm-pi-ai` row with no config at all. */
 async function loadComposition(): Promise<{ ctx: Context; settingsPath: string }> {
   root = await mkdtemp(join(tmpdir(), 'dsh-pi-composition-'))
+  // A developer's own `oauth-credentials.json` would inject live routes into
+  // this dormant composition and hide the shipped no-route posture.
+  vi.stubEnv('DSH_HOME', root)
   await writeFile(join(root, '.credentials.yaml'), 'version: 1\nrefs:\n  PI_COMPOSITION_KEY: key-from-store\n', { mode: 0o600 })
 
   const configPath = join(root, 'cordis.yml')

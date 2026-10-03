@@ -5,7 +5,9 @@
  */
 import type { ComponentType } from 'react'
 import type { Context as ClientContext } from '@deepseek-ai/cordis'
-import type { ClientSessionContext } from '@deepseek-ai/dsh-client-ui-input-trigger/client'
+import type {
+  SubmitAttachment, SubmitOutcome, ClientSessionContext,
+} from '@deepseek-ai/dsh-client-ui-input-trigger/client'
 import type { IconProps } from '@deepseek-ai/dsh-client-ui-primitives'
 
 /** Copy for an option that must be acknowledged before onSelect can run. */
@@ -145,6 +147,25 @@ export interface CommandUiContract {
   decorate(decoration: CommandDecoration): () => void
   /** Close this command's open popups and confirmations without consuming composer drafts. */
   dismiss(name: string): void
+  /**
+   * Execute one slash command through the Host command dispatcher.
+   *
+   * This is the shared submission seam for client decorations that need to
+   * turn a popup choice into a normal command line.
+   */
+  execute(
+    session: ClientSessionContext,
+    line: string,
+    attachments?: readonly SubmitAttachment[],
+  ): Promise<SubmitOutcome>
+  /**
+   * Prepare the hosted-OAuth browser destination under the caller's user
+   * gesture. Web opens a reusable blank tab; Desktop later delegates the
+   * forwarded authorize URL to its system-browser bridge. Surfaces that start
+   * sign-in outside the composer call this in the click handler. Safe to call
+   * when no sign-in follows.
+   */
+  prepareOAuthLoginTab(): void
   /** Resolve the per-session popup controller for one session scope (wiring/overlay layer). */
   popupFor(actx: ClientContext): unknown
 }

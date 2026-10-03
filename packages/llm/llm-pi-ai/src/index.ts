@@ -59,19 +59,40 @@ import type {} from '@deepseek-ai/dsh-settings'
 import type {} from '@deepseek-ai/cordis-plugin-loader'
 
 import type { Context } from '@deepseek-ai/cordis'
+import { join } from 'node:path'
 import { launchEnvironmentOf } from '@deepseek-ai/dsh-launch-environment'
+import { resolveDshHome } from '@deepseek-ai/dsh-home-paths'
 import { assertUsableApiKey, LlmError, resolveImageAttachmentAccess } from '@deepseek-ai/dsh-llm'
 import type { AdapterRegistrationHandle, DirectoryRegistrationHandle, LlmConfigurableProvider } from '@deepseek-ai/dsh-llm'
 import type {} from '@deepseek-ai/dsh-fs'
 import { deepEqualJson } from '@deepseek-ai/dsh-util-values'
 import { PiAiAdapter } from './adapter.ts'
-import { authContextFrom, credentialStoreFrom } from './auth.ts'
-import { catalogProviderIds } from './catalog.ts'
+import { authContextFrom } from './auth.ts'
+import { catalogProvider, catalogProviderIds } from './catalog.ts'
 import { assertServiceable, Config, resolveProfiles } from './config.ts'
 import type { ResolvedPiAiProviderProfile } from './config.ts'
 import { discoverModels } from './discovery.ts'
 import type { StoredModelDiscoveryProfile } from './discovery.ts'
 import { registerPiAiFlows } from './login.ts'
+import {
+  apiKeyProviderProfiles,
+  authUrlFallbackMessage,
+  commandFailure,
+  createBrowserOAuthInteraction,
+  emitOAuthOpenUrl,
+  hostedOAuthProviders,
+  OAUTH_LOGIN_UNSUPPORTED,
+  hostedOAuthProvider,
+  loginHostedOAuth,
+  loginOpenCodeGo,
+  logoutManagedLogin,
+  oauthProviderProfiles,
+  OPENCODE_GO_DISPLAY_NAME,
+  OPENCODE_GO_PROVIDER,
+  openUrl,
+  registerOAuthCommands,
+} from './oauth-login.ts'
+import { FileOAuthStore, OAUTH_CREDENTIALS_FILENAME } from './oauth-store.ts'
 
 export { PiAiAdapter } from './adapter.ts'
 export type { PiAiAdapterOptions } from './adapter.ts'
@@ -89,6 +110,14 @@ export type {
 } from './config.ts'
 export { recordKeyFor } from './auth.ts'
 export { supportedProtocols } from './provider.ts'
+export { OPENAI_CODEX_DISPLAY_NAME, OPENAI_CODEX_PROVIDER } from './oauth-login.ts'
+export { OPENCODE_GO_DISPLAY_NAME, OPENCODE_GO_PROVIDER } from './oauth-login.ts'
+export { CURSOR_DISPLAY_NAME, CURSOR_PROVIDER } from './cursor/constants.ts'
+export {
+  GOOGLE_ANTIGRAVITY_DISPLAY_NAME,
+  GOOGLE_ANTIGRAVITY_PROVIDER,
+} from './google-antigravity/constants.ts'
+export { OAUTH_CREDENTIALS_FILENAME } from './oauth-store.ts'
 
 export const name = 'llm-pi-ai'
 export const inject = ['llm']
@@ -114,60 +143,155 @@ function registrationFacts(profiles: ReadonlyMap<string, ResolvedPiAiProviderPro
 }
 
 /**
- * The configurable-provider directory: every installed catalog route, plus
- * every route the current profiles declare. A hand-declared route has no
- * catalog entry, so without this union it would have no settings address and
- * configuration surfaces could neither show nor edit it.
+ * The provider-owned login one catalog route offers instead of a settings key
+ * card. A route that authenticates through OAuth alone has no key a deployment
+ * could store, so it renders as a Connect card; a route whose key the settings
+ * page can write keeps its key card, because the login seam refuses an api-key
+ * login for every provider but OpenCode Go (declared separately).
+ * @param provider - provider route key.
+ * @returns the login method that makes this route a Connect card, or `undefined`.
+ */
+function catalogLoginMethod(provider: string): LlmConfigurableProvider['auth'] {
+  const auth = catalogProvider(provider)?.auth
+  return auth?.oauth !== undefined && auth.apiKey === undefined ? 'oauth' : undefined
+}
+
+/**
+ * The configurable-provider directory: every installed catalog route this
+ * adapter can authenticate, the named LM Studio preset, the hosted OAuth
+ * providers, plus every route the current profiles declare. A hand-declared
+ * route has no catalog entry, so without this union it would have no settings
+ * address and configuration surfaces could neither show nor edit it.
+ *
+ * The profile half is unconditional, which is what keeps a route already
+ * stored against a withheld provider editable and deletable rather than
+ * stranded in the settings document with nothing on the page to remove it.
+ * Dormant provider-login entries live only while their route is disconnected:
+ * once a credential injects the live route, the entry withdraws so the page
+ * renders the signed-in row instead of a second Connect card.
  * @param profiles - the currently resolved provider profiles.
+ * @param settingsNs - settings namespace the entries address.
+ * @param injected - authentication methods for routes a stored login currently injects.
  * @returns the directory entries in catalog order, declared routes last.
  */
 function directoryEntries(
   profiles: ReadonlyMap<string, ResolvedPiAiProviderProfile>,
   settingsNs: string,
+  injected: ReadonlyMap<string, NonNullable<LlmConfigurableProvider['auth']>>,
 ): LlmConfigurableProvider[] {
   const catalog = new Set(catalogProviderIds())
   const entries = new Map<string, LlmConfigurableProvider>()
-  const declare = (provider: string, displayName: string, error?: string): void => {
+  const declare = (
+    provider: string,
+    displayName: string,
+    options: {
+      defaults?: LlmConfigurableProvider['defaults']
+      error?: string | undefined
+      auth?: LlmConfigurableProvider['auth']
+      /** Whether this adapter ships the route without an installed-catalog entry. */
+      shipped?: boolean
+    } = {},
+  ): void => {
     entries.set(provider, {
       provider,
       displayName,
       settingsNs,
       settingsPath: ['providers', provider],
+      ...options.defaults === undefined ? {} : { defaults: { ...options.defaults } },
       // Membership of the installed catalog, not of the settings document:
       // narrowing a shipped provider's models stores a profile too, and that
-      // route is still one pi-ai knows.
-      declared: !catalog.has(provider),
-      ...error === undefined ? {} : { error },
+      // route is still one pi-ai knows. A route this adapter ships itself is
+      // not a deployment-declared one either.
+      declared: !catalog.has(provider) && options.shipped !== true,
+      ...options.error === undefined ? {} : { error: options.error },
+      ...options.auth === undefined ? {} : { auth: options.auth },
     })
   }
-  for (const provider of catalog) declare(provider, provider)
-  for (const [provider, profile] of profiles) declare(provider, profile.displayName, profile.catalogError)
+  // Every installed route is offered, including one that authenticates through
+  // a provider-owned login alone: the collection carries a durable credential
+  // store and a login flow writes into it, so such a route has a posture that
+  // works rather than only one that fails.
+  for (const provider of catalog) {
+    // A route a stored login already injects is live: its dormant Connect
+    // entry withdraws so the page renders the signed-in row instead.
+    if (injected.has(provider)) continue
+    if (provider === OPENCODE_GO_PROVIDER) {
+      // Its own login is the adapter's key flow rather than a settings key.
+      declare(provider, OPENCODE_GO_DISPLAY_NAME, { auth: 'api-key' })
+      continue
+    }
+    declare(provider, provider, { auth: catalogLoginMethod(provider) })
+  }
+  for (const host of hostedOAuthProviders()) {
+    if (!entries.has(host.id) && !injected.has(host.id)) {
+      declare(host.id, host.displayName, { auth: 'oauth', shipped: true })
+    }
+  }
+  for (const [provider, profile] of profiles) {
+    declare(provider, profile.displayName, { error: profile.catalogError })
+  }
   return [...entries.values()]
 }
 
 /** Register one generic pi-ai adapter for all configured provider routes. */
 export function apply(ctx: Context, config: Config): void {
+  const oauthStore = new FileOAuthStore(join(resolveDshHome(), OAUTH_CREDENTIALS_FILENAME))
   ctx.inject(['settings'], (child) => { child.effect(() => child.settings.configure({ auto: false }, ctx.fiber)) })
   const settingsNs = ctx.fiber.entry?.options.id ?? NS
   let lastRaw: ReturnType<Config['providers']['get']> | undefined
-  let memoized: ReadonlyMap<string, ResolvedPiAiProviderProfile> | undefined
+  let lastLoginRevision: number | undefined
+  let memo: {
+    settings: ReadonlyMap<string, ResolvedPiAiProviderProfile>
+    live: ReadonlyMap<string, ResolvedPiAiProviderProfile>
+  } | undefined
   /**
-   * The resolved profiles for the current configuration, memoized by the raw
-   * snapshot's identity — which is also what makes the adapter's own snapshot
-   * stable across operations that observe no change.
+   * Rebuild both profile maps when the volatile configuration snapshot identity
+   * or the managed login-store revision changes, memoized by those identities —
+   * which is also what makes the adapter's own snapshot stable across
+   * operations that observe no change.
    *
-   * Catalog diagnostics stay in the snapshot beside serviceable models, so
-   * stored configuration remains visible after an installed catalog changes.
-   * Scalar configuration errors still reject resolution.
+   * The settings half feeds the configurable-provider directory (so a login
+   * does not invent a key-card); the live half adds the routes stored provider
+   * logins inject, which is what makes a signed-in route selectable. Catalog
+   * diagnostics stay in both beside serviceable models, so stored
+   * configuration remains visible after an installed catalog changes. Scalar
+   * configuration errors still reject resolution.
    */
-  const profiles = (): ReadonlyMap<string, ResolvedPiAiProviderProfile> => {
+  const resolveMemo = (): NonNullable<typeof memo> => {
     const raw = config.providers.get()
-    if (raw === lastRaw && memoized !== undefined) return memoized
-    const next = resolveProfiles(structuredClone(raw) as import('./config.ts').Options['providers'], 'deferred')
+    const revision = oauthStore.revision
+    if (raw === lastRaw && revision === lastLoginRevision && memo !== undefined) return memo
+    const providers = structuredClone(raw) as import('./config.ts').Options['providers']
+    const credentialInfos = oauthStore.credentialInfos()
     lastRaw = raw
-    memoized = next
-    return next
+    lastLoginRevision = revision
+    memo = {
+      settings: resolveProfiles(providers, 'deferred'),
+      live: resolveProfiles({
+        ...oauthProviderProfiles(credentialInfos),
+        ...apiKeyProviderProfiles(credentialInfos),
+        ...providers,
+      }, 'deferred'),
+    }
+    return memo
   }
+  /** Login methods for routes injected solely by stored credentials, not settings. */
+  const loginInjected = (): ReadonlyMap<string, NonNullable<LlmConfigurableProvider['auth']>> => {
+    const { settings } = resolveMemo()
+    const credentialInfos = oauthStore.credentialInfos()
+    const injected = new Map<string, NonNullable<LlmConfigurableProvider['auth']>>()
+    for (const id of Object.keys(oauthProviderProfiles(credentialInfos))) {
+      if (!settings.has(id)) injected.set(id, 'oauth')
+    }
+    for (const id of Object.keys(apiKeyProviderProfiles(credentialInfos))) {
+      if (!settings.has(id)) injected.set(id, 'api-key')
+    }
+    return injected
+  }
+  /** Profiles the Models page can address; managed-login routes stay out. */
+  const settingsProfiles = (): ReadonlyMap<string, ResolvedPiAiProviderProfile> => resolveMemo().settings
+  /** Profiles the adapter serves, including stored provider-login routes. */
+  const profiles = (): ReadonlyMap<string, ResolvedPiAiProviderProfile> => resolveMemo().live
   profiles()
   ctx.on('internal/config', function (this: import('@deepseek-ai/cordis').Fiber, _raw, next) {
     const raw: unknown = next()
@@ -205,14 +329,21 @@ export function apply(ctx: Context, config: Config): void {
     )
   }
 
+  let onCredentialChange: () => void = () => undefined
   // One store and one ambient context for the whole plugin instance: both read
   // through `ctx` per call, so they stay correct across the collection rebuilds
-  // a configuration change causes, and a sign-in survives one.
-  const auth = { credentials: credentialStoreFrom(ctx), authContext: authContextFrom(ctx) }
+  // a configuration change causes, and a sign-in survives one. The store is the
+  // owner-only login file pi-ai itself writes through, which is what makes a
+  // signed-in route visible to the adapter without a settings profile.
+  const auth = { credentials: oauthStore, authContext: authContextFrom(ctx) }
   const adapter = new PiAiAdapter({
     profiles,
     resolveApiKey,
     auth,
+    loginInjected,
+    logoutManagedLogin: async (provider) => {
+      await logoutManagedLogin(provider, { store: oauthStore, onCredentialChange })
+    },
     resolveAttachments: () => ctx.get('attachments'),
     resolveImageAccess: (attachments, ref) => resolveImageAttachmentAccess(
       attachments,
@@ -239,7 +370,7 @@ export function apply(ctx: Context, config: Config): void {
   let directory: DirectoryRegistrationHandle | undefined
   let directoryFacts: unknown
   const ensureDirectory = (): void => {
-    const entries = directoryEntries(profiles(), settingsNs)
+    const entries = directoryEntries(settingsProfiles(), settingsNs, loginInjected())
     if (deepEqualJson(entries, directoryFacts)) return
     // Atomic replace, never dispose-then-register: a route another adapter
     // family already declares (a profile keyed `deepseek-official`) would
@@ -276,6 +407,49 @@ export function apply(ctx: Context, config: Config): void {
     { ...request, ...signal === undefined ? {} : { signal } },
     () => storedDiscoveryProfile(request.provider),
   ))
+  // Signing a hosted OAuth route in is a configuration-time action over a
+  // dormant route, so it is offered for the whole namespace rather than per
+  // live route: the route a surface is connecting has no registration to name
+  // yet. The interaction emits the authorize URL on `commands/open-url` for
+  // GUI subscribers and falls back to the host browser opener for
+  // listener-less compositions, exactly like the `/login` command path.
+  ctx.llm.registerOAuthLogin(settingsNs, async (provider, signal) => {
+    const host = hostedOAuthProvider(provider)
+    if (host === undefined) {
+      throw new Error(OAUTH_LOGIN_UNSUPPORTED)
+    }
+    let browserEventDelivered = false
+    try {
+      await loginHostedOAuth(provider, oauthStore, createBrowserOAuthInteraction({
+        ...signal === undefined ? {} : { signal },
+        openUrl: async (url) => {
+          if (browserEventDelivered) return
+          await openUrl(url)
+        },
+        writeAuthUrl: (url) => {
+          browserEventDelivered = emitOAuthOpenUrl(
+            authUrl => ctx.events.dispatch('emit', ['commands/open-url', authUrl]),
+            url,
+          )
+          process.stderr.write(authUrlFallbackMessage(url))
+        },
+      }))
+    } catch (error) {
+      throw new Error(commandFailure(error, host.loginFailed))
+    }
+    onCredentialChange()
+  })
+  // OpenCode Go's provider-owned method is an API key rather than OAuth. The
+  // Remote receives it as a secret field, pi-ai persists it in the same
+  // owner-only store as other provider logins, and the successful write makes
+  // the route live without creating a settings profile.
+  ctx.llm.registerApiKeyLogin(settingsNs, async (provider, apiKey, signal) => {
+    if (provider !== OPENCODE_GO_PROVIDER) {
+      throw new Error('Only OpenCode Go supports API-key login from the Models page.')
+    }
+    await loginOpenCodeGo(oauthStore, apiKey, signal)
+    onCredentialChange()
+  })
   // Route effects bind to this apply fiber via the stable `ctx` reference,
   // even when a swap runs inside the scoped settings callback below. A bare
   // mount (zero routes) is the dormant posture: nothing registers until a
@@ -306,6 +480,27 @@ export function apply(ctx: Context, config: Config): void {
     registeredFacts = facts
   }
   ensureRegistrationFacts()
+
+  onCredentialChange = () => {
+    lastRaw = undefined
+    lastLoginRevision = undefined
+    try {
+      ensureRegistrationFacts()
+    } catch (error) {
+      ctx.logger.error('llm-pi-ai: keeping the previously registered routes after a managed credential change')
+      ctx.logger.error(error)
+    }
+    // A sign-in withdraws its dormant directory entry (and a sign-out
+    // restores it), so the Models page never renders both a Connect card
+    // and a signed-in row for one route.
+    try {
+      ensureDirectory()
+    } catch (error) {
+      ctx.logger.error('llm-pi-ai: keeping the previous configurable-provider directory after a managed credential change')
+      ctx.logger.error(error)
+    }
+  }
+  registerOAuthCommands(ctx, { store: oauthStore, onCredentialChange })
 
   ctx.on('loader/volatile-update', () => {
     try { ensureRegistrationFacts(); ensureDirectory() }

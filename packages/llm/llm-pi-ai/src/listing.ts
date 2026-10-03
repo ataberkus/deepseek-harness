@@ -25,7 +25,7 @@ import { LlmError } from '@deepseek-ai/dsh-llm'
 import type { LlmDiscoveredModel } from '@deepseek-ai/dsh-llm'
 import { attributionHeaders } from '@deepseek-ai/dsh-llm'
 import type { Api, Model, ModelThinkingLevel, ThinkingLevelMap } from '@earendil-works/pi-ai'
-import { catalogModels, catalogProvider } from './catalog.ts'
+import { catalogProvider } from './catalog.ts'
 import { attachThinking, openRouterThinkingFromListing, thinkingLevelMapFromOffered } from './thinking-levels.ts'
 
 /**
@@ -185,7 +185,10 @@ function overlaysLiveCatalog(provider: string, baseURL: string): boolean {
 /**
  * Protocol and endpoint to list for a catalog route, when that route overlays
  * a live listing. OpenRouter (the catalog id, or an OpenRouter hostname on
- * another listable route) overlays; other catalog endpoints do not.
+ * another listable route) overlays; other catalog endpoints do not. Such an
+ * endpoint serves the OpenAI-compatible `/models` protocol whatever protocol
+ * the route itself speaks, so a profile only changes the answer by naming the
+ * other listable protocol; any other named protocol has no listing to read.
  * @param provider - provider route key.
  * @param profile - optional protocol and endpoint overrides.
  * @returns the protocol and base URL to list, or `undefined` when this route
@@ -198,11 +201,9 @@ export function catalogListingTarget(
   const catalog = catalogProvider(provider)
   const baseURL = profile.baseURL ?? catalog?.baseUrl
   if (baseURL === undefined || baseURL.length === 0) return undefined
-  const apis = new Set<string>()
-  for (const model of catalogModels(provider).values()) apis.add(model.api)
-  const api = profile.api ?? (apis.size === 1 ? [...apis][0] : undefined)
-  if (api === undefined || !LISTABLE_PROTOCOLS.has(api)) return undefined
   if (!overlaysLiveCatalog(provider, baseURL)) return undefined
+  const api = profile.api ?? 'openai-completions'
+  if (!LISTABLE_PROTOCOLS.has(api)) return undefined
   return { api, baseURL }
 }
 

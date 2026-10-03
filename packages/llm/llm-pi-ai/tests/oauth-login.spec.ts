@@ -963,7 +963,7 @@ describe('login and logout commands', () => {
       model: model.id,
       messages: [createUserMessage({
         content: [{ type: 'text', text: 'hi' }],
-        source: { kind: 'plugin', plugin: 'test' },
+        source: { kind: 'user' },
       })],
     })
     expect(result.finish).toMatchObject({ kind: 'error', failure: { code: 'MISSING_CREDENTIAL' } })
@@ -992,7 +992,7 @@ describe('login and logout commands', () => {
       model: model.id,
       messages: [createUserMessage({
         content: [{ type: 'text', text: 'hi' }],
-        source: { kind: 'plugin', plugin: 'test' },
+        source: { kind: 'user' },
       })],
     })
     // Model listing reads the stored token first without request options; the
@@ -1026,7 +1026,7 @@ describe('login and logout commands', () => {
       model: 'composer-1.5',
       messages: [createUserMessage({
         content: [{ type: 'text', text: 'hi' }],
-        source: { kind: 'plugin', plugin: 'test' },
+        source: { kind: 'user' },
       })],
     })
     expect(result.finish).toMatchObject({ kind: 'error', failure: { code: 'MISSING_CREDENTIAL' } })
@@ -1044,7 +1044,7 @@ describe('login and logout commands', () => {
       model: 'gemini-3.7-flash',
       messages: [createUserMessage({
         content: [{ type: 'text', text: 'hi' }],
-        source: { kind: 'plugin', plugin: 'test' },
+        source: { kind: 'user' },
       })],
     })
     expect(result.finish).toMatchObject({ kind: 'error', failure: { code: 'MISSING_CREDENTIAL' } })

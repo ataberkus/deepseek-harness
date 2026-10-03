@@ -15,6 +15,7 @@ import { resolveProfiles } from '../src/config.ts'
 import { createModels, createProvider, getSupportedThinkingLevels } from '../src/models.ts'
 import { buildProvider, supportedProtocols } from '../src/provider.ts'
 import { assemble } from './assemble.ts'
+import { isolateDshHome, removeIsolatedHomes } from './dsh-home.ts'
 import { memoryAuth } from './auth-double.ts'
 import { closeMockServers, mockServer, textEvents } from './mock-server.ts'
 
@@ -29,13 +30,17 @@ declare module '@deepseek-ai/dsh-llm' {
 // mounted credentials seam.
 const KEY_ENV = 'PI_TEST_KEY'
 
-beforeEach(() => {
+beforeEach(async () => {
   vi.stubEnv(KEY_ENV, 'test-key')
+  // A developer's own `oauth-credentials.json` would inject live routes and
+  // change which directory entries this composition offers.
+  await isolateDshHome()
 })
 
 afterEach(async () => {
   vi.unstubAllEnvs()
   await closeMockServers()
+  await removeIsolatedHomes()
 })
 
 /** The dormant composition with Loader-managed live Config. */

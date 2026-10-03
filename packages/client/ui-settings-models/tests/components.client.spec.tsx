@@ -211,6 +211,7 @@ function scriptedFace(overrides: {
       discoverModels: vi.fn(() => Promise.resolve(remoteOk([]))),
       loginOAuth: overrides.loginOAuth ?? vi.fn(() => Promise.resolve(remoteOk(undefined))),
       loginApiKey: overrides.loginApiKey ?? vi.fn(() => Promise.resolve(remoteOk(undefined))),
+      logout: vi.fn((_provider: string): Promise<unknown> => Promise.resolve(remoteOk(undefined))),
     },
     settings: {
       describe: vi.fn(() => Promise.resolve(remoteOk({ writable: true, hasDocument: false, namespaces: wireNamespaces() }))),
@@ -1979,6 +1980,48 @@ describe('dormant hosted OAuth routes', () => {
     expect(screen.getByRole('button', { name: 'Delete Cursor (cursor)' })).toBeTruthy()
     expect(screen.queryByRole('button', { name: 'Connect Cursor (cursor)' })).toBeNull()
   })
+
+  it('names the stored login each signed-in row holds', async () => {
+    const scripted = scriptedFace()
+    scripted.face.llm.listProviders.mockResolvedValue(remoteOk([
+      { id: 'openai', name: 'openai' },
+      { id: 'cursor', name: 'Cursor', auth: 'oauth' },
+      { id: 'codex', name: 'Codex', auth: 'oauth' },
+      { id: 'google-antigravity', name: 'Antigravity', auth: 'oauth' },
+      { id: 'google-gemini-cli', name: 'Gemini CLI', auth: 'oauth' },
+    ]))
+    await mountFace(scripted)
+
+    expect(screen.getByRole('img', { name: en.oauthConfiguredCursor })).toBeTruthy()
+    expect(screen.getByRole('img', { name: en.oauthConfigured })).toBeTruthy()
+    expect(screen.getAllByRole('img', { name: en.oauthConfiguredAntigravity })).toHaveLength(2)
+  })
+
+  it('signs a live OAuth route out and reloads the page once the login is revoked', async () => {
+    const scripted = scriptedFace()
+    scripted.face.llm.listProviders.mockResolvedValue(remoteOk([
+      { id: 'deepseek-official', name: 'DeepSeek' },
+      { id: 'openai', name: 'openai' },
+      { id: 'cursor', name: 'Cursor', auth: 'oauth' },
+    ]))
+    const gate = Promise.withResolvers<unknown>()
+    scripted.face.llm.logout.mockImplementation(() => gate.promise)
+    const mounted = await mountFace(scripted)
+    const load = vi.spyOn(mounted.controller, 'load')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Delete Cursor (cursor)' }))
+    const dialog = screen.getByRole('dialog', { name: 'Sign out of Cursor (cursor)?' })
+    expect(dialog.textContent).toContain(en.oauthSignOutDescription.replace('{provider}', 'Cursor (cursor)'))
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Sign out of Cursor (cursor)' }))
+    expect(scripted.face.llm.logout).toHaveBeenCalledWith('cursor')
+    expect(within(dialog).getByRole('button', { name: 'Signing out of Cursor (cursor)…' })).toBeTruthy()
+
+    gate.resolve(remoteOk(undefined))
+    await vi.waitFor(() => { expect(load).toHaveBeenCalledTimes(1) })
+    await vi.waitFor(() => {
+      expect(screen.queryByRole('dialog', { name: 'Sign out of Cursor (cursor)?' })).toBeNull()
+    })
+  })
 })
 
 describe('OpenCode Go API-key login', () => {
@@ -2047,6 +2090,35 @@ describe('OpenCode Go API-key login', () => {
     expect(screen.getByRole('img', { name: en.apiKeyLoginConfigured })).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Delete OpenCode Go (opencode-go)' })).toBeTruthy()
     expect(screen.queryByRole('button', { name: 'Connect OpenCode Go (opencode-go)' })).toBeNull()
+  })
+
+  it('keeps a refused disconnect recoverable in its confirmation dialog', async () => {
+    const scripted = scriptedFace()
+    scripted.face.llm.listProviders.mockResolvedValue(remoteOk([
+      { id: 'deepseek-official', name: 'DeepSeek' },
+      { id: 'openai', name: 'openai' },
+      { id: 'opencode-go', name: 'OpenCode Go', auth: 'api-key' },
+    ]))
+    const gate = Promise.withResolvers<unknown>()
+    scripted.face.llm.logout.mockImplementation(() => gate.promise)
+    const mounted = await mountFace(scripted)
+    const load = vi.spyOn(mounted.controller, 'load')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Delete OpenCode Go (opencode-go)' }))
+    const dialog = screen.getByRole('dialog', { name: 'Disconnect OpenCode Go (opencode-go)?' })
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Disconnect OpenCode Go (opencode-go)' }))
+    expect(within(dialog).getByRole('button', { name: 'Disconnecting OpenCode Go (opencode-go)…' })).toBeTruthy()
+
+    // A rejection that is not an Error still reaches the dialog verbatim.
+    gate.reject('service unavailable')
+    await within(dialog).findByText('service unavailable')
+    expect(load).not.toHaveBeenCalled()
+    expect(screen.getByRole('dialog', { name: 'Disconnect OpenCode Go (opencode-go)?' })).toBe(dialog)
+
+    scripted.face.llm.logout.mockImplementation(() => Promise.reject(new Error('still refused')))
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Disconnect OpenCode Go (opencode-go)' }))
+    await within(dialog).findByText('still refused')
+    expect(load).not.toHaveBeenCalled()
   })
 })
 
