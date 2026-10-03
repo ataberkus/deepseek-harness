@@ -43,7 +43,6 @@
     { "path": "../../session/session-persistence" },
     { "path": "../../session/session-projection" },
     { "path": "../../session/session-projection-cache" },
-    { "path": "../../session/workspace-checkpoint" },
     { "path": "../../session/session-title" },
     { "path": "../../session-query/session-query" },
     { "path": "../../skill/skill" },

@@ -9,11 +9,6 @@ import type { SessionSummary } from '../../types.ts'
 /** Host list summary enriched with the latest Session Controller title projection. */
 export interface TitledSessionSummary extends SessionSummary {
   title?: string
-  agentPreset?: string
-  /** User-facing checkpoint ordinal for this branch, when checkpoint state is known. */
-  checkpointLabelIndex?: number
-  /** Whether this session has a known usable workspace-file checkpoint. */
-  workspaceResumable?: boolean
   /** Current host-computed projection values for list consumers. */
   projectionValues?: Readonly<Partial<SessionProjectionMap>>
 }
@@ -33,12 +28,6 @@ export interface SessionListEntry {
   /** Coarse durable origin for navigation filtering; not a continuation capability. */
   origin?: 'subagent'
   cwd?: string
-  agentPreset?: string
-  /** User-facing checkpoint ordinal for this branch, when checkpoint state is known. */
-  checkpointLabelIndex?: number
-  /** Whether this session has a known usable workspace-file checkpoint. */
-  workspaceResumable?: boolean
-
   /** Current host-computed projection values for list consumers. */
   projectionValues?: Readonly<Partial<SessionProjectionMap>>
   /** Lineage indent depth: root = 0; the UI just multiplies by the indent width. */

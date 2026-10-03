@@ -256,7 +256,6 @@ export function apply(ctx: Context): void {
                 // Fork or child-title failure leaves the source view unchanged.
               })
           },
-          retryTurn: (messageSeq, checkpointId) => session.retry(messageSeq, checkpointId),
         }
       },
     }, ChatView)

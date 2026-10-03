@@ -1,14 +1,10 @@
 import { Fragment, memo, useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
-import type {
-  CheckpointSnapshot, CheckpointView, PendingSubmission,
-} from '@deepseek-ai/dsh-api-session-controller/client'
+import type { PendingSubmission } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { MessageImageSource } from '@deepseek-ai/dsh-client-ui-conversation/client'
-import { Button, fileExtension, FileTypeIcon, fileSizeText, JsonBlock, projectUserText, StateDot, TextShimmer } from '@deepseek-ai/dsh-client-ui-primitives'
+import { fileExtension, FileTypeIcon, fileSizeText, JsonBlock, projectUserText, StateDot, TextShimmer } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { ChatNodeOwnerProps, ChatNodeViewProps, ChatViewSlotProps } from '../contract/slots.ts'
-import type { ChatNode } from '../contract/chat-nodes.ts'
 import type { ModelRetryNode, TurnErrorNode, UserMessageNode } from '../contract/snapshot.ts'
-import type { ChatSnapshot } from '../contract/snapshot.ts'
 import { CompactionItem } from './CompactionItem.tsx'
 import { ContextInjectionRow } from './ContextInjectionRow.tsx'
 import { MessageIconActions } from './MessageIconActions.tsx'
@@ -130,107 +126,19 @@ function ModelRetryItem({ node, active, t }: {
   )
 }
 
-/** Seq of the direct user message opening one failed turn, when it is in the window. */
-function failedTurnUserSeq(snapshot: ChatSnapshot, turn: number): number | undefined {
-  for (const key of snapshot.locations.getTurn(turn)) {
-    const node = snapshot.nodes.get(key) as ChatNode | undefined
-    if (node?.kind === 'user') return node.data.seq
-  }
-  return undefined
-}
-
-/** Persistent, turn-positioned feedback for a terminal failure with same-branch retry. */
-function TurnErrorItem({ node, t, useSession, useChat, useInput, retryTurn }: {
+/** Persistent, turn-positioned feedback for a terminal failure. */
+function TurnErrorItem({ node, t }: {
   node: TurnErrorNode
   t: ChatViewSlotProps['t']
-  useSession: ChatNodeViewProps<'turn-error'>['useSession']
-  useChat: ChatNodeViewProps<'turn-error'>['useChat']
-  useInput: ChatNodeViewProps<'turn-error'>['useInput']
-  retryTurn: ChatNodeOwnerProps['retryTurn']
 }) {
-  const [retrying, setRetrying] = useState(false)
-  const [retryError, setRetryError] = useState<string | null>(null)
-  let checkpoints: CheckpointSnapshot | undefined
-  try {
-    checkpoints = useSession(s => s.checkpoints)
-  } catch {
-    checkpoints = undefined
-  }
-  let running = false
-  try {
-    running = useSession(s => s.running) ?? false
-  } catch {
-    running = false
-  }
-  let alreadyEditing = false
-  try {
-    alreadyEditing = useInput(s => s.edit) !== undefined
-  } catch {
-    alreadyEditing = false
-  }
-  let userSeq: number | undefined
-  try {
-    userSeq = useChat(snapshot => failedTurnUserSeq(snapshot, node.turn))
-  } catch {
-    userSeq = undefined
-  }
-  let isLatest = false
-  try {
-    isLatest = useChat(snapshot => snapshot.timeline.turnOrder.at(-1) === node.turn) ?? false
-  } catch {
-    isLatest = false
-  }
-  const eligible = userSeq === undefined || alreadyEditing
-    ? undefined
-    : selectEditCheckpoint(checkpoints, userSeq)
-  const operationBusy = checkpoints?.operation !== undefined
-    && checkpoints.operation.phase !== 'ready'
-    && checkpoints.operation.phase !== 'failed'
-  const blocked = checkpoints?.recoveryRequired !== undefined || !isLatest || running || operationBusy
-  const canRetry = retryTurn !== undefined
-    && userSeq !== undefined
-    && eligible !== undefined
-    && !blocked
-  const showActions = canRetry || retrying || retryError !== null
-  const busy = retrying || running || operationBusy
   return (
-    <div className={css.turnErrorWrap}>
-      <div className={css.turnErrorRow} role="status">
-        <StateDot state="error" className={css.turnErrorDot} />
-        <div className={css.turnErrorCopy}>
-          <span className={css.turnErrorTitle}>{node.code === 'ACCOUNT_SIGNED_OUT' ? t('message.accountStopped') : t('message.turnError')}</span>
-          <span className={css.turnErrorMessage}>{failureMessage(node.message, node.code, t)}</span>
-        </div>
+    <div className={css.turnErrorRow} role="status">
+      <StateDot state="error" className={css.turnErrorDot} />
+      <div className={css.turnErrorCopy}>
+        <span className={css.turnErrorTitle}>{node.code === 'ACCOUNT_SIGNED_OUT' ? t('message.accountStopped') : t('message.turnError')}</span>
+        <span className={css.turnErrorMessage}>{failureMessage(node.message, node.code, t)}</span>
       </div>
-      {showActions && (
-        <div className={css.turnErrorActions}>
-          {(canRetry || retrying) && (
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={busy || !canRetry}
-              onClick={() => {
-                if (retryTurn === undefined || userSeq === undefined || eligible === undefined || busy || !canRetry) return
-                setRetrying(true)
-                setRetryError(null)
-                void retryTurn(userSeq, eligible.id).then(
-                  (result) => {
-                    setRetrying(false)
-                    if (!result.ok) setRetryError(`${result.error.message} (${result.error.code})`)
-                  },
-                  (error: unknown) => {
-                    setRetrying(false)
-                    setRetryError(error instanceof Error ? error.message : String(error))
-                  },
-                )
-              }}
-            >
-              {busy ? t('message.turnRetry.running') : t('message.turnRetry')}
-            </Button>
-          )}
-          {retryError !== null && <span className={css.turnErrorRetryError} role="alert">{retryError}</span>}
-        </div>
-      )}
+      {node.code !== undefined && <code className={css.turnErrorCode}>{node.code}</code>}
     </div>
   )
 }
@@ -408,43 +316,11 @@ export function PendingSubmissionBubble({ submission, renderMessageImages, t }: 
   )
 }
 
-/**
- * Latest usable checkpoint before one durable message, matching the Host edit boundary.
- * @param checkpoints - session checkpoint snapshot, if the control frame arrived.
- * @param messageSeq - durable sequence of the message being edited.
- * @returns the newest ready, eligible, non-emergency checkpoint below the message.
- */
-export function selectEditCheckpoint(
-  checkpoints: CheckpointSnapshot | undefined,
-  messageSeq: number,
-): CheckpointView | undefined {
-  if (checkpoints?.enabled !== true) return undefined
-  return [...checkpoints.checkpoints].reverse().find(checkpoint =>
-    checkpoint.role !== 'emergency'
-    && checkpoint.status.kind === 'ready'
-    && checkpoint.restoreEligible
-    && checkpoint.boundarySeq < messageSeq)
-}
-
 /** User and admitted-steering keyed Chat renderer. */
 export const UserMessageNodeView = memo(function UserMessageNodeView({
-  node, renderMessageImages, openFile, openSkill, t, useSession, inputActions, useInput,
+  node, renderMessageImages, openFile, openSkill, t,
 }: ChatNodeViewProps<'user' | 'steering'>) {
   const data = node.data
-  let checkpoints: CheckpointSnapshot | undefined
-  try {
-    checkpoints = useSession(s => s.checkpoints)
-  } catch {
-    checkpoints = undefined
-  }
-  let alreadyEditing = false
-  try {
-    alreadyEditing = useInput(s => s.edit) !== undefined
-  } catch {
-    alreadyEditing = false
-  }
-  const eligible = alreadyEditing ? undefined : selectEditCheckpoint(checkpoints, data.seq)
-  const beginEdit = inputActions?.beginEdit
   return (
     <UserStyleBubble
       content={data.content}
@@ -459,9 +335,6 @@ export const UserMessageNodeView = memo(function UserMessageNodeView({
           time={data.time}
           clock="start"
           className={css.actions}
-          {...eligible === undefined || beginEdit === undefined
-            ? {}
-            : { onEdit: () => { beginEdit({ messageSeq: data.seq, checkpointId: eligible.id, originalText: text }) } }}
           t={t}
         />
       )}
@@ -495,8 +368,8 @@ export const RetryNodeView = memo(function RetryNodeView({ node, t }: ChatNodeVi
 })
 
 /** Terminal turn-error keyed Chat renderer. */
-export const TurnErrorNodeView = memo(function TurnErrorNodeView({ node, t, useSession, useChat, useInput, retryTurn }: ChatNodeViewProps<'turn-error'>) {
-  return <TurnErrorItem node={node.data} t={t} useSession={useSession} useChat={useChat} useInput={useInput} retryTurn={retryTurn} />
+export const TurnErrorNodeView = memo(function TurnErrorNodeView({ node, t }: ChatNodeViewProps<'turn-error'>) {
+  return <TurnErrorItem node={node.data} t={t} />
 })
 
 /** Max-tokens turn-end notice keyed Chat renderer. */

@@ -41,11 +41,6 @@ export type {
   SessionProjectionMap,
   UseProjection,
 } from './sessions/projection-store.ts'
-export {
-  CheckpointSnapshotStore,
-  EMPTY_CHECKPOINT_SNAPSHOT,
-} from './sessions/checkpoint-store.ts'
-export type { CheckpointOperation, CheckpointSnapshot, CheckpointView } from './sessions/checkpoint-store.ts'
 export type {
   BeginSubmissionInput,
   ISession,

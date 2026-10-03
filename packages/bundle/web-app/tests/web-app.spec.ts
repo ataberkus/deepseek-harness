@@ -9,9 +9,9 @@
 
 import { EventEmitter } from 'node:events'
 import { spawn, type ChildProcess } from 'node:child_process'
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, posix } from 'node:path'
+import { join } from 'node:path'
 import { PassThrough } from 'node:stream'
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
@@ -115,14 +115,6 @@ interface BashContribution {
 }
 
 describe('web-app runtime glue', () => {
-  it('keeps the Process Hacker audit log outside checkpoint mutation', () => {
-    const patch = readFileSync(new URL('../cordis.patch.yml', import.meta.url), 'utf8')
-    const checkpointRow = patch.match(/- id: workspace-checkpoint\n[\s\S]*?(?=\n    - id: workspace-checkpoint-capture)/)?.[0]
-    const auditGlob = checkpointRow?.match(/- '([^']*processhacker_audit\.log)'/)?.[1]
-    if (auditGlob === undefined) throw new Error('workspace checkpoint patch must exclude the Process Hacker audit log')
-    expect(posix.matchesGlob('processhacker_audit.log', auditGlob)).toBe(true)
-  })
-
   it('mounts dist serving, prompt section, bash variables, and publishes the URL with the LAN snapshot', async () => {
     stageDist()
     const ctx = new Context()

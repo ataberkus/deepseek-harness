@@ -12,7 +12,6 @@ import type { MessageId } from '@deepseek-ai/dsh-llm/brand'
 import type { SessionId, SessionSeq } from '@deepseek-ai/dsh-session/types'
 import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import type { ObservableSnapshot } from '@deepseek-ai/dsh-client-store'
-import type { CheckpointView } from '../sessions/checkpoint-store.ts'
 import type { PromptContentPart, QueueAction, SessionRequestId } from '../../types.ts'
 import type { PendingSubmissionAttachment, SessionSnapshot } from './snapshot.ts'
 
@@ -119,42 +118,6 @@ export interface ISession {
    * @returns the normalized accepted title and its event seq, or the business error.
    */
   rename(title: string): Promise<RemoteResult<{ title: string; seq: SessionSeq }>>
-  /**
-   * Restore the selected workspace checkpoint and queue an edited message on
-   * the child branch created by Host.
-   * @param messageSeq - durable sequence of the direct user message.
-   * @param checkpointId - usable checkpoint immediately before that message's turn.
-   * @param text - replacement text.
-   * @returns the new child session id, or the Host error.
-   */
-  edit(
-    messageSeq: number,
-    checkpointId: CheckpointView['id'],
-    text: string,
-    signal?: AbortSignal,
-  ): Promise<RemoteResult<{ sessionId: SessionId }>>
-  /**
-   * Restore the pre-turn workspace checkpoint and re-run the failed message
-   * in the same session.
-   * @param messageSeq - durable sequence of the failed direct user message.
-   * @param checkpointId - usable checkpoint immediately before that message's turn.
-   * @param signal - optional caller cancellation before the retry starts.
-   * @returns acceptance, or the Host error.
-   */
-  retry(
-    messageSeq: number,
-    checkpointId: CheckpointView['id'],
-    signal?: AbortSignal,
-  ): Promise<RemoteResult<{ accepted: true }>>
-  /**
-   * Restore the latest usable checkpoint for this idle session.
-   * @returns restore status and selected checkpoint, or the Host error.
-   */
-  activate(): Promise<RemoteResult<{
-    restored: boolean
-    checkpointId?: CheckpointView['id']
-    unavailable?: boolean
-  }>>
   /**
    * Extend history by at least 50 messages and two Turn starts, including a
    * partial Turn at the window's beginning. Stop at 500 messages or history
