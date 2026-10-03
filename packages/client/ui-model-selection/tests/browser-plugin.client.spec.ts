@@ -527,6 +527,9 @@ describe('ui-model-selection dual entry', () => {
     expect(options.map((o: SelectOption) => o.label)).toEqual([
       'External Flash', 'DeepSeek-V4-Flash', 'DeepSeek-V4-Pro',
     ])
+    expect(options[0]).toMatchObject({
+      group: { name: 'favorites', label: zh['favorites.title'] }, detail: 'External Provider',
+    })
 
     face.toggleFavorite('external', 'deepseek-v4-flash')
     expect(face.favorites.getSnapshot()).toEqual({ favorites: [] })

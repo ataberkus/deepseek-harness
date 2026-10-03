@@ -23,7 +23,9 @@
  * Retry remains the catalog-load surface. While the directory's pending
  * selection is unsettled, the trigger shows a spinner in place of its
  * chevron, and each row whose value that selection carries shows one in place
- * of its check mark.
+ * of its check mark. Favorited models also appear in a leading Favorites group
+ * that follows the search query and joins keyboard navigation; each row's star
+ * toggles the browser-local favorite without selecting.
  */
 import { MenuGroup, MenuSurface, observeStickyMenuGroups } from '@deepseek-ai/dsh-client-ui-primitives'
 import {
@@ -39,6 +41,7 @@ import {
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ModelSelectInjected } from './slots.ts'
+import { favoriteEntries, favoriteId, type FavoriteEntry } from './favorites.ts'
 import css from './ModelSelect.module.css'
 import { orderModelProviders } from './provider-order.ts'
 
@@ -58,16 +61,20 @@ const MEASURE_STYLE: CSSProperties = { visibility: 'hidden', left: 0, top: 0 }
 /**
  * Render the composer model seat.
  * @param props - owner share (locked) + injected face (shared directory
- * store/verbs) + the standard locale seat.
+ * store/verbs plus the shared favorites list) + the standard locale seat.
  * @returns the trigger and, while open, the two-level menu.
  */
 export function ModelSelect(
-  { locked, available, directory, load, select, t }:
+  { locked, available, directory, favorites, load, select, toggleFavorite, t }:
   ModelSelectInjected & { locked: boolean } & PropsLocale<'model'>,
 ) {
   const state = useSyncExternalStore(
     fn => directory.subscribe(fn),
     () => directory.getSnapshot(),
+  )
+  const favoriteIds = useSyncExternalStore(
+    fn => favorites.subscribe(fn),
+    () => favorites.getSnapshot().favorites,
   )
   const [open, setOpen] = useState(false)
   const [pane, setPane] = useState<Pane>('root')
@@ -107,9 +114,11 @@ export function ModelSelect(
   const filteredGroups = useMemo(() => groups.map(group => ({
     ...group, models: rankByName(group.models, showSearch ? query.trim() : ''),
   })).filter(group => group.models.length > 0), [groups, query, showSearch])
-  const visibleModels = useMemo(() => filteredGroups.flatMap(group => group.models.map(model => ({
-    provider: group.id, model: model.id,
-  }))), [filteredGroups])
+  const favoriteRows = useMemo(() => favoriteEntries(filteredGroups, favoriteIds), [filteredGroups, favoriteIds])
+  const visibleModels = useMemo(() => [
+    ...favoriteRows,
+    ...filteredGroups.flatMap(group => group.models.map(model => ({ group, model }))),
+  ].map(({ group, model }) => ({ provider: group.id, model: model.id })), [favoriteRows, filteredGroups])
   const currentVisibleIndex = visibleModels.findIndex(model =>
     model.provider === state.current?.provider && model.model === state.current.model)
   const activeModelIndex = Math.min(highlightedIndex ?? Math.max(0, currentVisibleIndex), visibleModels.length - 1)
@@ -195,7 +204,7 @@ export function ModelSelect(
     const viewport = groupsRef.current
     if (viewport === null) return
     return observeStickyMenuGroups(viewport)
-  }, [available, open, pane, filteredGroups])
+  }, [available, open, pane, filteredGroups, favoriteRows])
 
   useLayoutEffect(() => {
     if (open && pane === 'model' && activeModelIndex >= 0) {
@@ -234,7 +243,7 @@ export function ModelSelect(
       window.removeEventListener('scroll', place, true)
       window.removeEventListener('resize', place)
     }
-  }, [open, pane, state, query])
+  }, [open, pane, state, query, favoriteIds])
   /* jscpd:ignore-end */
 
   if (!available) return null
@@ -431,6 +440,55 @@ export function ModelSelect(
     const at = itemIndex++
     return (node: HTMLButtonElement | null) => { itemRefs.current[at] = node }
   }
+  const renderModelRow = ({ group, model }: FavoriteEntry, key: string) => {
+    const index = modelIndex++
+    const selected = state.current?.provider === group.id && state.current.model === model.id
+    const favorite = favoriteIds.includes(favoriteId(group.id, model.id))
+    const starLabel = t(favorite ? 'favorites.remove' : 'favorites.add', { model: model.name })
+    return (
+      <div className={css.optionRow} key={key}>
+        <button
+          ref={itemRef()}
+          type="button"
+          role="menuitemradio"
+          aria-checked={selected}
+          id={`${id}-model-${index}`}
+          tabIndex={showSearch ? -1 : 0}
+          onFocus={() => { setHighlightedIndex(index) }}
+          data-highlighted={index === activeModelIndex ? '' : undefined}
+          className={clsx(
+            css.option, css.modelOption, selected && css.selected, index === activeModelIndex && css.optionActive,
+          )}
+          onMouseMove={busy || index === activeModelIndex ? undefined : () => {
+            if (showSearch) setHighlightedIndex(index)
+            else itemRefs.current[index]?.focus()
+          }}
+          title={model.name}
+          disabled={busy}
+          onClick={() => { choose({ provider: group.id, model: model.id }) }}
+        >
+          <span className={css.optionCopy}>
+            <span className={css.modelName}>{model.name}</span>
+          </span>
+          <span className={css.check}>
+            {pending?.provider === group.id && pending.model === model.id
+              ? <StateDot state="ongoing" />
+              : selected ? <IconCheckOutlineRegular /> : null}
+          </span>
+        </button>
+        <button
+          type="button"
+          className={clsx(css.favorite, favorite && css.favoriteActive)}
+          aria-pressed={favorite}
+          aria-label={starLabel}
+          title={starLabel}
+          onClick={() => { toggleFavorite(group.id, model.id) }}
+        >
+          <span aria-hidden="true">{favorite ? '★' : '☆'}</span>
+        </button>
+      </div>
+    )
+  }
 
   return (
     <div
@@ -556,48 +614,16 @@ export function ModelSelect(
                 aria-label={t('menu.model')}
                 hidden={filteredGroups.length === 0}
               >
-                {filteredGroups.map((group) => {
-                  return (
-                    <MenuGroup key={group.id} label={group.id === 'deepseek-account' ? t('provider.account') : group.name}>
-                      {group.models.map((model) => {
-                        const index = modelIndex++
-                        const selected = state.current?.provider === group.id && state.current.model === model.id
-                        return (
-                          <button
-                            ref={itemRef()}
-                            type="button"
-                            role="menuitemradio"
-                            aria-checked={selected}
-                            id={`${id}-model-${index}`}
-                            tabIndex={showSearch ? -1 : 0}
-                            onFocus={() => { setHighlightedIndex(index) }}
-                            data-highlighted={index === activeModelIndex ? '' : undefined}
-                            className={clsx(
-                              css.option, css.modelOption, selected && css.selected, index === activeModelIndex && css.optionActive,
-                            )}
-                            onMouseMove={busy || index === activeModelIndex ? undefined : () => {
-                              if (showSearch) setHighlightedIndex(index)
-                              else itemRefs.current[index]?.focus()
-                            }}
-                            key={model.id}
-                            title={model.name}
-                            disabled={busy}
-                            onClick={() => { choose({ provider: group.id, model: model.id }) }}
-                          >
-                            <span className={css.optionCopy}>
-                              <span className={css.modelName}>{model.name}</span>
-                            </span>
-                            <span className={css.check}>
-                              {pending?.provider === group.id && pending.model === model.id
-                                ? <StateDot state="ongoing" />
-                                : selected ? <IconCheckOutlineRegular /> : null}
-                            </span>
-                          </button>
-                        )
-                      })}
-                    </MenuGroup>
-                  )
-                })}
+                {favoriteRows.length > 0 && (
+                  <MenuGroup key="favorites" label={t('favorites.title')}>
+                    {favoriteRows.map(entry => renderModelRow(entry, `${entry.group.id}/${entry.model.id}`))}
+                  </MenuGroup>
+                )}
+                {filteredGroups.map(group => (
+                  <MenuGroup key={group.id} label={group.id === 'deepseek-account' ? t('provider.account') : group.name}>
+                    {group.models.map(model => renderModelRow({ group, model }, model.id))}
+                  </MenuGroup>
+                ))}
               </div>
               {state.status === 'ready' && filteredGroups.length === 0 && (
                 <div className={css.empty} role="status">{t(choices.length === 0 ? 'empty.models' : 'search.empty')}</div>

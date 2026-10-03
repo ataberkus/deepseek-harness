@@ -4,7 +4,7 @@ import type { ModelCatalog, SessionId } from '@deepseek-ai/dsh-api-remotes/clien
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import { RemoteError } from '@deepseek-ai/dsh-typert-protocol'
-import type { ModelCatalogDirectory, ModelCatalogState } from '../src/client/catalog.ts'
+import type { ModelCatalogState } from '../src/client/catalog.ts'
 import { ModelDirectory } from '../src/client/directory.ts'
 
 const sessionId = 's' as SessionId
@@ -62,7 +62,8 @@ function makeDirectory(opts: {
       if (value === null) throw new Error('empty catalog')
       return value
     },
-  } as ModelCatalogDirectory
+    reasoningFor: () => undefined,
+  }
   const projected = createSnapshotStore(opts.projected ?? { next: opts.catalog.default })
   return new ModelDirectory(
     { selectModel: opts.selectModel },
@@ -70,6 +71,7 @@ function makeDirectory(opts: {
     () => true,
     catalog,
     projected,
+    () => false,
   )
 }
 
@@ -100,8 +102,12 @@ describe('ModelDirectory', () => {
       selectModel: () => Promise.resolve(fail('no')),
     })
     await directory.load()
-    await expect(directory.select({ provider: 'p', model: 'b' }))
-      .rejects.toThrow(/gateway\/internal/)
+    // A refusal resolves with the original Remote failure for the entry that
+    // asked, while the directory keeps the last good selection and its error.
+    const outcome = await directory.select({ provider: 'p', model: 'b' })
+    if (outcome.ok) throw new Error('a refused selection must not resolve as successful')
+    expect(outcome.error.code).toBe('gateway/internal')
+    expect(outcome.error.message).toBe('no')
     expect(directory.store.getSnapshot().current).toEqual({ provider: 'p', model: 'a' })
     expect(directory.store.getSnapshot().status).toBe('error')
   })

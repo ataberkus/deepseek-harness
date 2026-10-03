@@ -4,9 +4,12 @@
  * contribution and the composer's named `conversation.input.model` seat share
  * one Host-generation `session/modelCatalog` catalog, combine it with the Session's
  * durable model-selection projection, and submit through `session.selectModel`.
- * A switch made in either entry is what the other shows next. Failures
- * ride each entry's own retry surface (popup shell error/retry; seat menu
- * inline error) without forking the state. Addressed subagent sessions expose
+ * A switch made in either entry is what the other shows next. Both entries
+ * pin the browser-local favorites list first: the seat shows a Favorites
+ * group with per-row stars, while the popup moves favorited rows into a
+ * leading Favorites group. Failures ride each entry's own retry surface
+ * (popup shell error/retry; seat menu inline error) without forking the
+ * state. Addressed subagent sessions expose
  * neither entry because those Agent-bound RPCs would activate persisted
  * history outside the direct-parent continuation path.
  */
@@ -48,23 +51,39 @@ function rowId(providerId: string, modelId: string): string {
   return `${providerId}/${modelId}`
 }
 
-/** Flatten the directory into popup rows; failure rows are listed for visibility but never selectable. */
-function optionsOf(directory: ModelDirectoryState, t: TranslateNS<'model'>): SelectOption[] {
-  const rows: SelectOption[] = []
+/**
+ * Flatten the directory into popup rows; failure rows are listed for
+ * visibility but never selectable. Favorited rows move into a leading
+ * Favorites group in catalog order, labeled with their provider.
+ * @param directory - the session's directory snapshot.
+ * @param t - bound translator.
+ * @param favorites - favorite row ids (unknown ids ignored).
+ * @returns the popup rows with favorites pinned first.
+ */
+function optionsOf(
+  directory: ModelDirectoryState,
+  t: TranslateNS<'model'>,
+  favorites: readonly string[],
+): SelectOption[] {
+  const wanted = new Set(favorites)
+  const favored: SelectOption[] = []
+  const rest: SelectOption[] = []
   for (const group of orderModelProviders(directory.groups)) {
     const name = group.id === 'deepseek-account' ? t('provider.account') : group.name
     for (const model of group.models) {
-      rows.push({
-        id: rowId(group.id, model.id),
-        label: model.name,
-        group: { name: group.id, label: name },
-        ...(directory.current !== null
-          && directory.current.provider === group.id
-          && directory.current.model === model.id
-          ? { active: true } : {}),
-      })
+      const id = rowId(group.id, model.id)
+      const active = directory.current !== null
+        && directory.current.provider === group.id
+        && directory.current.model === model.id
+      const row: SelectOption = { id, label: model.name, ...(active ? { active: true } : {}) }
+      if (wanted.has(id)) {
+        favored.push({ ...row, detail: name, group: { name: 'favorites', label: t('favorites.title') } })
+      } else {
+        rest.push({ ...row, group: { name: group.id, label: name } })
+      }
     }
   }
+  const rows = [...favored, ...rest]
   for (const failure of directory.failures) {
     rows.push({
       id: `failure/${failure.id}`,
@@ -144,7 +163,8 @@ export function apply(ctx: ClientContext): void {
           if (sessions.subagentAddress(session.sessionId) !== undefined) {
             throw new Error('model selection is unavailable for addressed subagent sessions')
           }
-          return optionsOf(await models.directoryFor(session.sessionId).load(), t)
+          const directory = await models.directoryFor(session.sessionId).load()
+          return optionsOf(directory, t, models.favorites.getSnapshot().favorites)
         },
         onSelect: async (option, session) => {
           if (sessions.subagentAddress(session.sessionId) !== undefined) {
@@ -165,7 +185,8 @@ export function apply(ctx: ClientContext): void {
     }), 'ui-model-selection: /model contribution')
   })
 
-  // Entry 2: the composer's named model seat over the SAME directory.
+  // Entry 2: the composer's named model seat over the SAME directory plus
+  // the shared favorites list.
   ctx.inject(['slots', 'modelDirectories'], (scope: ClientContext) => {
     const models = scope.modelDirectories
     const sessions = scope.sessions
@@ -178,12 +199,16 @@ export function apply(ctx: ClientContext): void {
         return {
           available,
           directory: directory.store,
+          favorites: models.favorites,
           load: () => {
             if (available) directory.load().catch(() => { /* surfaced on the store */ })
           },
           select: (selection: ModelSelection) => available
             ? directory.select(selection)
             : Promise.resolve(undefined),
+          toggleFavorite: (providerId: string, modelId: string) => {
+            models.toggleFavorite(providerId, modelId)
+          },
         }
       },
     }, ModelSelect))

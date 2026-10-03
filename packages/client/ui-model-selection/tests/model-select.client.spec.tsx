@@ -7,9 +7,23 @@ import type { ModelSelection } from '@deepseek-ai/dsh-api-remotes/client'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import type { ComponentProps } from 'react'
 import type { ModelDirectoryState } from '../src/client/directory.ts'
-import { ModelSelect } from '../src/client/ModelSelect.tsx'
+import { ModelSelect as Seat } from '../src/client/ModelSelect.tsx'
 import { en, zh } from '../src/client/locales.ts'
 import { zh as commonZh } from '@deepseek-ai/dsh-client-locale/src/locales/zh.ts'
+
+type SeatProps = ComponentProps<typeof Seat>
+
+/** Never-mutated favorites list for tests that do not exercise starring. */
+const noFavorites = createSnapshotStore({ favorites: [] as string[] })
+
+/**
+ * The seat with an empty favorites face unless a test passes its own.
+ * @param props - seat props; `favorites`/`toggleFavorite` are optional here.
+ * @returns the rendered seat.
+ */
+function ModelSelect(props: Omit<SeatProps, 'favorites' | 'toggleFavorite'> & Partial<SeatProps>) {
+  return <Seat favorites={noFavorites} toggleFavorite={vi.fn()} {...props} />
+}
 
 // The seat's key domain is model ∪ common; the stub mirrors the real lookup
 // chain: package dictionary, then common vocabulary, then the key.
@@ -916,4 +930,84 @@ it('restores the account model name after login without changing the saved route
   act(() => { directory.update((snapshot) => { snapshot.groups = groups; snapshot.routable = true }) })
   expect(screen.getByRole('button', { name: /选择模型，当前/ }).textContent).toBe('DeepSeek FlashHigh')
   expect(directory.getSnapshot().current).toEqual(selected)
+})
+
+describe('ModelSelect favorites', () => {
+  const groups = [
+    { id: 'deepseek-official', name: 'DeepSeek', models: [
+      { id: 'deepseek-v4-flash', name: 'DeepSeek-V4-Flash' },
+      { id: 'deepseek-v4-pro', name: 'DeepSeek-V4-Pro' },
+    ] },
+    { id: 'acme-gateway', name: 'Acme Gateway', models: [
+      { id: 'acme-large', name: 'Acme Large' },
+      { id: 'acme-small', name: 'Acme Small' },
+      { id: 'acme-tiny', name: 'Acme Tiny' },
+    ] },
+  ]
+
+  /** Open the model pane over a favorites store whose toggle writes through. */
+  function openWithFavorites(initial: readonly string[] = [], select = vi.fn()) {
+    const favorites = createSnapshotStore({ favorites: [...initial] })
+    const toggleFavorite = vi.fn((providerId: string, modelId: string) => {
+      const id = `${providerId}/${modelId}`
+      favorites.update((draft) => {
+        draft.favorites = draft.favorites.includes(id)
+          ? draft.favorites.filter(entry => entry !== id)
+          : [...draft.favorites, id]
+      })
+    })
+    render(<ModelSelect locked={false} available directory={createSnapshotStore(state({ groups }))}
+      favorites={favorites} toggleFavorite={toggleFavorite} load={vi.fn()} select={select} t={t} />)
+    fireEvent.click(screen.getByRole('button', { name: /选择模型/ }))
+    fireEvent.click(screen.getByRole('menuitem', { name: /模型/ }))
+    return toggleFavorite
+  }
+
+  it('hides the Favorites group without favorites and pins it first once starred', () => {
+    const toggleFavorite = openWithFavorites()
+    expect(screen.queryByRole('group', { name: zh['favorites.title'] })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: '将 Acme Large 添加到收藏' }))
+    expect(toggleFavorite).toHaveBeenCalledWith('acme-gateway', 'acme-large')
+    const favoriteGroup = screen.getByRole('group', { name: zh['favorites.title'] })
+    expect(screen.getByRole('menu', { name: zh['menu.model'] }).firstElementChild).toBe(favoriteGroup)
+    expect(favoriteGroup.textContent).toContain('Acme Large')
+  })
+
+  it('keeps a favorited model in its provider group and unstars from either row', () => {
+    const toggleFavorite = openWithFavorites(['deepseek-official/deepseek-v4-pro'])
+    expect(screen.getAllByRole('menuitemradio', { name: 'DeepSeek-V4-Pro' })).toHaveLength(2)
+    fireEvent.click(screen.getAllByRole('button', { name: '将 DeepSeek-V4-Pro 移出收藏' })[1]!)
+    expect(toggleFavorite).toHaveBeenCalledWith('deepseek-official', 'deepseek-v4-pro')
+    expect(screen.queryByRole('group', { name: zh['favorites.title'] })).toBeNull()
+    expect(screen.getAllByRole('menuitemradio', { name: 'DeepSeek-V4-Pro' })).toHaveLength(1)
+  })
+
+  it('filters favorites with the search query and highlights them first for the keyboard', async () => {
+    const select = vi.fn().mockResolvedValue({ ok: true, value: undefined })
+    openWithFavorites(['deepseek-official/deepseek-v4-pro', 'acme-gateway/acme-large'], select)
+    const search = screen.getByRole('searchbox')
+    fireEvent.change(search, { target: { value: 'Acme' } })
+    const favoriteGroup = screen.getByRole('group', { name: zh['favorites.title'] })
+    expect(screen.getAllByRole('menuitemradio', { name: 'Acme Large' })).toHaveLength(2)
+    expect(screen.queryByRole('menuitemradio', { name: 'DeepSeek-V4-Pro' })).toBeNull()
+    const favoriteRow = favoriteGroup.querySelector('[role="menuitemradio"]')!
+    expect(search.getAttribute('aria-activedescendant')).toBe(favoriteRow.id)
+    fireEvent.keyDown(search, { key: 'ArrowDown' })
+    fireEvent.keyDown(search, { key: 'ArrowUp' })
+    expect(search.getAttribute('aria-activedescendant')).toBe(favoriteRow.id)
+    fireEvent.keyDown(search, { key: 'Enter' })
+    await waitFor(() => {
+      expect(select).toHaveBeenCalledWith({ provider: 'acme-gateway', model: 'acme-large' })
+    })
+  })
+
+  it('selects a favorited model from the Favorites group by click', async () => {
+    const select = vi.fn().mockResolvedValue({ ok: true, value: undefined })
+    openWithFavorites(['acme-gateway/acme-small'], select)
+    const favoriteGroup = screen.getByRole('group', { name: zh['favorites.title'] })
+    fireEvent.click(favoriteGroup.querySelector('[role="menuitemradio"]')!)
+    await waitFor(() => {
+      expect(select).toHaveBeenCalledWith({ provider: 'acme-gateway', model: 'acme-small' })
+    })
+  })
 })

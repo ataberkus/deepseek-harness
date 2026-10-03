@@ -60,7 +60,7 @@ export class ModelDirectory {
     private readonly sessions: Pick<TypertClientRemote['session'], 'selectModel'>,
     private readonly sessionId: SessionId,
     private readonly available: () => boolean,
-    private readonly catalog: ModelCatalogDirectory,
+    private readonly catalog: Pick<ModelCatalogDirectory, 'store' | 'load' | 'reasoningFor'>,
     private readonly projected: ObservableSnapshot<unknown>,
     private readonly isBlank: () => boolean,
     private readonly track?: TrackProductEvent,
