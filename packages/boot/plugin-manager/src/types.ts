@@ -8,10 +8,21 @@ import type { PluginEntryId } from '@deepseek-ai/dsh-host-plugin-inventory/types
 /** Reasons a profile control cannot modify its target. */
 export type ReadOnlyReason = 'management-required' | 'unaddressable'
 
+/** A package whose declared DSH peers reject the running DSH version, without an exemption for the exact pair. */
+export interface IncompatiblePlugin {
+  name: string
+  version: string
+  runtimeVersion: string
+  /** Only the DSH peer ranges the running version does not satisfy. */
+  peers: Record<string, string>
+}
+
 /** Localizable management failure and optional external diagnostic. */
 export interface ManagementError {
-  code: ReadOnlyReason | 'unknown-plugin' | 'invalid-spec' | 'ambiguous-install' | 'not-bundle' | 'not-removable' | 'stop-profile' | 'bundle-in-use' | 'stale-approval' | 'operation-error'
+  code: ReadOnlyReason | 'unknown-plugin' | 'invalid-spec' | 'ambiguous-install' | 'not-bundle' | 'not-removable' | 'stop-profile' | 'bundle-in-use' | 'stale-approval' | 'incompatible-version' | 'operation-error'
   diagnostic?: string
+  /** Present with `incompatible-version`: the packages the running DSH version rejects. */
+  incompatible?: IncompatiblePlugin[]
 }
 
 /** One running-profile entry and its persistent control availability. */
@@ -45,6 +56,11 @@ export interface BundleInfo {
   /** Whether the profile's own dependencies hold the package; false for a bundle the dsh installation supplies. */
   installed: boolean
   /**
+   * Present for a profile dependency the installation does not also supply: the spec `pnpm add` accepts, with local
+   * paths made absolute and the user information of an http(s) URL removed.
+   */
+  source?: string
+  /**
    * Whether the installation ships the bundle for the person to switch on: named by the launcher's `OPTIONAL_BUNDLES`,
    * held by the installation's dependencies, selected by no shipped template, and never removable.
    */
@@ -69,7 +85,7 @@ export interface PluginRegistries {
   readonly resolved: string | null
 }
 
-/** How a pnpm run failed, read off how it ended and what it printed. */
+/** How a package operation failed, read off how it ended and what it printed. */
 export type PluginInstallFailureKind =
   | 'pnpm-missing'
   | 'timeout'
@@ -82,7 +98,7 @@ export type PluginInstallFailureKind =
   | 'integrity'
   | 'unknown'
 
-/** Pnpm completion, including a retrieval path for unabridged diagnostics. */
+/** Package operation completion, including Git checks and a retrieval path for unabridged diagnostics. */
 export interface PackageResult {
   exitCode: number
   output: string
@@ -90,6 +106,10 @@ export interface PackageResult {
   logPath: string
   /** Present when the run failed: what kind of failure its exit and output describe. */
   kind?: PluginInstallFailureKind
+  /** The manager terminated the run after it printed nothing for its silence bound; `exitCode` still reports how it ended. */
+  timedOut?: boolean
+  /** Present when a compatibility check refused the run: the packages the running DSH version rejects. */
+  incompatible?: IncompatiblePlugin[]
 }
 
 /** Persisted change and independently observed application outcome. */
@@ -107,6 +127,8 @@ export interface ChangeResult {
   packageResult?: PackageResult
   /** The bundle an installation added, once pnpm and the bundle check accepted it. */
   bundle?: string
+  /** The installed bundle's manifest version, when declared; pnpm's `minimumReleaseAge` can make it older than the newest release. */
+  version?: string
   /** Exact package names awaiting explicit script approval in the profile's pnpm settings, read after a failed run. */
   pendingBuilds?: string[]
   /** Package script permissions saved before this installation attempt. */

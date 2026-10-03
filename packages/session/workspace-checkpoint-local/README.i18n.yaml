@@ -1,6 +1,19 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/session/workspace-checkpoint-local/README.md
-README.md: 21ee8f6dd0132fc172dd802903c5e05804e282d4
-README.zh.md: 997b933ff526ec9ede212dacce612854d8e47b04
+/deepseek-ai-dsh-workspace-checkpoint-local:
+  en: 7585564271a1cef4
+  zh: 86f1485d4424f7f1
+/deepseek-ai-dsh-workspace-checkpoint-local/plugin-namespace-workspace-checkpoint-local:
+  en: 4e86a5bc9498f9f8
+  zh: 2de409fadb7c0315
+/deepseek-ai-dsh-workspace-checkpoint-local/model-experience:
+  en: 1dc95761eb3d56d3
+  zh: e491022ad13496b8
+/deepseek-ai-dsh-workspace-checkpoint-local/model-experience/kv-cache-effect:
+  en: ca75c51c89c2c9b0
+  zh: f57cc48a1b5cbfa9
+/deepseek-ai-dsh-workspace-checkpoint-local/known-limitations-and-deferred-work:
+  en: 2ac0954130fbaf93
+  zh: 52319ef790bb5192

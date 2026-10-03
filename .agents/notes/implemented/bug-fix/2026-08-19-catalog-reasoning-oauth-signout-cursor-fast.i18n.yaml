@@ -1,6 +1,22 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-08-19-catalog-reasoning-oauth-signout-cursor-fast.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-08-19-catalog-reasoning-oauth-signout-cursor-fast.md
-2026-08-19-catalog-reasoning-oauth-signout-cursor-fast.md: 6c5f308f66a2c571ee591c24604431475e545d11
-2026-08-19-catalog-reasoning-oauth-signout-cursor-fast.zh.md: 6b8abf0929cff000709fb61e499f99701747b880
+/agent-note-live-catalog-reasoning-oauth-sign-out-and-cursor-fast-skus:
+  en: 68bf76bd3b32ead3
+  zh: 5017eccb922171a3
+/agent-note-live-catalog-reasoning-oauth-sign-out-and-cursor-fast-skus/problem:
+  en: 7846ee0812acd99b
+  zh: d413858b0396d732
+/agent-note-live-catalog-reasoning-oauth-sign-out-and-cursor-fast-skus/decision:
+  en: c9a4f922baa6d572
+  zh: b2763552ffd98673
+/agent-note-live-catalog-reasoning-oauth-sign-out-and-cursor-fast-skus/alternatives-considered:
+  en: 359425e8dd9571a2
+  zh: bc186c13b282cac8
+/agent-note-live-catalog-reasoning-oauth-sign-out-and-cursor-fast-skus/consequences:
+  en: 68e92805c1825a66
+  zh: 42ba1d05263ff0d1
+/agent-note-live-catalog-reasoning-oauth-sign-out-and-cursor-fast-skus/testing:
+  en: bb8a5d62906adec6
+  zh: 60723c4573b5ce0b

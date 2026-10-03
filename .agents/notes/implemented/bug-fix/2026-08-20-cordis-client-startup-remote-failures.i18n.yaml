@@ -1,6 +1,22 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-08-20-cordis-client-startup-remote-failures.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-08-20-cordis-client-startup-remote-failures.md
-2026-08-20-cordis-client-startup-remote-failures.md: a3e873e84c852c1c33cbe18e48b972a9795239f0
-2026-08-20-cordis-client-startup-remote-failures.zh.md: 5744f0e66f85da6e13103cb8b9292e2eb6d16c3e
+/agent-note-keep-cordis-client-startup-resilient-to-remote-readiness:
+  en: ea193914745fb7fe
+  zh: 31adeec7d97212ff
+/agent-note-keep-cordis-client-startup-resilient-to-remote-readiness/problem:
+  en: d43e26909cbc707b
+  zh: 95f3fe8c10b6bf8f
+/agent-note-keep-cordis-client-startup-resilient-to-remote-readiness/decision:
+  en: 8763ace3fa02583f
+  zh: d368c42301816901
+/agent-note-keep-cordis-client-startup-resilient-to-remote-readiness/alternatives-considered:
+  en: 1836c97b63833fb8
+  zh: 26ac8974bf17fb44
+/agent-note-keep-cordis-client-startup-resilient-to-remote-readiness/consequences:
+  en: fbfecbd0c4881aca
+  zh: 445201b094724e6c
+/agent-note-keep-cordis-client-startup-resilient-to-remote-readiness/testing:
+  en: 89bf0417d74d47bf
+  zh: 6c8736b644128a82

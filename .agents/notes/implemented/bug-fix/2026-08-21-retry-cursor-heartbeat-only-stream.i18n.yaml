@@ -1,6 +1,19 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-08-21-retry-cursor-heartbeat-only-stream.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-08-21-retry-cursor-heartbeat-only-stream.md
-2026-08-21-retry-cursor-heartbeat-only-stream.md: 065b9fb43a1a5bd27343c9d991b76a55f5e2b208
-2026-08-21-retry-cursor-heartbeat-only-stream.zh.md: 3d681d3f1899cfe8988937463fe3afdb26e63898
+/agent-note-retry-cursor-heartbeat-only-completions:
+  en: 31e8fb3f2be1adb5
+  zh: 15b831f482925677
+/agent-note-retry-cursor-heartbeat-only-completions/problem:
+  en: 9df1c9462af2cf07
+  zh: c54f62e92a5909ca
+/agent-note-retry-cursor-heartbeat-only-completions/decision:
+  en: 44c95f0acbf56989
+  zh: 0ce249ddab254e9e
+/agent-note-retry-cursor-heartbeat-only-completions/alternatives-considered:
+  en: fbe631484ec2fab0
+  zh: 6cf579736192f436
+/agent-note-retry-cursor-heartbeat-only-completions/consequences:
+  en: 737d1952c84e6102
+  zh: 4449ea325f25fe19

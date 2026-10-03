@@ -1,6 +1,40 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-08-21-login-provider-picker-design.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write docs/superpowers/specs/2026-08-21-login-provider-picker-design.md
-2026-08-21-login-provider-picker-design.md: df043e921d52fd28ee03bea90c89f94d8ad6cc52
-2026-08-21-login-provider-picker-design.zh.md: e9166904454770b561d9acfbc60b168923035c77
+/login-provider-picker-design:
+  en: 7eee1c0e9c15220d
+  zh: 5c3d476e1a46b8c9
+/login-provider-picker-design/problem:
+  en: 27b6e5234aecb974
+  zh: b04e546817e06fb0
+/login-provider-picker-design/goals:
+  en: d750c6afa4309561
+  zh: cd6ba45b2450bafc
+/login-provider-picker-design/non-goals:
+  en: 124230c1b3108634
+  zh: 67bb102fe17a751e
+/login-provider-picker-design/user-interaction:
+  en: ea48a53b6574ba11
+  zh: dbf1ecc189ae07d6
+/login-provider-picker-design/architecture:
+  en: a7e56472b11bd3c8
+  zh: a7e56472b11bd3c8
+/login-provider-picker-design/architecture/host-command:
+  en: 66ff2ab940b63736
+  zh: 8762f322102442dc
+/login-provider-picker-design/architecture/shared-command-runtime:
+  en: 9998699c17554b8f
+  zh: c4349bab3b5f79c5
+/login-provider-picker-design/architecture/provider-picker-decoration:
+  en: 95a62e9319b2cc61
+  zh: e708b8bdda7402bf
+/login-provider-picker-design/data-flow-and-safety:
+  en: 1fef4c2da2d2fd4e
+  zh: fa8ca748075f82ff
+/login-provider-picker-design/verification:
+  en: acaf2378f7fb48ec
+  zh: 82bb477d11cd9c49
+/login-provider-picker-design/affected-areas:
+  en: a560b79da34acf6d
+  zh: 7763d673fd2d881c

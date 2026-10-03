@@ -26,6 +26,7 @@ const BASH_ICON = <IconApiOutlineRegular size={14} />
 /** Visually hidden status for the color-only running sweep and error tone. */
 function stateStatus(state: ToolRowState, t: BashRowProps['t']): string | null {
   switch (state) {
+    case 'preparing': return t('row.preparing')
     case 'running': return t('bash.running')
     case 'error': return t('bash.failed')
     case 'stopped': return t('bash.stopped')
@@ -34,7 +35,8 @@ function stateStatus(state: ToolRowState, t: BashRowProps['t']): string | null {
 }
 
 /**
- * Render expandable Bash output with an accessible lifecycle label.
+ * Render expandable Bash output with an accessible lifecycle label. While the
+ * call is preparing the row shows the description streamed so far and cannot expand.
  * @param props - tool call, Session sources, locale, and inspection callback.
  * @returns the Bash output row.
  */
@@ -70,7 +72,7 @@ export const BashRow = memo(function BashRow({ toolName, block, sessionId, useSe
   const settlementLine = state === 'error'
     ? model.errorSummary ?? normalSummary
     : state === 'stopped' ? t('bash.stopped') : null
-  const running = state === 'running'
+  const running = state === 'running' || state === 'preparing'
   const toggleFromKeyboard = useCallback((event: KeyboardEvent<HTMLDivElement>) => {
     if (!expandable || (event.key !== 'Enter' && event.key !== ' ')) return
     event.preventDefault()
@@ -102,15 +104,17 @@ export const BashRow = memo(function BashRow({ toolName, block, sessionId, useSe
       >
         <span className={css.leading}>{leading}</span>
         {status !== null && <span className={css.visuallyHidden}>{status}</span>}
-        <TextShimmer className={css.title} active={running}>{t(model.titleKey)}</TextShimmer>
-        <span className={css.sep} aria-hidden />
-        <span className={clsx(
-          css.summary,
-          state === 'error' && css.errorSummary,
-          state === 'stopped' && css.stoppedSummary,
-        )}>
-          <TextShimmer active={running}>{settlementLine ?? normalSummary}</TextShimmer>
-        </span>
+        <TextShimmer active={running}>
+          <TextShimmer className={css.title}>{t(model.titleKey)}</TextShimmer>
+          <span className={css.sep} data-shimmer-decoration aria-hidden />
+          <span className={clsx(
+            css.summary,
+            state === 'error' && css.errorSummary,
+            state === 'stopped' && css.stoppedSummary,
+          )}>
+            <TextShimmer>{settlementLine ?? normalSummary}</TextShimmer>
+          </span>
+        </TextShimmer>
       </div>
       {open && (
         <div className={css.bodyWrap}>

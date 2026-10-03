@@ -276,6 +276,12 @@ Parsing rules: `item` has exactly the keys `type` and `streamId` plus an optiona
 | `item` received after `end` | Any | The stream fails with a `gateway/protocol` error frame and aborts; the socket stays open |
 | `item` / `end` with an unknown `streamId` | Any | Ignored, like `cancel`: after the Host ends a stream and deletes its id, uplink frames still in flight from the Client are normal and must not take down the other streams on the same socket |
 
+### Cancellation wait lifetime
+
+`cancellableStream`, `UplinkDecoder.next()`, and the Client uplink pump each create a cancellation or stop promise per read. `Promise.race` does not remove the losing input's reaction when a read completes: reusing a stream-wide pending promise retains completed races and their item results until that promise settles or becomes unreachable. Read-local promises keep retained cancellation state independent of the number of delivered items.
+
+The Host downlink clears its current reject callback after each read and checks cancellation before reading again. The uplink decoder retains only pending reads: abort rejects them, while normal close resolves all of them with `done`, including overlapping reads. The Client pump drops its stop promise after each read and does not start another read after stopping. Source iterators retain their existing release ownership; closing the Host uplink still precedes returning the method iterator.
+
 ### Ordering guarantees
 
 Frames on one socket arrive in total order: a logical stream's `open`, `item`…, `end` reach the Host in send order, and uplink items enter `uplink()` in the order of `send`. There is no cross-direction ordering guarantee between uplink and downlink; a protocol that needs request-response pairing carries its own sequence numbers.
@@ -538,6 +544,10 @@ for await (const reply of stream) replies.push(reply)   // ['> a', '> b']
 
 ## Alternatives considered
 
+**A shared cancellation controller for all three reading loops.** Each loop already has an owner with distinct close behavior. Read-local promises bound retained state without moving those responsibilities into a new abstraction.
+
+**Requiring source iterators to cancel their own `next()`.** Gateway accepts arbitrary iterables, whose pending reads need not respond to cancellation or `return()`. Gateway must still wake its own waiters independently of source cleanup.
+
 **A separate `mode: 'duplex'` plus a reserved parameter `uplink: AsyncIterable<In>` alongside `signal`.** Special logic everywhere: the analyzer must recognize a second reserved parameter and its position rules, the generated signature gains a parameter, load time must validate `duplex ⟺ uplink`, and because the mux does not know the method mode, the Gateway must reject uplink frames on behalf of `'stream'` methods. Duplex is an inherent property of the transport-layer stream, not a mode of the method: the carrier already has `streamId`, `open`, and `cancel`; the uplink adds just two more frames, which any stream can receive and which are simply not sent when unused.
 
 **Declaring the uplink type in a decorator option, `@Remote({ mode: 'stream', uplink: 'JobInputFrame' })`.** A string reference to a type name is not checked by the compiler and breaks on rename. The return-type alias puts both types in one compiler-visible place.
@@ -572,6 +582,8 @@ for await (const reply of stream) replies.push(reply)   // ['> a', '> b']
 
 ## Testing
 
+Retention cases in `gateway-stream.host.spec.ts` and `gateway.client.spec.ts` count live iterator results after a full GC while the streams remain open. Lifecycle cases cover normal close waking multiple pending uplink reads, cancellation between reads, synchronous abort followed by a source exception, and termination during a Client send.
+
 - `packages/api/gateway/tests/echo-stream.host.spec.ts`: the same echo method passes through the WebSocket carrier and through the in-process carrier.
 - Gateway Host: exact-key validation in frame parsing; `UplinkInbox` buffering during opening, `item` after `end`, overflow, ignored unknown `streamId`, and cleanup on socket closure; `UplinkDecoder` delivery with and without a codec and abort on decode failure; `uplink()` taken only once; the `extend({ invocation })` view and the origin of `peer`; `cancellableStream` closing the uplink before `return()`.
 - Gateway Client: the handle's `send` (JSON validation, queued before open, throws after termination), idempotent `end`, `dispose` driving the `cancel` frame and ending later reads; the pump's three exits; the pump stopping as soon as a terminal frame arrives.
@@ -592,6 +604,6 @@ for await (const reply of stream) replies.push(reply)   // ['> a', '> b']
 
 ## Related
 
-- [Remote event delivery](2026-08-10-remote-event-delivery.md): the unary `$events/result` answer path; the duplex `$events` item under Deferred partially supersedes it once it lands.
+- [Remote event delivery](../../../../packages/api/remotes/README.md): the unary `$events/result` answer path; the duplex `$events` item under Deferred partially supersedes it once it lands.
 - [Session history and event transport](2026-08-18-session-history-and-event-transport.md): the `$stream()` supervisor and the journal / snapshot protocols above it, which this note leaves unchanged.
 - [Web sidebar terminal](../feature/2026-09-09-web-sidebar-terminal.md): the unary terminal `write` and `attachmentId`; the `attach` stream under Deferred replaces it once it lands.

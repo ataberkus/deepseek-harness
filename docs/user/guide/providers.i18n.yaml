@@ -1,6 +1,49 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for providers.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write docs/user/guide/providers.md
-providers.md: cba912a0cd5c12f8b2ee2579c94a0f99bdb5fd98
-providers.zh.md: cb35a29bd3cd92d01fccbdd8991ab6af98607027
+/configure-models:
+  en: b1631dcf25e805a1
+  zh: 8ded02e2ae87f00b
+/configure-models/configure-deepseek:
+  en: 2c6b665adc256b4e
+  zh: 2240e4c1573ebe9c
+/configure-models/add-a-third-party-provider:
+  en: b045aac6ba3425de
+  zh: 8757386f42a8c5e4
+/configure-models/connect-opencode-go:
+  en: 47b719fcecd4580d
+  zh: 4d6fd8bba17c37e1
+/configure-models/sign-in-to-openai-codex:
+  en: 2ae7f29af526a1a2
+  zh: 350644d807cdc7db
+/configure-models/sign-in-to-cursor:
+  en: 447134e59442c40c
+  zh: 89b427f593993aab
+/configure-models/sign-in-to-antigravity:
+  en: a420ee1f29327768
+  zh: 2eb93ace9d560e12
+/configure-models/add-a-custom-model-api:
+  en: 17867305a3e1b52a
+  zh: 876fedf1f6f563e4
+/configure-models/add-a-custom-model-api/discover-models:
+  en: 97318c5a115199ff
+  zh: 0c455e4232cf0265
+/configure-models/select-a-model:
+  en: 6a94264c99535caf
+  zh: f97bb0dc6a40c0d3
+/configure-models/advanced-configuration:
+  en: aaefe21c2fb77396
+  zh: c02d1e2a6b2a1290
+/configure-models/advanced-configuration/image-input:
+  en: 75350cb615da03a4
+  zh: 6f8b3510085e4ac4
+/configure-models/advanced-configuration/reasoning-effort:
+  en: f7581a0760fdfd2c
+  zh: dc6eaa16f74a0e9f
+/configure-models/advanced-configuration/request-compatibility:
+  en: 6f52195d1502783e
+  zh: 34dbbeacb541afd4
+/configure-models/troubleshooting:
+  en: 7ed9797bfeafd293
+  zh: 67be8b7086cac527

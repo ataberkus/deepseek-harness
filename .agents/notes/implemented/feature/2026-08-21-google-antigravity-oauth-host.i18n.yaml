@@ -1,6 +1,22 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-08-21-google-antigravity-oauth-host.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-08-21-google-antigravity-oauth-host.md
-2026-08-21-google-antigravity-oauth-host.md: 46e74b063de945f78dc64e17c6fab1ee88f10d47
-2026-08-21-google-antigravity-oauth-host.zh.md: 7bd3f6dd828d19b2de01ae395ba63d8e9417384c
+/agent-note-host-antigravity-oauth-for-cloud-code-assist:
+  en: 87cd2a7a7b7f2ba0
+  zh: b6257b6582012402
+/agent-note-host-antigravity-oauth-for-cloud-code-assist/problem:
+  en: 3e3e6383b001b1be
+  zh: 07d14f3bd8b37c89
+/agent-note-host-antigravity-oauth-for-cloud-code-assist/decision:
+  en: c7f93caac8360ad0
+  zh: 5da2c42e872dcb49
+/agent-note-host-antigravity-oauth-for-cloud-code-assist/alternatives-considered:
+  en: 765a093bd9bf3c9b
+  zh: 630b6aa66f2a5635
+/agent-note-host-antigravity-oauth-for-cloud-code-assist/consequences:
+  en: 2c36b7df58f09f6b
+  zh: 32739d2e9bcac426
+/agent-note-host-antigravity-oauth-for-cloud-code-assist/testing:
+  en: ea41123642111e97
+  zh: 10b3f0f2b58ac8c4

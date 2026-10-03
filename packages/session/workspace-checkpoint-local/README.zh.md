@@ -30,4 +30,3 @@
 
 - **恢复只覆盖会话 cwd** — 网络、数据库、终端和被忽略的外部效果不在范围内。
 - **捕获是 fail-soft** — unavailable 记录不会抹掉已完成的回合；Host 不得为该检查点提供自动恢复。
-- **本地 invariant companion 由事件驱动** — 已存在的关系错误会在下一次检查点变更发出时报告；storage schema 校验仍会在 domain 打开时拒绝格式错误的记录。

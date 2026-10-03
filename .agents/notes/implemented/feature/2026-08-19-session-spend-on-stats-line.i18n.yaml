@@ -1,6 +1,19 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-08-19-session-spend-on-stats-line.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-08-19-session-spend-on-stats-line.md
-2026-08-19-session-spend-on-stats-line.md: 829e32553e93b0cb472e4cf8888fbdd71e87220e
-2026-08-19-session-spend-on-stats-line.zh.md: cca5c48062bda846123c6093d4c307c935bc2b33
+/agent-note-session-usd-spend-on-the-web-stats-line:
+  en: fe76c46cae8a0816
+  zh: 60762a2c926efad6
+/agent-note-session-usd-spend-on-the-web-stats-line/problem:
+  en: cef71feed980343b
+  zh: 9cde1d74c3085800
+/agent-note-session-usd-spend-on-the-web-stats-line/decision:
+  en: aad1c06ed4b1a2ca
+  zh: 732583ecf2bb1e5d
+/agent-note-session-usd-spend-on-the-web-stats-line/alternatives-considered:
+  en: 97b8f8b2d0ed93a8
+  zh: 092b5f4fac5c363f
+/agent-note-session-usd-spend-on-the-web-stats-line/consequences:
+  en: 2ed1938646c4eb2d
+  zh: 3dcc8fc017605f34

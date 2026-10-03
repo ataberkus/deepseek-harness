@@ -164,6 +164,7 @@ export function BooleanField(props: FieldProps) {
  * A write-only credential control. The value never rides a response, so the
  * control reports only whether one is configured and starts blank; a blank
  * draft writes nothing, which keeps the stored key rather than clearing it.
+ * The control asks browsers not to autofill saved login passwords.
  * @param props - the field's copy, its staged text, and the configured state.
  * @returns the labelled control.
  */
@@ -185,7 +186,7 @@ export function SettingsSecretField(props: Pick<SettingsFieldProps, 'id' | 'labe
         id={props.id}
         className={css.input}
         type="password"
-        autoComplete="off"
+        autoComplete="new-password"
         value={props.text}
         disabled={props.disabled}
         onChange={(event) => { props.onEdit(event.target.value) }}

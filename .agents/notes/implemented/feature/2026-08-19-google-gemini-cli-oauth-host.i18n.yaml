@@ -1,6 +1,22 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-08-19-google-gemini-cli-oauth-host.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-08-19-google-gemini-cli-oauth-host.md
-2026-08-19-google-gemini-cli-oauth-host.md: 2d24b128725ae7c0987fb8a66cd6d136f734d5b4
-2026-08-19-google-gemini-cli-oauth-host.zh.md: e857733eaf85dcd174fc2b75d7ca9a1633acc9f2
+/agent-note-host-gemini-cli-oauth-for-cloud-code-assist:
+  en: 4759f2bb8a1774ca
+  zh: 2b03763d1e512fe4
+/agent-note-host-gemini-cli-oauth-for-cloud-code-assist/problem:
+  en: 82131787a56c252b
+  zh: 5b5a8e4006cae685
+/agent-note-host-gemini-cli-oauth-for-cloud-code-assist/decision:
+  en: a9dffe74352bcd42
+  zh: 73c48635359db2ee
+/agent-note-host-gemini-cli-oauth-for-cloud-code-assist/alternatives-considered:
+  en: 64a0315857ab59c3
+  zh: be826d00c3e20b26
+/agent-note-host-gemini-cli-oauth-for-cloud-code-assist/consequences:
+  en: 1f54337b5179f229
+  zh: 8782ad7d533475db
+/agent-note-host-gemini-cli-oauth-for-cloud-code-assist/testing:
+  en: 54ae3c976589a228
+  zh: 9918c72a028b305e

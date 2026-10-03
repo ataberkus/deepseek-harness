@@ -1,6 +1,22 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-08-20-cursor-agentservice-wire-compatibility.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-08-20-cursor-agentservice-wire-compatibility.md
-2026-08-20-cursor-agentservice-wire-compatibility.md: cbbe528f8650107e999496c903873a8ae6c2b7f7
-2026-08-20-cursor-agentservice-wire-compatibility.zh.md: 23bd9312f0ebe182ad2bb4ddbe9757ebbbe47d97
+/agent-note-keep-cursor-agentservice-run-wire-compatible:
+  en: 6685e600a14c3b11
+  zh: 8437d4de13ff173a
+/agent-note-keep-cursor-agentservice-run-wire-compatible/problem:
+  en: 1e60bb456fe672a2
+  zh: db80d9411fb9fbf5
+/agent-note-keep-cursor-agentservice-run-wire-compatible/decision:
+  en: 0ee806f3a2bbba55
+  zh: e9acbb4dabeac59a
+/agent-note-keep-cursor-agentservice-run-wire-compatible/alternatives-considered:
+  en: 5e7ae37ad9d1a06e
+  zh: 97fd97fe2df59a36
+/agent-note-keep-cursor-agentservice-run-wire-compatible/consequences:
+  en: 4d549db7c4e30a04
+  zh: 100a2dec407ece31
+/agent-note-keep-cursor-agentservice-run-wire-compatible/testing:
+  en: 46072540ceb2fa61
+  zh: b02488ebe77c5402

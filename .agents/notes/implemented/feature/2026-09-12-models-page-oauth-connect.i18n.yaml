@@ -1,6 +1,19 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-09-12-models-page-oauth-connect.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-09-12-models-page-oauth-connect.md
-2026-09-12-models-page-oauth-connect.md: 439b8233a590021564f58174fcd215a934dad93b
-2026-09-12-models-page-oauth-connect.zh.md: 06503b818e9cb6350b919899a7799087d7f3130c
+/agent-note-models-page-provider-connect:
+  en: 61a32684c89d91f1
+  zh: 20883580dcf860bd
+/agent-note-models-page-provider-connect/problem:
+  en: 497d6169c221a5cd
+  zh: f9f7c067ff85c3e3
+/agent-note-models-page-provider-connect/decision:
+  en: 5c37ab86a97cfb25
+  zh: 9d9236fa3aeabef1
+/agent-note-models-page-provider-connect/alternatives-considered:
+  en: 630b303df3482a68
+  zh: 562f3afd29633763
+/agent-note-models-page-provider-connect/consequences:
+  en: 8f1bb269337b3da7
+  zh: e54403723a820ecb

@@ -1,6 +1,40 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-09-14-bundled-third-party-skills.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-09-14-bundled-third-party-skills.md
-2026-09-14-bundled-third-party-skills.md: ec5895ef5c5783766f31b40bdcf941194ee4f931
-2026-09-14-bundled-third-party-skills.zh.md: 45f4a8fedfd2a11cca033f90f3ef2054b6002dba
+/agent-note-bundled-third-party-skills:
+  en: 103d3ba4eac37f39
+  zh: 096b9b835857221d
+/agent-note-bundled-third-party-skills/problem:
+  en: f83ee499a876623b
+  zh: 66ea2a15fcca517a
+/agent-note-bundled-third-party-skills/decision:
+  en: 19974d4b61aae851
+  zh: adb5c762c6c9834e
+/agent-note-bundled-third-party-skills/decision/vendoring:
+  en: 9df2107f9816509f
+  zh: ed32e59d5fc68fd1
+/agent-note-bundled-third-party-skills/decision/composition:
+  en: 231981626becacc6
+  zh: 3b19111ae55b9e6c
+/agent-note-bundled-third-party-skills/alternatives-considered:
+  en: 6119e2aff3b6be5a
+  zh: 6119e2aff3b6be5a
+/agent-note-bundled-third-party-skills/alternatives-considered/hand-copied-filesystem-skills:
+  en: d0137c929b337ca9
+  zh: 10ea5bc340f8264b
+/agent-note-bundled-third-party-skills/alternatives-considered/one-combined-package-for-both-upstreams:
+  en: e23524a3b017cd0d
+  zh: b86ebdd496929cba
+/agent-note-bundled-third-party-skills/alternatives-considered/enabled-by-default-in-dsh-base:
+  en: f0e2541c2d3fd957
+  zh: 5b25ca9b6fe5579d
+/agent-note-bundled-third-party-skills/alternatives-considered/runtime-frontmatter-parsing-or-submodule:
+  en: b799e33be56f8abb
+  zh: 8a2aaca37a11d8b5
+/agent-note-bundled-third-party-skills/consequences:
+  en: b731da8ec8e98e6b
+  zh: 7796e0f34384f26b
+/agent-note-bundled-third-party-skills/testing:
+  en: d3203ec613b5d79c
+  zh: 67e3813d6d4c9bb8

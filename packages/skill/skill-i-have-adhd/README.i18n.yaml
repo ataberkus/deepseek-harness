@@ -1,6 +1,55 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/skill/skill-i-have-adhd/README.md
-README.md: 893db833fd8cc17783915f20de9b41d94af7ba87
-README.zh.md: d85524638e8987ec28dd5907c8fb339c3520da51
+/:
+  en: d5ae6ddfa6e645b8
+  zh: 63699885c227d201
+/deepseek-ai-dsh-skill-i-have-adhd:
+  en: 060278f52e219bc5
+  zh: 387b134de7cc0d30
+/deepseek-ai-dsh-skill-i-have-adhd/summary:
+  en: 5df974725bc4284d
+  zh: 2c889f2e4590cf6e
+/deepseek-ai-dsh-skill-i-have-adhd/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 09388d293f9be9cb
+/deepseek-ai-dsh-skill-i-have-adhd/use-this-package:
+  en: 77f6e6ea5aceaff2
+  zh: bb41259fd3afe7fe
+/deepseek-ai-dsh-skill-i-have-adhd/use-this-package/when-to-choose-it:
+  en: 9dd1fc1e40fd2330
+  zh: 25fb4f1478a1595b
+/deepseek-ai-dsh-skill-i-have-adhd/use-this-package/enable-the-plugin:
+  en: e6558976849f844a
+  zh: 44b8005ff9a266fb
+/deepseek-ai-dsh-skill-i-have-adhd/use-this-package/what-the-i-have-adhd-skill-provides:
+  en: 6779edcb17a7bf90
+  zh: be5b8e3b3af188e1
+/deepseek-ai-dsh-skill-i-have-adhd/use-this-package/observable-success-and-failures:
+  en: 04411c23e4c8ff2f
+  zh: bf3b502ec320bfb3
+/deepseek-ai-dsh-skill-i-have-adhd/understand-the-implementation:
+  en: 63465b0133f30e85
+  zh: 84bebb7c1fe0ceba
+/deepseek-ai-dsh-skill-i-have-adhd/understand-the-implementation/design-concept:
+  en: bf8b86fdd6cdf764
+  zh: 934295522572f70d
+/deepseek-ai-dsh-skill-i-have-adhd/understand-the-implementation/source-map:
+  en: 429b17e9f47b5b5a
+  zh: c0b1c4b5274fa28b
+/deepseek-ai-dsh-skill-i-have-adhd/further-exploration:
+  en: 7d2a606a2aff2d3f
+  zh: 2faba9e6736d1568
+/deepseek-ai-dsh-skill-i-have-adhd/model-experience:
+  en: 693d8025d40ccc1f
+  zh: 4675d073d680b3d7
+/deepseek-ai-dsh-skill-i-have-adhd/model-experience/kv-cache-effect:
+  en: 9ad39724b073d213
+  zh: d9bae99268eecde5
+/deepseek-ai-dsh-skill-i-have-adhd/known-limitations-and-deferred-work:
+  en: bde2fac7e1d60d46
+  zh: 42b698f03ef9777f
+/deepseek-ai-dsh-skill-i-have-adhd/known-limitations-and-deferred-work/dev-note:
+  en: e67f633dc6fe7773
+  zh: 3bb0c20c93f16f98

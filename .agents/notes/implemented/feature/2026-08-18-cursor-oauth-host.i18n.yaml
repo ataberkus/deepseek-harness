@@ -1,6 +1,22 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-08-18-cursor-oauth-host.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-08-18-cursor-oauth-host.md
-2026-08-18-cursor-oauth-host.md: 4f77184c8b5e31f592b7bc8972a02d339f81c205
-2026-08-18-cursor-oauth-host.zh.md: 446e9c9257860c1083571190c8930120421460af
+/agent-note-host-cursor-oauth-for-cursor-models:
+  en: d1db33b5cc425ea4
+  zh: b60960b702abbcf4
+/agent-note-host-cursor-oauth-for-cursor-models/problem:
+  en: c20eef8558287f43
+  zh: 1e59b88460943e40
+/agent-note-host-cursor-oauth-for-cursor-models/decision:
+  en: fa38618760e13fa2
+  zh: 3d53d6d31938acf2
+/agent-note-host-cursor-oauth-for-cursor-models/alternatives-considered:
+  en: 079670a517fc9c75
+  zh: 22a36d4b9f1840fa
+/agent-note-host-cursor-oauth-for-cursor-models/consequences:
+  en: a132c9ddd2f9230c
+  zh: 7b2f7a322e428ea8
+/agent-note-host-cursor-oauth-for-cursor-models/testing:
+  en: d9e6984323085f01
+  zh: 662e5d2e4c8bfb03

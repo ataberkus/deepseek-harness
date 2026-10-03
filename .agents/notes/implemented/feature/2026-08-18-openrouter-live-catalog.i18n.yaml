@@ -1,6 +1,22 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-08-18-openrouter-live-catalog.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-08-18-openrouter-live-catalog.md
-2026-08-18-openrouter-live-catalog.md: d4ad143d7a0e81646f1c3051d34147008a12656c
-2026-08-18-openrouter-live-catalog.zh.md: 37afebec4bc48ab162e1fdbbe9ed62ee9e319b6d
+/agent-note-overlay-live-openai-compatible-listings-on-installed-catalog-routes:
+  en: 96011cb82c064f87
+  zh: be3cb20694cadbf2
+/agent-note-overlay-live-openai-compatible-listings-on-installed-catalog-routes/problem:
+  en: c12671c44869bb5b
+  zh: 0810fb903f99bfd5
+/agent-note-overlay-live-openai-compatible-listings-on-installed-catalog-routes/decision:
+  en: 730689f16b12f748
+  zh: 0965c6e475acdaf3
+/agent-note-overlay-live-openai-compatible-listings-on-installed-catalog-routes/alternatives-considered:
+  en: 7f16310c60acb82f
+  zh: 573e9925ae89eeb5
+/agent-note-overlay-live-openai-compatible-listings-on-installed-catalog-routes/consequences:
+  en: 2174e48bee9e562e
+  zh: b9e5d3193896e91c
+/agent-note-overlay-live-openai-compatible-listings-on-installed-catalog-routes/testing:
+  en: 88d4472c47705318
+  zh: 2c6944e7aa7fbaf7

@@ -1,6 +1,43 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-09-13-mcp-settings-fleet.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-09-13-mcp-settings-fleet.md
-2026-09-13-mcp-settings-fleet.md: 505b0633884ace7d8664195ff9efa0863926ab76
-2026-09-13-mcp-settings-fleet.zh.md: bc7ae5453727c89252e3f9e18c9fef8027c1daec
+/agent-note-settings-driven-mcp-fleet:
+  en: dfff9ce04a359733
+  zh: 97574232129ab1f4
+/agent-note-settings-driven-mcp-fleet/problem:
+  en: f4498760bdde8b1f
+  zh: f5612d8236e45cde
+/agent-note-settings-driven-mcp-fleet/decision:
+  en: a15c7c13f167e5ac
+  zh: a15c7c13f167e5ac
+/agent-note-settings-driven-mcp-fleet/decision/fleet-manager-package:
+  en: 3849d2e38b3f26b3
+  zh: a92343782b49c38f
+/agent-note-settings-driven-mcp-fleet/decision/lifecycle:
+  en: 22ede76d94a60f01
+  zh: c503480ae7d770cb
+/agent-note-settings-driven-mcp-fleet/decision/browser-card:
+  en: 5eebf1d6c455bb13
+  zh: 87131e8ce08d9e05
+/agent-note-settings-driven-mcp-fleet/alternatives-considered:
+  en: 6119e2aff3b6be5a
+  zh: 6119e2aff3b6be5a
+/agent-note-settings-driven-mcp-fleet/alternatives-considered/per-server-settings-sections:
+  en: d084e0b9355b5492
+  zh: 4e3abbf7409bc2f5
+/agent-note-settings-driven-mcp-fleet/alternatives-considered/manager-owning-connections-directly:
+  en: f3b648249205a420
+  zh: 6b950806ef7f0f0a
+/agent-note-settings-driven-mcp-fleet/alternatives-considered/credential-references-for-fleet-secrets:
+  en: c144838c523e9a16
+  zh: 9a745bf180008554
+/agent-note-settings-driven-mcp-fleet/alternatives-considered/array-valued-fleet:
+  en: 787d0dcd9c808a9a
+  zh: 78b996fd1488cc7c
+/agent-note-settings-driven-mcp-fleet/testing:
+  en: 61a6a971684ffb1f
+  zh: eb24939c52353e32
+/agent-note-settings-driven-mcp-fleet/consequences:
+  en: f66dba708d00edd2
+  zh: 76b9628f660920b0

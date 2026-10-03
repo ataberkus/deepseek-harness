@@ -1,6 +1,22 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-08-18-openai-codex-oauth-host.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-08-18-openai-codex-oauth-host.md
-2026-08-18-openai-codex-oauth-host.md: df607ec9d140c0fbec4b4482f67133a31ae41f6d
-2026-08-18-openai-codex-oauth-host.zh.md: b0be898256c43c418f50c930d1a1d1f4b0af9786
+/agent-note-host-openai-codex-oauth-inside-llm-pi-ai:
+  en: c41dba17f5aceebf
+  zh: 9ba64439db608404
+/agent-note-host-openai-codex-oauth-inside-llm-pi-ai/problem:
+  en: 34f9adac2b07a938
+  zh: c59420fe129c6b78
+/agent-note-host-openai-codex-oauth-inside-llm-pi-ai/decision:
+  en: 9b1305a396ce5e3e
+  zh: 40b1dd80d076f9c1
+/agent-note-host-openai-codex-oauth-inside-llm-pi-ai/alternatives-considered:
+  en: 2c97a18f81c87ba7
+  zh: cd2d105153888e7f
+/agent-note-host-openai-codex-oauth-inside-llm-pi-ai/consequences:
+  en: f6ce5d75e1c9b514
+  zh: 47d1c05ca786856c
+/agent-note-host-openai-codex-oauth-inside-llm-pi-ai/testing:
+  en: c2a5ce5b3aec76a3
+  zh: 8d9f883c2565bcf2

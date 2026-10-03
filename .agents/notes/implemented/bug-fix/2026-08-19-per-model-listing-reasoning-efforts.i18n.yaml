@@ -1,6 +1,22 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-08-19-per-model-listing-reasoning-efforts.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-08-19-per-model-listing-reasoning-efforts.md
-2026-08-19-per-model-listing-reasoning-efforts.md: c3f340494072d9a03c3683ded5772f6c8d4e54d3
-2026-08-19-per-model-listing-reasoning-efforts.zh.md: 9693837d92dd4de67a21a9fb1eb0ebbb3b2a9510
+/agent-note-per-model-openrouter-and-cursor-reasoning-efforts:
+  en: e7ac22ee329d1813
+  zh: e5c141322dd3a033
+/agent-note-per-model-openrouter-and-cursor-reasoning-efforts/problem:
+  en: 2eb533eff953c5cd
+  zh: 69c3031cb9efe32c
+/agent-note-per-model-openrouter-and-cursor-reasoning-efforts/decision:
+  en: 85630330372340cd
+  zh: 4af193dac70c0cfc
+/agent-note-per-model-openrouter-and-cursor-reasoning-efforts/alternatives-considered:
+  en: 03bd5204465195ab
+  zh: 3c7eb68acbc3ef1f
+/agent-note-per-model-openrouter-and-cursor-reasoning-efforts/consequences:
+  en: 74fa0a9f16188303
+  zh: ea2247ec72d1ca94
+/agent-note-per-model-openrouter-and-cursor-reasoning-efforts/testing:
+  en: 3b9949855830c79b
+  zh: 0271476661fd7ee3

@@ -1,6 +1,28 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-08-19-session-spend-on-stats-line.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write docs/superpowers/specs/2026-08-19-session-spend-on-stats-line.md
-2026-08-19-session-spend-on-stats-line.md: bc4dac1df0fa40152ee3cae01a25202dcaa8a017
-2026-08-19-session-spend-on-stats-line.zh.md: 2ab1c1b0d1331bd66d4d037dbd16e90dfbfdb4eb
+/session-usd-spend-on-the-web-stats-line:
+  en: b4d793b0bafa3ea2
+  zh: 54e6d75aef03b9c4
+/session-usd-spend-on-the-web-stats-line/scope:
+  en: 2a745192c4a09674
+  zh: f23ff82545cb9428
+/session-usd-spend-on-the-web-stats-line/goals:
+  en: 9c3b22cd24e8495b
+  zh: 51d4f83e717601f8
+/session-usd-spend-on-the-web-stats-line/data-flow-and-ownership:
+  en: 52beefc11c52586b
+  zh: f82102a8bb566bd9
+/session-usd-spend-on-the-web-stats-line/compatibility-and-non-goals:
+  en: 5e2b5ad33b125ce5
+  zh: 74199d22b8cc6b79
+/session-usd-spend-on-the-web-stats-line/verification:
+  en: 33020f223aea038c
+  zh: ef9a2b9c6e8f1319
+/session-usd-spend-on-the-web-stats-line/alternatives-considered:
+  en: 8dc6258dcf06b907
+  zh: 1e552e1601a457f1
+/session-usd-spend-on-the-web-stats-line/consequences:
+  en: b3188c69a5610e50
+  zh: 38d1d509325e2fd6

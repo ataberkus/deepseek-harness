@@ -30,4 +30,3 @@ None; this package neither assembles nor sends a provider request.
 
 - **Restore covers the session cwd only** — network, database, terminal, and ignored-external effects are out of scope.
 - **Capture is fail-soft** — an unavailable record does not erase a completed turn; the Host must not offer automatic restore for that checkpoint.
-- **The local invariant companion is event-driven** — existing malformed relations are reported when the next checkpoint change is emitted; storage schema validation still rejects malformed rows while opening the domain.

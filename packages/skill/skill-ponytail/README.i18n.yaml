@@ -1,6 +1,55 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/skill/skill-ponytail/README.md
-README.md: ed3d2b362b3e2e4fae7cf79810af9e175f4f8a72
-README.zh.md: f0cb50583d52c14162a7fa41135118c826e851c8
+/:
+  en: b63866c33808e759
+  zh: 9e9bad140875cb2a
+/deepseek-ai-dsh-skill-ponytail:
+  en: 642f217e379ed30a
+  zh: f5fbe88738b529b7
+/deepseek-ai-dsh-skill-ponytail/summary:
+  en: 0b1ee66c8e5709d0
+  zh: ea3fc1ae8a119dce
+/deepseek-ai-dsh-skill-ponytail/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 09388d293f9be9cb
+/deepseek-ai-dsh-skill-ponytail/use-this-package:
+  en: 7c2fe407c6acc694
+  zh: f7d247fdadf98310
+/deepseek-ai-dsh-skill-ponytail/use-this-package/when-to-choose-it:
+  en: 5a6d2b1c8a825dc1
+  zh: 859658953fbb9c52
+/deepseek-ai-dsh-skill-ponytail/use-this-package/enable-the-plugin:
+  en: f27b5443ddec3bc8
+  zh: 1fdbd7010555da8c
+/deepseek-ai-dsh-skill-ponytail/use-this-package/what-the-ponytail-skills-provide:
+  en: 2bc0610d502645d6
+  zh: 43afe5168e5bde5c
+/deepseek-ai-dsh-skill-ponytail/use-this-package/observable-success-and-failures:
+  en: 85fbaba9744c1857
+  zh: 3c5bd7634f384c99
+/deepseek-ai-dsh-skill-ponytail/understand-the-implementation:
+  en: 63465b0133f30e85
+  zh: 84bebb7c1fe0ceba
+/deepseek-ai-dsh-skill-ponytail/understand-the-implementation/design-concept:
+  en: 48f11e0e9bce2c67
+  zh: 3cd17c178bbbcf2d
+/deepseek-ai-dsh-skill-ponytail/understand-the-implementation/source-map:
+  en: efc33ac2da81bd0d
+  zh: 97c94dc08671bc95
+/deepseek-ai-dsh-skill-ponytail/further-exploration:
+  en: da162de3bb1ce093
+  zh: d907766a5875982c
+/deepseek-ai-dsh-skill-ponytail/model-experience:
+  en: 2b8d6ce9bf648f5b
+  zh: e288cc67b6d079f6
+/deepseek-ai-dsh-skill-ponytail/model-experience/kv-cache-effect:
+  en: bc070ec11096228e
+  zh: 453ec29827b82bbc
+/deepseek-ai-dsh-skill-ponytail/known-limitations-and-deferred-work:
+  en: 083b5e7420c32bf0
+  zh: 9085e14d7922ada4
+/deepseek-ai-dsh-skill-ponytail/known-limitations-and-deferred-work/dev-note:
+  en: e67f633dc6fe7773
+  zh: 3bb0c20c93f16f98

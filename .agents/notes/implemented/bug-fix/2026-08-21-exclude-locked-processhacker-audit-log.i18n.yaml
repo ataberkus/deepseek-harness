@@ -1,6 +1,19 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-08-21-exclude-locked-processhacker-audit-log.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-08-21-exclude-locked-processhacker-audit-log.md
-2026-08-21-exclude-locked-processhacker-audit-log.md: beae80a075b8a9adc2f2d4da7ee417417596cf8c
-2026-08-21-exclude-locked-processhacker-audit-log.zh.md: a5a7a969e6a0d4396ee6dd84a3ccd7250218a87d
+/agent-note-exclude-the-locked-process-hacker-audit-log:
+  en: 49f57552c4f204ba
+  zh: 74b88334fa750621
+/agent-note-exclude-the-locked-process-hacker-audit-log/problem:
+  en: ddc8da83d368d7f2
+  zh: df97cdd1ed6fedb6
+/agent-note-exclude-the-locked-process-hacker-audit-log/decision:
+  en: 20743895ccf60f0c
+  zh: 839f4ea2bc745ba3
+/agent-note-exclude-the-locked-process-hacker-audit-log/alternatives-considered:
+  en: 417f266999ec4e0e
+  zh: 971ca7a1286f7f70
+/agent-note-exclude-the-locked-process-hacker-audit-log/consequences:
+  en: 8a3a3ce5e79a616b
+  zh: a00fa98cab19d864

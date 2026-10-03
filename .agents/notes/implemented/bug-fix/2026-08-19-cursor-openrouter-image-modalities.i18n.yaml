@@ -1,6 +1,22 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-08-19-cursor-openrouter-image-modalities.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-08-19-cursor-openrouter-image-modalities.md
-2026-08-19-cursor-openrouter-image-modalities.md: a7a4db9771a38ad0c07cf6b77f9a3ba2e4b794e8
-2026-08-19-cursor-openrouter-image-modalities.zh.md: ef88c7374476e4b7eb27f90e34276732e21fbb67
+/agent-note-cursor-and-live-openrouter-image-modalities:
+  en: a93e2773f7fd8970
+  zh: 530b1d808eee53bb
+/agent-note-cursor-and-live-openrouter-image-modalities/problem:
+  en: 065196fa37744bfd
+  zh: ad54fd5345bc8eaa
+/agent-note-cursor-and-live-openrouter-image-modalities/decision:
+  en: 512dab737871b2de
+  zh: 620a3ce9f0d434a8
+/agent-note-cursor-and-live-openrouter-image-modalities/alternatives-considered:
+  en: cc1ec87d26e874c3
+  zh: d57f09c9f2d18722
+/agent-note-cursor-and-live-openrouter-image-modalities/consequences:
+  en: 5ad6a44a68e67fda
+  zh: 06c05501fa063237
+/agent-note-cursor-and-live-openrouter-image-modalities/testing:
+  en: e3eb73658cc76113
+  zh: b831f6329d4efe17

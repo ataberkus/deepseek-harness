@@ -1,6 +1,22 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-08-20-lm-studio-local-provider.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-08-20-lm-studio-local-provider.md
-2026-08-20-lm-studio-local-provider.md: 4c87bc991169980fb37f6621d9be1e589bd75302
-2026-08-20-lm-studio-local-provider.zh.md: 386c8c306d4210ccbfcb4f1c992f28a62a7a5fab
+/agent-note-lm-studio-is-a-first-class-local-pi-ai-route:
+  en: 39abba81fdd76aab
+  zh: b03cf8fdb182c13b
+/agent-note-lm-studio-is-a-first-class-local-pi-ai-route/problem:
+  en: 05b7ef168ea6c1da
+  zh: 43462cf5708583c5
+/agent-note-lm-studio-is-a-first-class-local-pi-ai-route/decision:
+  en: 296c675c3369a07e
+  zh: 9cac278cd34215e3
+/agent-note-lm-studio-is-a-first-class-local-pi-ai-route/alternatives-considered:
+  en: 37b096a609abb667
+  zh: 2beceb81ac8927b8
+/agent-note-lm-studio-is-a-first-class-local-pi-ai-route/consequences:
+  en: ab39a399bf156a48
+  zh: 70ca3e47bce0458f
+/agent-note-lm-studio-is-a-first-class-local-pi-ai-route/testing:
+  en: 61222ab0e5cf561b
+  zh: 5ca42568dcdb543f

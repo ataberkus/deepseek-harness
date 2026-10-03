@@ -715,7 +715,7 @@ describe('headless stream-json snapshots', () => {
       expect(header?.config).toMatchInlineSnapshot(`
         {
           "maxTokens": 1024,
-          "model": "deepseek-v4-flash",
+          "model": "deepseek-flash",
           "provider": "deepseek",
           "reasoningEffort": "low",
         }
@@ -862,9 +862,17 @@ describe('headless stream-json snapshots', () => {
         "identityReminders": [
           "<system-reminder>
       You are teammate "implementer".
+      Your Team Lead is named "lead".
+      Use list_agents({}) to find your teammates and their names.
+      To message your Team Lead, use send_message({ target: "lead", message: "..." }).
+      To message another teammate, use send_message({ target: "<teammate name>", message: "..." }).
       </system-reminder>",
           "<system-reminder>
       You are teammate "researcher".
+      Your Team Lead is named "lead".
+      Use list_agents({}) to find your teammates and their names.
+      To message your Team Lead, use send_message({ target: "lead", message: "..." }).
+      To message another teammate, use send_message({ target: "<teammate name>", message: "..." }).
       </system-reminder>",
         ],
         "memberEdges": 4,

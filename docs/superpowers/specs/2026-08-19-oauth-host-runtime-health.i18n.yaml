@@ -1,6 +1,40 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-08-19-oauth-host-runtime-health.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write docs/superpowers/specs/2026-08-19-oauth-host-runtime-health.md
-2026-08-19-oauth-host-runtime-health.md: cb2bdeba08d6404dba9f4ee030101859b7739bfb
-2026-08-19-oauth-host-runtime-health.zh.md: 09942dc505bfc9acb4c810a8a6251975d40a1b3e
+/oauth-host-runtime-health:
+  en: 7790f5a10763549b
+  zh: e7005144c025f699
+/oauth-host-runtime-health/scope:
+  en: 25444fa92632eb66
+  zh: 6f6565724ca0c19e
+/oauth-host-runtime-health/confirmed-evidence:
+  en: efbe2c74fa2ec09d
+  zh: 622b7192b911cf63
+/oauth-host-runtime-health/goals:
+  en: b051d5be55f8c445
+  zh: a1b65e047006690b
+/oauth-host-runtime-health/proposed-behavior:
+  en: 2a1861304cb350fa
+  zh: c8b242645637d050
+/oauth-host-runtime-health/proposed-behavior/gemini-composition-check:
+  en: a9280a3efbccb72a
+  zh: 7232622b9fd67bec
+/oauth-host-runtime-health/proposed-behavior/cursor-discovery:
+  en: 213da94ac4322ec5
+  zh: da3f874840012740
+/oauth-host-runtime-health/proposed-behavior/cursor-streaming:
+  en: 09422463272522cb
+  zh: 6a87eb7521169eaf
+/oauth-host-runtime-health/verification:
+  en: 493fb568957424a4
+  zh: 9b2ed9dadfa85335
+/oauth-host-runtime-health/non-goals:
+  en: 238c65ce1e48df07
+  zh: 54ed0f1777bce3f7
+/oauth-host-runtime-health/alternatives-considered:
+  en: 266f89a67c8a3d35
+  zh: f3965dd5c56b3d43
+/oauth-host-runtime-health/risks-and-mitigations:
+  en: 44ed5d316098f503
+  zh: 29fae43d8a434594

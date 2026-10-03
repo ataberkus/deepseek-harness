@@ -1,6 +1,46 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-08-19-conversation-edit-checkpoints-design.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write docs/superpowers/specs/2026-08-19-conversation-edit-checkpoints-design.md
-2026-08-19-conversation-edit-checkpoints-design.md: 8426b74a99d02282f1a6098412d961793362e1eb
-2026-08-19-conversation-edit-checkpoints-design.zh.md: 2d6825f3f15a3baf89f8d86f62ddf77b039d5935
+/conversation-edit-checkpoints:
+  en: aea45f2d562e28c5
+  zh: 93bc1ac18efbc378
+/conversation-edit-checkpoints/scope:
+  en: 77f5e0eef175c6f1
+  zh: a7300fc7b7f54459
+/conversation-edit-checkpoints/current-constraints:
+  en: 7287e28f6d422765
+  zh: 8fb7df456f4fcb9f
+/conversation-edit-checkpoints/goals:
+  en: dbc76e749e86f62f
+  zh: 4da79db718900af8
+/conversation-edit-checkpoints/checkpoint-model:
+  en: fe5fbf6f0c34a91e
+  zh: 9d4813fe9d1f0109
+/conversation-edit-checkpoints/turn-capture:
+  en: 157da2cee8ae3a9e
+  zh: 4375bc1f114fcd8c
+/conversation-edit-checkpoints/edit-transaction:
+  en: d8da7c008714e04f
+  zh: 0ea0a44502dc8a30
+/conversation-edit-checkpoints/gui-behavior:
+  en: 858fbb7e7537555e
+  zh: 8862b6b7b4403fc1
+/conversation-edit-checkpoints/storage-and-safety:
+  en: d88a7f00cb543b63
+  zh: dd01bfc3ff3e7b52
+/conversation-edit-checkpoints/composition-and-interfaces:
+  en: 11c5d2e77ca89d94
+  zh: dc001478a1663e53
+/conversation-edit-checkpoints/verification:
+  en: 3f6eb179ade5d723
+  zh: 5a817596570ee8b1
+/conversation-edit-checkpoints/non-goals:
+  en: 42eb86ec42485623
+  zh: d8af4a82bc6fafa3
+/conversation-edit-checkpoints/alternatives-considered:
+  en: eeb7a865a211d51b
+  zh: a42c18485c3ba198
+/conversation-edit-checkpoints/risks-and-mitigations:
+  en: 99f753a9fba039cc
+  zh: 79982f2cdeab2667

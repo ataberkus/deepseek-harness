@@ -1,6 +1,22 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-09-12-codex-oauth-model-listing.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-09-12-codex-oauth-model-listing.md
-2026-09-12-codex-oauth-model-listing.md: e5f43e9fcad74e2397c34d11423eb99b2b020a62
-2026-09-12-codex-oauth-model-listing.zh.md: 29920e9d38c8c13530651528015accc567ad2ec7
+/agent-note-list-live-codex-oauth-models-over-the-account-registry:
+  en: 1f115fba96e770c3
+  zh: da2a251c3cf8a1df
+/agent-note-list-live-codex-oauth-models-over-the-account-registry/problem:
+  en: 26936972c8e717d8
+  zh: 2dcf1e79aba028b6
+/agent-note-list-live-codex-oauth-models-over-the-account-registry/decision:
+  en: c91f897fed1962d7
+  zh: 888f3c87aa7b4a33
+/agent-note-list-live-codex-oauth-models-over-the-account-registry/alternatives-considered:
+  en: 40b23ba8d1d16988
+  zh: efc1b81096c972fe
+/agent-note-list-live-codex-oauth-models-over-the-account-registry/consequences:
+  en: 1cb0ba2251819d26
+  zh: 7a7d1e79f761974b
+/agent-note-list-live-codex-oauth-models-over-the-account-registry/testing:
+  en: ae4461f799fe9af7
+  zh: 94b17887ce32ddbc

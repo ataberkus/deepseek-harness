@@ -5,7 +5,7 @@ import type { PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import {
   IconCheckOutlineRegular, IconChevronDownOutlineRegular, IconChevronUpOutlineRegular, IconCloseOutlineRegular,
-  FileTypeIcon, fileSizeText, IconEditOutlineRegular, IconQueueOutlineRegular, IconSendOutlineRegular,
+  FileTypeIcon, fileSizeText, IconEditOutlineRegular, InlineEditor, IconQueueOutlineRegular, IconSendOutlineRegular,
   IconTrashOutlineRegular, projectUserText, Tooltip,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { InboxState } from '@deepseek-ai/dsh-agent/types'
@@ -103,13 +103,19 @@ export type QueueDockProps = PropsRuntime<'conversation.input.dock'> & QueueDock
 
 /**
  * Queue strip: one item renders directly; multiple items default to a
- * collapsible count header; an empty queue renders nothing. Local submissions
+ * collapsible count header; an empty queue renders nothing. Local queued submissions
  * show sending status and disabled actions until their Host queue rows arrive.
  */
 export function QueueDock({ useSession, useProjection, updateQueue, notify, loadImage, t }: QueueDockProps) {
   const inbox = useProjection('inbox') as unknown as InboxState | undefined
-  const queue = inbox?.['next-turn'] ?? EMPTY_QUEUE
   const pendingSubmissions = useSession(s => s.pendingSubmissions)
+  const queue = useMemo(() => {
+    const rows = inbox?.['next-turn'] ?? EMPTY_QUEUE
+    const inChat = new Set(pendingSubmissions.filter(item => item.placement === 'transcript').map(item => item.requestId))
+    return inChat.size === 0 ? rows : rows.filter(({ source }) => (
+      source.kind !== 'user' || !('rpcId' in source) || !inChat.has(source.rpcId)
+    ))
+  }, [inbox, pendingSubmissions])
   const pendingQueue = useMemo(() => {
     const admitted = new Set(queue.flatMap(({ source }) => (
       source.kind === 'user' && 'rpcId' in source ? [source.rpcId] : []
@@ -195,22 +201,12 @@ export function QueueDock({ useSession, useProjection, updateQueue, notify, load
                 {rowCount === 1 && <span className={css.lead} aria-hidden><IconQueueOutlineRegular /></span>}
                 {editing?.id === row.id
                   ? (
-                    <input
-                      autoFocus
-                      className={css.editor}
-                      aria-label={t('queue.edit')}
+                    <InlineEditor
                       value={editing.text}
-                      onChange={(event) => { setEditing({ id: row.id, text: event.currentTarget.value }) }}
-                      onKeyDown={(event) => {
-                        if (event.key === 'Escape') {
-                          setEditing(null)
-                          return
-                        }
-                        if (event.key === 'Enter' && !event.nativeEvent.isComposing) {
-                          event.preventDefault()
-                          void saveEdit()
-                        }
-                      }}
+                      label={t('queue.edit')}
+                      onChange={(text) => { setEditing({ id: row.id, text }) }}
+                      onSave={() => { void saveEdit() }}
+                      onCancel={() => { setEditing(null) }}
                     />
                   )
                   : (
@@ -242,7 +238,7 @@ export function QueueDock({ useSession, useProjection, updateQueue, notify, load
                   {editing?.id === row.id
                     ? (
                       <>
-                        <Tooltip label={t('queue.save')} side="bottom" delayMs={500}>
+                        <Tooltip portal label={t('queue.save')} side="bottom" delayMs={500}>
                           <button
                             type="button"
                             className={css.action}
@@ -253,7 +249,7 @@ export function QueueDock({ useSession, useProjection, updateQueue, notify, load
                             <IconCheckOutlineRegular size={14} />
                           </button>
                         </Tooltip>
-                        <Tooltip label={t('queue.cancelEdit')} side="bottom" delayMs={500}>
+                        <Tooltip portal label={t('queue.cancelEdit')} side="bottom" delayMs={500}>
                           <button
                             type="button"
                             className={css.action}
@@ -268,7 +264,7 @@ export function QueueDock({ useSession, useProjection, updateQueue, notify, load
                     )
                     : (
                       <>
-                        <Tooltip label={t('queue.edit')} side="bottom" delayMs={500} disabled={text === null}>
+                        <Tooltip portal label={t('queue.edit')} side="bottom" delayMs={500} disabled={text === null}>
                           <button
                             type="button"
                             className={css.action}
@@ -284,7 +280,7 @@ export function QueueDock({ useSession, useProjection, updateQueue, notify, load
                             <IconEditOutlineRegular size={14} />
                           </button>
                         </Tooltip>
-                        <Tooltip label={t('queue.remove')} side="bottom" delayMs={500}>
+                        <Tooltip portal label={t('queue.remove')} side="bottom" delayMs={500}>
                           <button
                             type="button"
                             className={css.action}
@@ -301,7 +297,7 @@ export function QueueDock({ useSession, useProjection, updateQueue, notify, load
                             <IconTrashOutlineRegular size={14} />
                           </button>
                         </Tooltip>
-                        <Tooltip label={t('queue.steer')} side="bottom" delayMs={500} disabled={!running}>
+                        <Tooltip portal label={t('queue.steer')} side="bottom" delayMs={500} disabled={!running}>
                           <button
                             type="button"
                             className={css.action}
