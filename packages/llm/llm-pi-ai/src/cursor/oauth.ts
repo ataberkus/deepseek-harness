@@ -9,6 +9,7 @@
  */
 
 import type { OAuthCredential } from '@earendil-works/pi-ai'
+import { randomUUID as mintUuid } from '@deepseek-ai/dsh-util-crypto'
 import {
   CURSOR_LOGIN_URL,
   CURSOR_POLL_URL,
@@ -22,7 +23,7 @@ export const cursorOAuthInternals = {
     globalThis.fetch(input, init)),
   /** Delay between poll attempts; tests replace this to avoid waiting. */
   sleep: (ms: number, signal?: AbortSignal): Promise<void> => sleepMs(ms, signal),
-  randomUUID: (): string => crypto.randomUUID(),
+  randomUUID: (): string => mintUuid(),
 }
 
 const POLL_MAX_ATTEMPTS = 150

@@ -10,6 +10,7 @@
 
 import { createHash } from 'node:crypto'
 import type { Context, SimpleStreamOptions, Tool } from '@earendil-works/pi-ai'
+import { randomUUID } from '@deepseek-ai/dsh-util-crypto'
 import {
   concat,
   encodeBool,
@@ -658,7 +659,7 @@ function encodeThinkingDetails(thinking: boolean, effort: string | undefined): U
 function encodeUserMessage(text: string, images: readonly CursorSelectedImage[]): Uint8Array {
   return concat(
     encodeString(1, text),
-    encodeString(2, crypto.randomUUID()),
+    encodeString(2, randomUUID()),
     images.length === 0 ? new Uint8Array() : encodeMessage(3, encodeSelectedContext(images)),
   )
 }
@@ -710,7 +711,7 @@ function imagesFromContent(content: string | readonly { type: string; data?: str
   for (const block of content) {
     if (block.type !== 'image' || typeof block.data !== 'string' || typeof block.mimeType !== 'string') continue
     if (block.data.length === 0) continue
-    const uuid = crypto.randomUUID()
+    const uuid = randomUUID()
     images.push({
       uuid,
       path: `${uuid}${extensionFor(block.mimeType)}`,
