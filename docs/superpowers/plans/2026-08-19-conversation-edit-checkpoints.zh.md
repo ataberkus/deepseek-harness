@@ -46,7 +46,7 @@
 - 修改：`packages/host/apiproxy/src/api/events.ts` — 添加 `session/checkpoints` mux 帧。
 - 修改：`packages/host/apiproxy/src/fetch/handler.ts` 和 `src/fetch/client.ts` — 接入新的 RPC。
 - 修改：`packages/host/apiproxy/src/api-proxy.ts` — 实现编辑事务、激活恢复，并发出检查点快照。
-- 修改：`packages/client/runtime/src/client/sessions/` — 检查点／操作快照、`edit`／`activate` 方法，以及选择时的 activate。
+- 修改：`packages/api/session-controller/src/client/sessions/` — 检查点／操作快照、`edit`／`activate` 方法，以及选择时的 activate。
 - 修改：`packages/client/ui-conversation/src/client/` — `Edit & resend`、草稿横幅、本地化文本、MessageIconActions。
 - 修改：`packages/bundle/web-app/cordis.patch.yml` 和 `package.json` — 挂载 Service Provider 和捕获 Consumer。
 - 修改：`tsconfig.host.json` — 为三个新包和新的 Web e2e 文件添加项目引用。
@@ -247,7 +247,6 @@ Host 和 UI 使用的可编辑消息规则：
 - 创建：`packages/session/workspace-checkpoint/src/types.ts`
 - 创建：`packages/session/workspace-checkpoint/src/spec.ts`
 - 创建：`packages/session/workspace-checkpoint/src/error.ts`
-- 创建：`packages/session/workspace-checkpoint/src/invariant.ts`
 - 创建：`packages/session/workspace-checkpoint/README.md`
 - 创建：`packages/session/workspace-checkpoint/README.zh.md`
 - 创建：`packages/session/workspace-checkpoint/tests/spec.spec.ts`
@@ -816,7 +815,6 @@ git commit -m "feat: lease workspace restores and bound checkpoint retention"
 **文件：**
 - 创建：`packages/session/workspace-checkpoint-capture/`（匹配任务 1 的完整包骨架）
 - 创建：`packages/session/workspace-checkpoint-capture/src/index.ts`
-- 创建：`packages/session/workspace-checkpoint-capture/src/invariant.ts`
 - 创建：`packages/session/workspace-checkpoint-capture/tests/capture.spec.ts`
 - 创建：`packages/session/workspace-checkpoint-capture/tests/guard.spec.ts`
 - 创建：`packages/session/workspace-checkpoint-capture/README.md` 和 `README.zh.md`
@@ -1074,10 +1072,10 @@ git commit -m "feat: add session.edit restore-and-branch Host command"
 ### 任务 8：Browser runtime snapshots
 
 **文件：**
-- 修改：`packages/client/runtime/src/client/sessions/session.ts`
-- 修改：`packages/client/runtime/src/client/sessions/service.ts`
-- 修改：`packages/client/runtime/src/client/sessions/manager.ts`
-- 创建：`packages/client/runtime/src/client/sessions/checkpoint-store.ts`
+- 修改：`packages/api/session-controller/src/client/sessions/session.ts`
+- 修改：`packages/api/session-controller/src/client/sessions/service.ts`
+- 修改：`packages/api/session-controller/src/client/sessions/manager.ts`
+- 创建：`packages/api/session-controller/src/client/sessions/checkpoint-store.ts`
 - 修改：`packages/client/runtime/tests/manager.client.spec.ts`
 
 **接口：**
@@ -1148,13 +1146,13 @@ git commit -m "feat: project workspace checkpoint snapshots in the browser runti
 ### 任务 9：Conversation edit affordance and banner
 
 **文件：**
-- 修改：`packages/client/ui-conversation/src/client/chat/MessageIconActions.tsx`
-- 修改：`packages/client/ui-conversation/src/client/chat/MessageItem.tsx`
+- 修改：`packages/client/ui-chat/src/client/chat/MessageIconActions.tsx`
+- 修改：`packages/client/ui-chat/src/client/chat/MessageItem.tsx`
 - 修改：`packages/client/ui-conversation/src/client/skeleton/InputBar.tsx`
 - 修改：`packages/client/ui-conversation/src/client/stores.ts`
 - 修改：`packages/client/ui-conversation/src/client/locales.ts`
 - 修改：`packages/client/ui-conversation/src/client/input/`，仅用于将文本 + 保留的图片 id 加载到现有 composer
-- 修改：`packages/client/ui-conversation/tests/chat-view.client.spec.tsx` 和 `input-bar.client.spec.tsx`
+- 修改：`packages/client/ui-chat/tests/chat-view.client.spec.tsx` 和 `input-bar.client.spec.tsx`
 - 修改：`packages/client/ui-conversation/README.md` 和 `README.zh.md` — 删除“不得编辑已结算消息”的限制
 
 **接口：**
@@ -1212,7 +1210,7 @@ English 字典镜像这些键。默认 UI 语言仍为中文。
 
 - [ ] **步骤 2：运行 UI 测试，并确认它们失败**
 
-运行：`pnpm exec vitest run packages/client/ui-conversation/tests/chat-view.client.spec.tsx packages/client/ui-conversation/tests/input-bar.client.spec.tsx --reporter=dot`
+运行：`pnpm exec vitest run packages/client/ui-chat/tests/chat-view.client.spec.tsx packages/client/ui-conversation/tests/input-bar.client.spec.tsx --reporter=dot`
 
 预期：由于控件缺失（2026-07-31 stub removal）而 FAIL。
 
@@ -1286,7 +1284,7 @@ it('keeps an unrestorable branch selectable for reading and shows a non-runnable
 
 - [ ] **步骤 4：运行 workspace 和 conversation GUI 测试**
 
-运行：`pnpm exec vitest run packages/client/ui-workspace/tests/checkpoint-branch.client.spec.tsx packages/client/ui-conversation/tests/chat-view.client.spec.tsx packages/client/ui-conversation/tests/input-bar.client.spec.tsx --reporter=dot`
+运行：`pnpm exec vitest run packages/client/ui-workspace/tests/checkpoint-branch.client.spec.tsx packages/client/ui-chat/tests/chat-view.client.spec.tsx packages/client/ui-conversation/tests/input-bar.client.spec.tsx --reporter=dot`
 
 预期：PASS。
 
@@ -1303,7 +1301,6 @@ git commit -m "feat: show checkpoint branch labels and unrestorable workspace st
 
 **文件：**
 - 修改：`packages/session/workspace-checkpoint-local/src/invariant.ts`
-- 修改：`packages/session/workspace-checkpoint-capture/src/invariant.ts`
 - 修改：`packages/session/workspace-checkpoint-local/tests/store.spec.ts` 和 `lease.spec.ts`
 - 创建：`docs/subsystems/workspace-checkpoint.md`（以及 `.zh.md`）
 - 修改：`docs/subsystems/README.md` 和 `README.zh.md`

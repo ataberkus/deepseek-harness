@@ -331,7 +331,7 @@ interface AppIdentity {
 
 ## `TokenUsage`
 
-逐调用 token 记账。各计数**互不重叠**：`inputTokens` 只包含未缓存输入；缓存输入单独报告，计费输入是三者之和。若提供方把缓存命中折入单一提示词总数（如 DeepSeek 的 `prompt_tokens`），适配器会再将其扣除。可选的 `totalTokens` 是精确的提示词与输出聚合计数，由适配器保留提供方原值或从权威聚合计数重建；不可用或不一致时省略。`reasoningTokens` 存在时只是信息性细节，已经包含在 `outputTokens` 中；汇总时不得重复相加。
+逐调用 token 记账。各计数**互不重叠**：`inputTokens` 只包含未缓存输入；缓存输入单独报告，计费输入是三者之和。若提供方把缓存命中折入单一提示词总数（如 DeepSeek 的 `prompt_tokens`），适配器会再将其扣除。可选的 `totalTokens` 是精确的提示词与输出聚合计数，由适配器保留提供方原值或从权威聚合计数重建；不可用或不一致时省略。`reasoningTokens` 存在时只是信息性细节，已经包含在 `outputTokens` 中；汇总时不得重复相加。可选的 `costUsd` 是适配器报告的本次调用美元费用；没有费率或计价总额为 0 的适配器会省略它。
 
 ```ts type-equiv
 /**
@@ -356,6 +356,11 @@ interface TokenUsage {
   cacheReadTokens?: number
   cacheWriteTokens?: number
   reasoningTokens?: number
+  /**
+   * Adapter-reported USD for this call; pi-ai copies `usage.cost.total` from
+   * catalog rates; omit when the adapter has no rates or the priced total is 0.
+   */
+  costUsd?: number
 }
 ```
 
@@ -682,10 +687,10 @@ interface ToolSchema {
  */
 interface LlmModelDiscoveryRequest {
   /**
-   * Route the draft is editing, when it edits an existing one. A route whose
-   * adapter already knows its models answers from that knowledge instead of
-   * asking the endpoint — the adapter's own registry is the better answer, and
-   * it costs no network call.
+   * Route the draft is editing, when it edits an existing one. A catalog
+   * route answers from the installed registry, plus any live listing the
+   * owning adapter overlays; a route the catalog does not describe is asked
+   * over the wire.
    */
   provider?: string
   /**

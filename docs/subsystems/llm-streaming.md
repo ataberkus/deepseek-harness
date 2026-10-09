@@ -327,7 +327,7 @@ interface AppIdentity {
 
 ## `TokenUsage`
 
-Per-call token accounting. Counts are **disjoint**: `inputTokens` is uncached input only; cached input is reported separately, and billed input is the sum of the three. Adapters whose providers fold cache hits into a single prompt total (DeepSeek's `prompt_tokens`) subtract them back out. Optional `totalTokens` is an exact aggregate prompt-plus-output count preserved from the provider or reconstructed from authoritative aggregate counters; adapters omit it when unavailable or inconsistent. `reasoningTokens`, when present, is informational detail already included in `outputTokens`; totals must not add it again.
+Per-call token accounting. Counts are **disjoint**: `inputTokens` is uncached input only; cached input is reported separately, and billed input is the sum of the three. Adapters whose providers fold cache hits into a single prompt total (DeepSeek's `prompt_tokens`) subtract them back out. Optional `totalTokens` is an exact aggregate prompt-plus-output count preserved from the provider or reconstructed from authoritative aggregate counters; adapters omit it when unavailable or inconsistent. `reasoningTokens`, when present, is informational detail already included in `outputTokens`; totals must not add it again. Optional `costUsd` is the adapter-reported USD for the call; adapters without rates, or whose priced total is 0, omit it.
 
 ```ts type-equiv
 /**
@@ -352,6 +352,11 @@ interface TokenUsage {
   cacheReadTokens?: number
   cacheWriteTokens?: number
   reasoningTokens?: number
+  /**
+   * Adapter-reported USD for this call; pi-ai copies `usage.cost.total` from
+   * catalog rates; omit when the adapter has no rates or the priced total is 0.
+   */
+  costUsd?: number
 }
 ```
 
@@ -676,10 +681,10 @@ A provider a surface is still drafting has no route and no catalog, so interroga
  */
 interface LlmModelDiscoveryRequest {
   /**
-   * Route the draft is editing, when it edits an existing one. A route whose
-   * adapter already knows its models answers from that knowledge instead of
-   * asking the endpoint — the adapter's own registry is the better answer, and
-   * it costs no network call.
+   * Route the draft is editing, when it edits an existing one. A catalog
+   * route answers from the installed registry, plus any live listing the
+   * owning adapter overlays; a route the catalog does not describe is asked
+   * over the wire.
    */
   provider?: string
   /**
