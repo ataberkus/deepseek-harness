@@ -14,8 +14,8 @@ import type {
   SimpleStreamOptions,
   StopReason,
   ToolCall,
-  Usage,
 } from '@earendil-works/pi-ai'
+import { abortedAssistant, emptyAssistant, failAssistantStream } from '../assistant-stream.ts'
 import {
   GOOGLE_ANTIGRAVITY_BASE_URL,
   GOOGLE_ANTIGRAVITY_FALLBACK_BASE_URL,
@@ -23,15 +23,6 @@ import {
 } from './constants.ts'
 import { antigravityHeaders } from './headers.ts'
 import { buildAntigravityRequest } from './request.ts'
-
-const ZERO_USAGE: Usage = {
-  input: 0,
-  output: 0,
-  cacheRead: 0,
-  cacheWrite: 0,
-  totalTokens: 0,
-  cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
-}
 
 /** Injectable HTTP so tests never hit Cloud Code Assist. */
 export const antigravityStreamInternals = {
@@ -65,7 +56,7 @@ async function runAntigravityStream(
   const snapshot = (): AssistantMessage => ({ ...partial, content: [...partial.content] })
   try {
     if (options?.signal?.aborted) {
-      fail(stream, aborted(partial))
+      failAssistantStream(stream, abortedAssistant(partial))
       return
     }
     const accessToken = accessTokenFromOptions(options)
@@ -101,7 +92,7 @@ async function runAntigravityStream(
         lastError = new Error(`Cloud Code Assist API error (${res.status}): ${await res.text()}`)
       } catch (err) {
         if (options?.signal?.aborted) {
-          fail(stream, aborted(partial))
+          failAssistantStream(stream, abortedAssistant(partial))
           return
         }
         lastError = err
@@ -123,7 +114,7 @@ async function runAntigravityStream(
     let finishReason: string | undefined
     for await (const chunk of readSseJson(response.body, options?.signal)) {
       if (options?.signal?.aborted) {
-        fail(stream, aborted(partial), 'aborted')
+        failAssistantStream(stream, abortedAssistant(partial), 'aborted')
         return
       }
       const payload = cloudCodeAssistPayload(chunk)
@@ -198,7 +189,7 @@ async function runAntigravityStream(
     closeOpenBlocks(stream, partial, textIndex, thinkingIndex, snapshot)
     /* v8 ignore next 4 -- abort after the SSE body ends is the same terminal as abort mid-chunk. */
     if (options?.signal?.aborted) {
-      fail(stream, aborted(partial), 'aborted')
+      failAssistantStream(stream, abortedAssistant(partial), 'aborted')
       return
     }
     if (toolCalls.length > 0) {
@@ -219,7 +210,7 @@ async function runAntigravityStream(
         partial.stopReason = 'stop'
         stream.push({ type: 'done', reason: 'stop', message: snapshot() })
       } else {
-        fail(stream, {
+        failAssistantStream(stream, {
           ...snapshot(),
           stopReason: 'error',
           errorMessage: `Cloud Code Assist stopped: ${finishReason}`,
@@ -230,10 +221,10 @@ async function runAntigravityStream(
     stream.end(snapshot())
   } catch (error) {
     if (options?.signal?.aborted) {
-      fail(stream, aborted(partial), 'aborted')
+      failAssistantStream(stream, abortedAssistant(partial), 'aborted')
       return
     }
-    fail(stream, {
+    failAssistantStream(stream, {
       ...partial,
       content: [...partial.content],
       stopReason: 'error',
@@ -368,32 +359,6 @@ function projectIdFromOptions(options: Omit<SimpleStreamOptions, 'toolChoice'> |
     }
   }
   return undefined
-}
-
-function emptyAssistant(model: Model<Api>): AssistantMessage {
-  return {
-    role: 'assistant',
-    content: [],
-    api: model.api,
-    provider: model.provider,
-    model: model.id,
-    usage: ZERO_USAGE,
-    stopReason: 'stop',
-    timestamp: Date.now(),
-  }
-}
-
-function aborted(partial: AssistantMessage): AssistantMessage {
-  return { ...partial, content: [...partial.content], stopReason: 'aborted', errorMessage: 'Request was aborted' }
-}
-
-function fail(
-  stream: AssistantMessageEventStream,
-  message: AssistantMessage,
-  reason: 'error' | 'aborted' = 'error',
-): void {
-  stream.push({ type: 'error', reason, error: message })
-  stream.end(message)
 }
 
 function openText(
