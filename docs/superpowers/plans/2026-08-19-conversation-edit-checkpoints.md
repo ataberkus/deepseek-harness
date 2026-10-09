@@ -46,7 +46,7 @@ This is one user-facing feature. Keep it as one plan. Ship it as three sequentia
 - Modify: `packages/host/apiproxy/src/api/events.ts` — add `session/checkpoints` mux frame.
 - Modify: `packages/host/apiproxy/src/fetch/handler.ts` and `src/fetch/client.ts` — wire the new RPCs.
 - Modify: `packages/host/apiproxy/src/api-proxy.ts` — implement edit transaction, activate restore, emit checkpoint snapshots.
-- Modify: `packages/client/runtime/src/client/sessions/` — checkpoint/operation snapshots, `edit`/`activate` methods, select-time activate.
+- Modify: `packages/api/session-controller/src/client/sessions/` — checkpoint/operation snapshots, `edit`/`activate` methods, select-time activate.
 - Modify: `packages/client/ui-conversation/src/client/` — `Edit & resend`, draft banner, locales, MessageIconActions.
 - Modify: `packages/bundle/web-app/cordis.patch.yml` and `package.json` — mount provider + capture.
 - Modify: `tsconfig.host.json` — project references for the three new packages and the new web e2e file.
@@ -247,7 +247,6 @@ Image blocks are preserved on Send. The client sends only `text`; Host copies th
 - Create: `packages/session/workspace-checkpoint/src/types.ts`
 - Create: `packages/session/workspace-checkpoint/src/spec.ts`
 - Create: `packages/session/workspace-checkpoint/src/error.ts`
-- Create: `packages/session/workspace-checkpoint/src/invariant.ts`
 - Create: `packages/session/workspace-checkpoint/README.md`
 - Create: `packages/session/workspace-checkpoint/README.zh.md`
 - Create: `packages/session/workspace-checkpoint/tests/spec.spec.ts`
@@ -816,7 +815,6 @@ git commit -m "feat: lease workspace restores and bound checkpoint retention"
 **Files:**
 - Create: `packages/session/workspace-checkpoint-capture/` (full package skeleton matching Task 1)
 - Create: `packages/session/workspace-checkpoint-capture/src/index.ts`
-- Create: `packages/session/workspace-checkpoint-capture/src/invariant.ts`
 - Create: `packages/session/workspace-checkpoint-capture/tests/capture.spec.ts`
 - Create: `packages/session/workspace-checkpoint-capture/tests/guard.spec.ts`
 - Create: `packages/session/workspace-checkpoint-capture/README.md` and `README.zh.md`
@@ -1074,10 +1072,10 @@ git commit -m "feat: add session.edit restore-and-branch Host command"
 ### Task 8: Browser runtime snapshots
 
 **Files:**
-- Modify: `packages/client/runtime/src/client/sessions/session.ts`
-- Modify: `packages/client/runtime/src/client/sessions/service.ts`
-- Modify: `packages/client/runtime/src/client/sessions/manager.ts`
-- Create: `packages/client/runtime/src/client/sessions/checkpoint-store.ts`
+- Modify: `packages/api/session-controller/src/client/sessions/session.ts`
+- Modify: `packages/api/session-controller/src/client/sessions/service.ts`
+- Modify: `packages/api/session-controller/src/client/sessions/manager.ts`
+- Create: `packages/api/session-controller/src/client/sessions/checkpoint-store.ts`
 - Modify: `packages/client/runtime/tests/manager.client.spec.ts`
 
 **Interfaces:**
@@ -1148,13 +1146,13 @@ git commit -m "feat: project workspace checkpoint snapshots in the browser runti
 ### Task 9: Conversation edit affordance and banner
 
 **Files:**
-- Modify: `packages/client/ui-conversation/src/client/chat/MessageIconActions.tsx`
-- Modify: `packages/client/ui-conversation/src/client/chat/MessageItem.tsx`
+- Modify: `packages/client/ui-chat/src/client/chat/MessageIconActions.tsx`
+- Modify: `packages/client/ui-chat/src/client/chat/MessageItem.tsx`
 - Modify: `packages/client/ui-conversation/src/client/skeleton/InputBar.tsx`
 - Modify: `packages/client/ui-conversation/src/client/stores.ts`
 - Modify: `packages/client/ui-conversation/src/client/locales.ts`
 - Modify: `packages/client/ui-conversation/src/client/input/` only to load text + preserved image ids into the existing composer
-- Modify: `packages/client/ui-conversation/tests/chat-view.client.spec.tsx` and `input-bar.client.spec.tsx`
+- Modify: `packages/client/ui-chat/tests/chat-view.client.spec.tsx` and `input-bar.client.spec.tsx`
 - Modify: `packages/client/ui-conversation/README.md` and `README.zh.md` — remove the "no edit on settled messages" limitation
 
 **Interfaces:**
@@ -1212,7 +1210,7 @@ English dictionary mirrors those keys. The default UI language remains Chinese.
 
 - [ ] **Step 2: Run the UI tests and verify they fail**
 
-Run: `pnpm exec vitest run packages/client/ui-conversation/tests/chat-view.client.spec.tsx packages/client/ui-conversation/tests/input-bar.client.spec.tsx --reporter=dot`
+Run: `pnpm exec vitest run packages/client/ui-chat/tests/chat-view.client.spec.tsx packages/client/ui-conversation/tests/input-bar.client.spec.tsx --reporter=dot`
 
 Expected: FAIL because the control is absent (the 2026-07-31 stub removal).
 
@@ -1286,7 +1284,7 @@ Ordinary fork children already appear as top-level workspace rows (`tree.ts`). D
 
 - [ ] **Step 4: Run workspace and conversation GUI tests**
 
-Run: `pnpm exec vitest run packages/client/ui-workspace/tests/checkpoint-branch.client.spec.tsx packages/client/ui-conversation/tests/chat-view.client.spec.tsx packages/client/ui-conversation/tests/input-bar.client.spec.tsx --reporter=dot`
+Run: `pnpm exec vitest run packages/client/ui-workspace/tests/checkpoint-branch.client.spec.tsx packages/client/ui-chat/tests/chat-view.client.spec.tsx packages/client/ui-conversation/tests/input-bar.client.spec.tsx --reporter=dot`
 
 Expected: PASS.
 
@@ -1303,7 +1301,6 @@ git commit -m "feat: show checkpoint branch labels and unrestorable workspace st
 
 **Files:**
 - Modify: `packages/session/workspace-checkpoint-local/src/invariant.ts`
-- Modify: `packages/session/workspace-checkpoint-capture/src/invariant.ts`
 - Modify: `packages/session/workspace-checkpoint-local/tests/store.spec.ts` and `lease.spec.ts`
 - Create: `docs/subsystems/workspace-checkpoint.md` (and `.zh.md`)
 - Modify: `docs/subsystems/README.md` and `README.zh.md`

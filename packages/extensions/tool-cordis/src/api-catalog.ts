@@ -1241,6 +1241,12 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'the advertised models, deduplicated in endpoint order.',
       },
       {
+        signature: '@Remote(\'logout\') async logout(provider: string): Promise<void>',
+        description: 'Disconnect a provider-managed route through its registered adapter.',
+        parameters: [{ name: 'provider', description: 'registered provider route to disconnect.' }],
+        returns: 'nothing; a successful call unregisters the live route.',
+      },
+      {
         signature: '@Remote(\'discoverModels\') async remoteDiscoverModels( settingsNs: string, request: LlmModelDiscoveryRequest, signal: AbortSignal, ): Promise<LlmDiscoveredModel[]>',
         description: 'Remote adapter for one draft provider interrogation.',
         parameters: [{ name: 'settingsNs', description: 'namespace whose registered discovery serves this draft.' }, { name: 'request', description: 'endpoint, protocol, and one-shot credential to use.' }, { name: 'signal', description: 'caller cancellation supplied by the Remote carrier.' }],
@@ -1248,10 +1254,42 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         throws: ['RemoteError with `llm/model-discovery-rejected` when discovery refuses or fails.'],
       },
       {
-        signature: 'async logout(provider: string): Promise<void>',
-        description: 'Sign out of a hosted OAuth route owned by its registered adapter.',
-        parameters: [{ name: 'provider', description: 'registered provider route to disconnect.' }],
-        returns: 'nothing; a successful call unregisters the live route.',
+        signature: 'registerOAuthLogin( settingsNs: string, login: (provider: string, signal?: AbortSignal) => Promise<void>, ): () => void',
+        description: 'Offer to sign a provider route in through OAuth on behalf of the settings namespace this plugin owns. The namespace is the key for the same reason discovery is keyed that way: a route being signed in has no live registration to name yet. Disposed with the fiber.',
+        parameters: [{ name: 'settingsNs', description: 'the namespace whose routes this login serves.' }, { name: 'login', description: 'signs in one provider and must honor the supplied signal.' }],
+        returns: 'the disposer that withdraws the offer.',
+      },
+      {
+        signature: 'async loginOAuth(settingsNs: string, provider: string, signal?: AbortSignal): Promise<void>',
+        description: 'Sign one provider route in through its namespace\'s OAuth offer.',
+        parameters: [{ name: 'settingsNs', description: 'namespace whose registered login serves this provider.' }, { name: 'provider', description: 'dormant OAuth route to sign in.' }, { name: 'signal', description: 'caller cancellation.' }],
+        returns: 'nothing; a successful call registers the live route.',
+      },
+      {
+        signature: '@Remote(\'loginOAuth\') async remoteLoginOAuth(settingsNs: string, provider: string, signal: AbortSignal): Promise<void>',
+        description: 'Remote adapter for one provider sign-in.',
+        parameters: [{ name: 'settingsNs', description: 'namespace whose registered login serves this provider.' }, { name: 'provider', description: 'dormant OAuth route to sign in.' }, { name: 'signal', description: 'caller cancellation supplied by the Remote carrier.' }],
+        returns: 'nothing; a successful call registers the live route.',
+        throws: ['RemoteError with `llm/login-rejected` when login refuses or fails.'],
+      },
+      {
+        signature: 'registerApiKeyLogin( settingsNs: string, login: (provider: string, apiKey: string, signal?: AbortSignal) => Promise<void>, ): () => void',
+        description: 'Offer to store one provider API key through the provider\'s own login method on behalf of the settings namespace this plugin owns. Disposed with the fiber.',
+        parameters: [{ name: 'settingsNs', description: 'the namespace whose routes this login serves.' }, { name: 'login', description: 'stores one provider key and must honor the supplied signal.' }],
+        returns: 'the disposer that withdraws the offer.',
+      },
+      {
+        signature: 'async loginApiKey( settingsNs: string, provider: string, apiKey: string, signal?: AbortSignal, ): Promise<void>',
+        description: 'Store one provider key through its namespace\'s API-key login offer.',
+        parameters: [{ name: 'settingsNs', description: 'namespace whose registered login serves this provider.' }, { name: 'provider', description: 'dormant API-key route to connect.' }, { name: 'apiKey', description: 'secret supplied for this login alone.' }, { name: 'signal', description: 'caller cancellation.' }],
+        returns: 'nothing; a successful call registers the live route.',
+      },
+      {
+        signature: '@Remote(\'loginApiKey\') async remoteLoginApiKey( settingsNs: string, provider: string, apiKey: string, signal: AbortSignal, ): Promise<void>',
+        description: 'Remote adapter for one provider API-key login.',
+        parameters: [{ name: 'settingsNs', description: 'namespace whose registered login serves this provider.' }, { name: 'provider', description: 'dormant API-key route to connect.' }, { name: 'apiKey', description: 'secret supplied for this login alone.' }, { name: 'signal', description: 'caller cancellation supplied by the Remote carrier.' }],
+        returns: 'nothing; a successful call registers the live route.',
+        throws: ['RemoteError with `llm/login-rejected` when login refuses or fails.'],
       },
       {
         signature: 'providerRetryPolicy(provider: string): ResolvedRetryPolicy',
@@ -1523,6 +1561,24 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         description: 'Fork one cold-readable completed-turn prefix into a new Session.',
         parameters: [{ name: 'request', description: 'source Session and optional event anchor.' }],
         returns: 'the new Session identity.',
+      },
+      {
+        signature: '@Remote(\'edit\') edit(request: SessionEditRequest, signal: AbortSignal): Promise<SessionEditValue>',
+        description: 'Edit one completed user message into a new workspace-backed branch.',
+        parameters: [{ name: 'request', description: 'source Session, message sequence, checkpoint, and text.' }, { name: 'signal', description: 'caller cancellation before the branch transaction starts.' }],
+        returns: 'the child Session identity.',
+      },
+      {
+        signature: '@Remote(\'retry\') retry(request: SessionRetryRequest, signal: AbortSignal): Promise<SessionRetryValue>',
+        description: 'Retry one failed turn in place after restoring its pre-turn workspace checkpoint.',
+        parameters: [{ name: 'request', description: 'source session, failed message sequence, and checkpoint.' }, { name: 'signal', description: 'caller cancellation before the retry transaction starts.' }],
+        returns: 'acceptance once the retry was queued in the same session.',
+      },
+      {
+        signature: '@Remote(\'activate\') activate(request: SessionActivateRequest, signal: AbortSignal): Promise<SessionActivateValue>',
+        description: 'Activate the latest usable workspace checkpoint for one Session.',
+        parameters: [{ name: 'request', description: 'Session whose workspace should be restored.' }, { name: 'signal', description: 'caller cancellation before restore starts.' }],
+        returns: 'whether a checkpoint was restored.',
       },
       {
         signature: '@Remote(\'prompt\') prompt(request: SessionPromptRequest, signal: AbortSignal): Promise<SessionPromptValue>',
@@ -3279,6 +3335,14 @@ export const EVENT_API: readonly EventApiEntry[] = [
     parameters: [],
   },
   {
+    name: 'commands/open-url',
+    mode: 'emit',
+    signature: '\'commands/open-url\'(url: string): void',
+    summary: 'Ask connected browsers to open `url` in a tab.',
+    description: 'Ask connected browsers to open `url` in a tab. CLI has no subscriber and still uses the host OS opener. The Web client opens a blank tab during the `/login` keystroke and navigates it here so popup blockers do not swallow the authorize page. The URL is https only.',
+    parameters: [{ name: 'url', description: 'absolute https authorize URL.' }],
+  },
+  {
     name: 'cordis/dynamic-package',
     mode: 'emit',
     signature: '\'cordis/dynamic-package\'(pkg: DynamicCordisPackage): void',
@@ -3421,6 +3485,14 @@ export const EVENT_API: readonly EventApiEntry[] = [
     summary: 'Transform one outbound record before it reaches the backend.',
     description: 'Transform one outbound record before it reaches the backend. This waterfall is the Service Definition\'s redaction extension point. It ships NO rules of its own: the innermost `next()` passes the record through unchanged, and with no listener mounted records reach the backend as captured, so exported data is exactly as clean as the rules a deployment mounts. Listeners stack by transforming `next()`\'s return value; returning without `next()` replaces everything beneath. Dispatched synchronously on the capture hot path inside the coordinator\'s containment: a throwing listener withholds that one record (fail-closed) and never reaches the agent loop. Live capture dispatches at append time; on-demand capture dispatches while reading the canonical log. Redaction applies to the exported copy only; the canonical session log is never rewritten.',
     parameters: [{ name: 'record', description: 'the candidate record, already the coordinator\'s own deep copy; listeners return a (possibly new) record and must not mutate it.' }],
+  },
+  {
+    name: 'session/checkpoints',
+    mode: 'emit',
+    signature: '\'session/checkpoints\'(frame: SessionCheckpointFrame): void',
+    summary: 'A workspace checkpoint update for one Session.',
+    description: 'A workspace checkpoint update for one Session.',
+    parameters: [{ name: 'frame', description: 'checkpoint rows or edit/activation progress for the Session.' }],
   },
   {
     name: 'session/created',
@@ -3591,14 +3663,6 @@ export const EVENT_API: readonly EventApiEntry[] = [
     parameters: [{ name: 'table', description: 'Mutable row table; listeners append in activation order.' }],
   },
   {
-    name: 'workspace-checkpoint/changed',
-    mode: 'emit',
-    signature: '\'workspace-checkpoint/changed\'(sessionId: SessionId): void',
-    summary: 'Durable checkpoint metadata or workspace association changed.',
-    description: 'Durable checkpoint metadata or workspace association changed.',
-    parameters: [{ name: 'sessionId', description: 'session whose index or records changed.' }],
-  },
-  {
     name: 'workflow/agent-end',
     mode: 'emit',
     signature: '\'workflow/agent-end\'(info: WorkflowRunInfo, agent: WorkflowAgentEndInfo): void',
@@ -3645,6 +3709,14 @@ export const EVENT_API: readonly EventApiEntry[] = [
     summary: 'A workflow run started — the script\'s meta block validated, the body about to execute.',
     description: 'A workflow run started — the script\'s meta block validated, the body about to execute. Paired with Events[\'workflow/end\'].',
     parameters: [{ name: 'info', description: 'the run\'s identity snapshot (id + meta).' }],
+  },
+  {
+    name: 'workspace-checkpoint/changed',
+    mode: 'emit',
+    signature: '\'workspace-checkpoint/changed\'(sessionId: SessionId): void',
+    summary: 'Durable checkpoint metadata or workspace association changed.',
+    description: 'Durable checkpoint metadata or workspace association changed.',
+    parameters: [{ name: 'sessionId', description: 'session whose index or records changed.' }],
   },
 ]
 
@@ -3893,6 +3965,42 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'BrandedNumber',
     declaration: 'export type BrandedNumber<B extends string> = number & {\n    readonly [BRAND]: B;\n};',
+  },
+  {
+    name: 'CaptureRequest',
+    declaration: 'export interface CaptureRequest {\n    readonly sessionId: SessionId;\n    readonly cwd: string;\n    readonly workspaceId?: WorkspaceId;\n    readonly boundarySeq: number;\n    readonly parentCheckpointId?: CheckpointId;\n    readonly role: CheckpointRole;\n    readonly turnOutcome: CheckpointTurnOutcome;\n    readonly lease?: WorkspaceLease;\n}',
+  },
+  {
+    name: 'CheckpointEditLink',
+    declaration: 'export interface CheckpointEditLink {\n    readonly sourceSessionId: SessionId;\n    readonly sourceBoundarySeq: number;\n    readonly selectedCheckpointId: CheckpointId;\n    readonly emergencyCheckpointId: CheckpointId;\n    readonly childSessionId: SessionId;\n}',
+  },
+  {
+    name: 'CheckpointId',
+    declaration: 'export type CheckpointId = Branded<\'CheckpointId\'>;',
+  },
+  {
+    name: 'CheckpointOperationPhase',
+    declaration: 'export type CheckpointOperationPhase = \'preparing\' | \'capturing-emergency\' | \'restoring\' | \'creating-branch\' | \'ready\' | \'failed\';',
+  },
+  {
+    name: 'CheckpointOperationView',
+    declaration: 'export interface CheckpointOperationView {\n    readonly sourceSessionId: SessionId;\n    readonly childSessionId?: SessionId;\n    readonly checkpointId: CheckpointId;\n    readonly phase: CheckpointOperationPhase;\n    readonly fileCount: number;\n    readonly message?: string;\n}',
+  },
+  {
+    name: 'CheckpointRole',
+    declaration: 'export type CheckpointRole = \'initial\' | \'turn\' | \'emergency\';',
+  },
+  {
+    name: 'CheckpointStatus',
+    declaration: 'export type CheckpointStatus = {\n    readonly kind: \'ready\';\n} | {\n    readonly kind: \'unavailable\';\n    readonly reason: string;\n};',
+  },
+  {
+    name: 'CheckpointTurnOutcome',
+    declaration: 'export type CheckpointTurnOutcome = \'initial\' | \'completed\' | \'failed\' | \'cancelled\' | \'interrupted\';',
+  },
+  {
+    name: 'CheckpointView',
+    declaration: 'export interface CheckpointView {\n    readonly id: CheckpointId;\n    readonly sessionId: SessionId;\n    readonly boundarySeq: number;\n    readonly labelIndex: number;\n    readonly role: CheckpointRole;\n    readonly status: CheckpointStatus;\n    readonly restoreEligible: boolean;\n    readonly fileCount: number;\n    readonly createdAt: number;\n}',
   },
   {
     name: 'ClientArtifactBaseline',
@@ -4584,7 +4692,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'LlmAdapter',
-    declaration: 'export abstract class LlmAdapter {\n    providerInfo(provider: string): LlmProviderInfo;\n    providerRetryPolicy(_provider: string): ResolvedRetryPolicy | undefined;\n    imageRequestPricing(_provider: string, _model: string): LlmImageRequestPricing | undefined;\n    listModels(_provider: string): Promise<readonly LlmModelInfo[]>;\n    resolveModel(provider: string, model: string, _signal?: AbortSignal): Promise<LlmResolvedModelInfo>;\n    async prepareCall(provider: string, model: string, signal?: AbortSignal): Promise<PreparedAdapterCall>;\n    abstract stream(options: GenerateOptions): AsyncIterable<StreamChunk>;\n}',
+    declaration: 'export abstract class LlmAdapter {\n    providerInfo(provider: string): LlmProviderInfo;\n    providerRetryPolicy(_provider: string): ResolvedRetryPolicy | undefined;\n    imageRequestPricing(_provider: string, _model: string): LlmImageRequestPricing | undefined;\n    listModels(_provider: string): Promise<readonly LlmModelInfo[]>;\n    resolveModel(provider: string, model: string, _signal?: AbortSignal): Promise<LlmResolvedModelInfo>;\n    logout(provider: string): Promise<void>;\n    async prepareCall(provider: string, model: string, signal?: AbortSignal): Promise<PreparedAdapterCall>;\n    abstract stream(options: GenerateOptions): AsyncIterable<StreamChunk>;\n}',
   },
   {
     name: 'LlmAttemptId',
@@ -4600,7 +4708,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'LlmConfigurableProvider',
-    declaration: 'export interface LlmConfigurableProvider {\n    provider: string;\n    displayName: string;\n    settingsNs: string;\n    settingsPath: readonly string[];\n    declared?: boolean;\n    error?: string;\n}',
+    declaration: 'export interface LlmConfigurableProvider {\n    provider: string;\n    displayName: string;\n    settingsNs: string;\n    settingsPath: readonly string[];\n    defaults?: LlmProviderConfigDefaults;\n    declared?: boolean;\n    auth?: \'oauth\' | \'api-key\';\n    error?: string;\n}',
   },
   {
     name: 'LlmDiscoveredModel',
@@ -4635,8 +4743,12 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface LlmModelReasoningInfo {\n    efforts: readonly LlmReasoningEffortInfo[];\n    defaultEffort?: ReasoningEffortId;\n}',
   },
   {
+    name: 'LlmProviderConfigDefaults',
+    declaration: 'export interface LlmProviderConfigDefaults {\n    api?: string;\n    baseURL?: string;\n}',
+  },
+  {
     name: 'LlmProviderInfo',
-    declaration: 'export interface LlmProviderInfo {\n    id: string;\n    name: string;\n    auth?: \'oauth\';\n}',
+    declaration: 'export interface LlmProviderInfo {\n    id: string;\n    name: string;\n    auth?: \'oauth\' | \'api-key\';\n}',
   },
   {
     name: 'LlmReasoningEffortInfo',
@@ -4648,7 +4760,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'LlmRuntime',
-    declaration: 'export class LlmRuntime extends TypertRemoteService {\n    constructor(ctx: Context);\n    registerAdapter(providers: string[], adapter: LlmAdapter): AdapterRegistrationHandle;\n    @Remote\n    listProviders(): LlmProviderInfo[];\n    registerConfigurableProviders(entries: readonly LlmConfigurableProvider[]): DirectoryRegistrationHandle;\n    @Remote\n    listConfigurableProviders(): LlmConfigurableProvider[];\n    registerModelDiscovery(settingsNs: string, discover: (request: LlmModelDiscoveryRequest, signal?: AbortSignal) => Promise<readonly LlmDiscoveredModel[]>): () => void;\n    async discoverModels(settingsNs: string, request: LlmModelDiscoveryRequest, signal?: AbortSignal): Promise<LlmDiscoveredModel[]>;\n    @Remote(\'discoverModels\')\n    async remoteDiscoverModels(settingsNs: string, request: LlmModelDiscoveryRequest, signal: AbortSignal): Promise<LlmDiscoveredModel[]>;\n    providerRetryPolicy(provider: string): ResolvedRetryPolicy;\n    imageRequestPricing(provider: string, model: string): LlmImageRequestPricing | undefined;\n    fileRequestText(ref: FileAttachmentRef): string;\n    async listModels(provider: string): Promise<LlmModelInfo[]>;\n    async resolveModelInfo(provider: string, model: string, signal?: AbortSignal): Promise<LlmResolvedModelInfo>;\n    async resolveCallConfig(config: LlmCallConfig, signal?: AbortSignal): Promise<LlmCallConfig>;\n    async prepareCall(config: LlmCallConfig, signal?: AbortSignal): Promise<PreparedLlmCall>;\n    stream(options: GenerateOptions) /* …truncated — full shape in source */',
+    declaration: 'export class LlmRuntime extends TypertRemoteService {\n    constructor(ctx: Context);\n    registerAdapter(providers: string[], adapter: LlmAdapter): AdapterRegistrationHandle;\n    @Remote\n    listProviders(): LlmProviderInfo[];\n    registerConfigurableProviders(entries: readonly LlmConfigurableProvider[]): DirectoryRegistrationHandle;\n    @Remote\n    listConfigurableProviders(): LlmConfigurableProvider[];\n    registerModelDiscovery(settingsNs: string, discover: (request: LlmModelDiscoveryRequest, signal?: AbortSignal) => Promise<readonly LlmDiscoveredModel[]>): () => void;\n    async discoverModels(settingsNs: string, request: LlmModelDiscoveryRequest, signal?: AbortSignal): Promise<LlmDiscoveredModel[]>;\n    @Remote(\'logout\')\n    async logout(provider: string): Promise<void>;\n    @Remote(\'discoverModels\')\n    async remoteDiscoverModels(settingsNs: string, request: LlmModelDiscoveryRequest, signal: AbortSignal): Promise<LlmDiscoveredModel[]>;\n    registerOAuthLogin(settingsNs: string, login: (provider: string, signal?: AbortSignal) => Promise<void>): () => void;\n    async loginOAuth(settingsNs: string, provider: string, signal?: AbortSignal): Promise<void>;\n    @Remote(\'loginOAuth\')\n    async remoteLoginOAuth(settingsNs: string, provider: string, signal: AbortSignal): Promise<void>;\n    registerApiKeyLogin(settingsNs: string, login: (provider: string, apiKey: string, signal?: AbortSignal) => Promise<void>): () => void;\n    async loginApiKey(settingsNs: string, provider: string, /* …truncated — full shape in source */',
   },
   {
     name: 'LspHover',
@@ -5139,6 +5251,14 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export type SessionAccess = \'read\' | \'write\';',
   },
   {
+    name: 'SessionActivateRequest',
+    declaration: 'export interface SessionActivateRequest {\n    readonly sessionId: SessionId;\n}',
+  },
+  {
+    name: 'SessionActivateValue',
+    declaration: 'export interface SessionActivateValue {\n    readonly restored: boolean;\n    readonly checkpointId?: CheckpointView[\'id\'];\n    readonly unavailable?: boolean;\n}',
+  },
+  {
     name: 'SessionAddress',
     declaration: 'export type SessionAddress = {\n    readonly kind: \'session\';\n    readonly sessionId: SessionId;\n} | {\n    readonly kind: \'subagent\';\n    readonly parentSessionId: SessionId;\n    readonly childSessionId: SessionId;\n    readonly mode: \'one-shot\' | \'continuable\';\n};',
   },
@@ -5175,12 +5295,16 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface SessionCancelValue {\n    readonly accepted: true;\n}',
   },
   {
+    name: 'SessionCheckpointFrame',
+    declaration: 'export interface SessionCheckpointFrame {\n    readonly type: \'session/checkpoints\';\n    readonly sessionId: SessionId;\n    readonly checkpoints: readonly CheckpointView[];\n    readonly enabled: boolean;\n    readonly appliedCheckpointId?: CheckpointView[\'id\'];\n    readonly operation?: CheckpointOperationView;\n    readonly branchCheckpoint?: CheckpointView;\n    readonly branchLabelIndex?: number;\n    readonly workspaceResumable?: boolean;\n    readonly recoveryRequired?: string;\n}',
+  },
+  {
     name: 'SessionControlBaseline',
     declaration: 'export interface SessionControlBaseline {\n    readonly queues: Readonly<Record<SessionId, readonly SessionQueuedItem[]>>;\n    readonly jobs: Readonly<Record<SessionId, readonly SessionJob[]>>;\n    readonly projections: Readonly<Record<SessionId, SessionProjectionBaseline>>;\n}',
   },
   {
     name: 'SessionControlFrame',
-    declaration: 'export type SessionControlFrame = {\n    readonly type: \'baseline\';\n    readonly value: SessionControlBaseline;\n} | {\n    readonly type: \'queue\';\n    readonly sessionId: SessionId;\n    readonly items: readonly SessionQueuedItem[];\n} | {\n    readonly type: \'jobs\';\n    readonly sessionId: SessionId;\n    readonly jobs: readonly SessionJob[];\n} | ({\n    readonly type: \'projection\';\n} & SessionProjectionUpdate);',
+    declaration: 'export type SessionControlFrame = {\n    readonly type: \'baseline\';\n    readonly value: SessionControlBaseline;\n} | {\n    readonly type: \'queue\';\n    readonly sessionId: SessionId;\n    readonly items: readonly SessionQueuedItem[];\n} | {\n    readonly type: \'jobs\';\n    readonly sessionId: SessionId;\n    readonly jobs: readonly SessionJob[];\n} | SessionCheckpointFrame | ({\n    readonly type: \'projection\';\n} & SessionProjectionUpdate);',
   },
   {
     name: 'SessionCreateRequest',
@@ -5189,6 +5313,14 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'SessionCreateValue',
     declaration: 'export interface SessionCreateValue {\n    readonly sessionId: SessionId;\n    readonly agentPreset?: string;\n}',
+  },
+  {
+    name: 'SessionEditRequest',
+    declaration: 'export interface SessionEditRequest {\n    readonly sessionId: SessionId;\n    readonly messageSeq: number;\n    readonly checkpointId: CheckpointView[\'id\'];\n    readonly text: string;\n}',
+  },
+  {
+    name: 'SessionEditValue',
+    declaration: 'export interface SessionEditValue {\n    readonly sessionId: SessionId;\n}',
   },
   {
     name: 'SessionEvent',
@@ -5483,6 +5615,14 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface SessionResultRange {\n    from?: number;\n    to?: number;\n}',
   },
   {
+    name: 'SessionRetryRequest',
+    declaration: 'export interface SessionRetryRequest {\n    readonly sessionId: SessionId;\n    readonly messageSeq: number;\n    readonly checkpointId: CheckpointView[\'id\'];\n}',
+  },
+  {
+    name: 'SessionRetryValue',
+    declaration: 'export interface SessionRetryValue {\n    readonly accepted: true;\n}',
+  },
+  {
     name: 'SessionSearchCursor',
     declaration: 'export type SessionSearchCursor = Branded<\'SessionSearchCursor\'>;',
   },
@@ -5536,7 +5676,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'SessionSummary',
-    declaration: 'export interface SessionSummary {\n    readonly sessionId: SessionId;\n    readonly updatedAt: number;\n    readonly running: boolean;\n    readonly blank: boolean;\n    readonly parentSessionId?: SessionId;\n    readonly origin?: \'subagent\';\n    readonly cwd?: string;\n    readonly projections?: SessionProjectionHints;\n}',
+    declaration: 'export interface SessionSummary {\n    readonly sessionId: SessionId;\n    readonly updatedAt: number;\n    readonly running: boolean;\n    readonly blank: boolean;\n    readonly parentSessionId?: SessionId;\n    readonly origin?: \'subagent\';\n    readonly cwd?: string;\n    readonly agentPreset?: string;\n    readonly checkpointLabelIndex?: number;\n    readonly workspaceResumable?: boolean;\n    readonly projections?: SessionProjectionHints;\n}',
   },
   {
     name: 'SessionSurface',
@@ -5799,12 +5939,12 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface StoredImageAttachment {\n    ref: ImageAttachmentRef;\n    data: Uint8Array;\n}',
   },
   {
-    name: 'StreamChunk',
-    declaration: 'export type StreamChunk = {\n    type: \'block-start\';\n    index: number;\n    blockType: ContentBlockType;\n} | {\n    type: \'text-delta\';\n    index: number;\n    text: string;\n} | {\n    type: \'reasoning-delta\';\n    index: number;\n    text: string;\n} | {\n    type: \'tool-call-delta\';\n    index: number;\n    id: ToolCallId;\n    name?: string;\n    argumentsDelta: string;\n} | {\n    type: \'block-end\';\n    index: number;\n    block: ContentBlock;\n} | {\n    type: \'usage\';\n    usage: TokenUsage;\n} | {\n    type: \'finish\';\n    reason: FinishReason;\n    replayState?: ReplayEnvelope;\n};',
-  },
-  {
     name: 'StoredSessionCheckpointIndex',
     declaration: 'export type StoredSessionCheckpointIndex = z.infer<typeof sessionCheckpointIndexSchema>;',
+  },
+  {
+    name: 'StreamChunk',
+    declaration: 'export type StreamChunk = {\n    type: \'block-start\';\n    index: number;\n    blockType: ContentBlockType;\n} | {\n    type: \'text-delta\';\n    index: number;\n    text: string;\n} | {\n    type: \'reasoning-delta\';\n    index: number;\n    text: string;\n} | {\n    type: \'tool-call-delta\';\n    index: number;\n    id: ToolCallId;\n    name?: string;\n    argumentsDelta: string;\n} | {\n    type: \'block-end\';\n    index: number;\n    block: ContentBlock;\n} | {\n    type: \'usage\';\n    usage: TokenUsage;\n} | {\n    type: \'finish\';\n    reason: FinishReason;\n    replayState?: ReplayEnvelope;\n};',
   },
   {
     name: 'SubagentCapabilities',

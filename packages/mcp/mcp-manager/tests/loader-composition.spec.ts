@@ -83,8 +83,7 @@ describe('mcp-manager real Loader composition', () => {
     await vi.waitFor(() => {
       expect(context!.get('settings')?.describe().map(entry => String(entry.ns))).toContain('mcp')
     })
-    const names = (context!.tools as unknown as { list(): Array<{ name: string }> }).list()
-      .map(tool => tool.name)
+    const names = context.tools.schemas().map(tool => tool.name)
     expect(names.filter(toolName => toolName.startsWith('mcp__'))).toEqual([])
   })
 })

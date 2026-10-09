@@ -80,6 +80,7 @@ export interface PromptError {
   readonly error: RemoteFailure
 }
 
+/** Immutable Session lifecycle and control snapshot. */
 export interface SessionSnapshot {
   readonly sessionId: SessionId
   readonly queue: readonly QueuedMessage[]

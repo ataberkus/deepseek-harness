@@ -263,7 +263,7 @@ Source: [`packages/core/session/src/types.ts:321`](../packages/core/session/src/
 }
 ```
 
-Source: [`packages/interaction/commands/src/types.ts:112`](../packages/interaction/commands/src/types.ts)
+Source: [`packages/interaction/commands/src/types.ts:121`](../packages/interaction/commands/src/types.ts)
 
 <a id="commandrun--log-only"></a>
 
@@ -283,7 +283,7 @@ Source: [`packages/interaction/commands/src/types.ts:112`](../packages/interacti
 'command/run': { commandId: CommandId; name: string; args?: string; source: CommandSource }
 ```
 
-Source: [`packages/interaction/commands/src/types.ts:105`](../packages/interaction/commands/src/types.ts)
+Source: [`packages/interaction/commands/src/types.ts:114`](../packages/interaction/commands/src/types.ts)
 
 ### `compaction/*`
 
@@ -552,7 +552,7 @@ Source: [`packages/llm/llm-retry/src/types.ts:11`](../packages/llm/llm-retry/src
 'model/selection': ModelSelection
 ```
 
-Source: [`packages/api/session-controller/src/types.ts:40`](../packages/api/session-controller/src/types.ts)
+Source: [`packages/api/session-controller/src/types.ts:41`](../packages/api/session-controller/src/types.ts)
 
 ### `permission/*`
 

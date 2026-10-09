@@ -491,6 +491,18 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface ChainRenderOpts {\n    fallback?: ReactNode;\n    fallbackOnly?: boolean;\n    overlay?: boolean;\n}',
   },
   {
+    name: 'CheckpointOperation',
+    declaration: 'export type CheckpointOperation = NonNullable<SessionCheckpointFrame[\'operation\']>;',
+  },
+  {
+    name: 'CheckpointSnapshot',
+    declaration: 'export interface CheckpointSnapshot {\n    readonly enabled: boolean;\n    readonly checkpoints: readonly CheckpointView[];\n    readonly appliedCheckpointId?: CheckpointView[\'id\'];\n    readonly operation?: CheckpointOperation;\n    readonly branchCheckpoint?: CheckpointView;\n    readonly branchLabelIndex?: number;\n    readonly workspaceResumable?: boolean;\n    readonly recoveryRequired?: string;\n}',
+  },
+  {
+    name: 'CheckpointView',
+    declaration: 'export type CheckpointView = SessionCheckpointFrame[\'checkpoints\'][number];',
+  },
+  {
     name: 'ChildrenDecl',
     declaration: 'export type ChildrenDecl = {\n    [P in keyof SlotMap & string]?: SlotSpec<SlotMap[P]>;\n};',
   },
@@ -588,7 +600,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'ISession',
-    declaration: 'export interface ISession {\n    readonly sessionId: SessionId;\n    readonly projections: ProjectionsFace;\n    beginSubmission(input: BeginSubmissionInput): SubmissionHandle;\n    prompt(content: PromptContentPart[], mode: \'queue\' | \'steer\', signal?: AbortSignal, requestId?: SessionRequestId): Promise<RemoteResult<{\n        accepted: true;\n    }>>;\n    readAttachment(attachmentId: AttachmentIdType): Promise<RemoteResult<{\n        attachment: ImageAttachmentRef;\n        data: Uint8Array;\n    }>>;\n    updateQueue(itemId: MessageId, action: QueueAction): Promise<RemoteResult<{\n        accepted: true;\n    }>>;\n    cancel(): Promise<RemoteResult<{\n        accepted: true;\n    }>>;\n    rename(title: string): Promise<RemoteResult<{\n        title: string;\n        seq: SessionSeq;\n    }>>;\n    loadOlder(): Promise<void>;\n    loadThrough(seq: SessionSeq): Promise<void>;\n    command(line: string): Promise<RemoteResult<{\n        matched: boolean;\n    }>>;\n}',
+    declaration: 'export interface ISession {\n    readonly sessionId: SessionId;\n    readonly projections: ProjectionsFace;\n    beginSubmission(input: BeginSubmissionInput): SubmissionHandle;\n    prompt(content: PromptContentPart[], mode: \'queue\' | \'steer\', signal?: AbortSignal, requestId?: SessionRequestId): Promise<RemoteResult<{\n        accepted: true;\n    }>>;\n    readAttachment(attachmentId: AttachmentIdType): Promise<RemoteResult<{\n        attachment: ImageAttachmentRef;\n        data: Uint8Array;\n    }>>;\n    updateQueue(itemId: MessageId, action: QueueAction): Promise<RemoteResult<{\n        accepted: true;\n    }>>;\n    cancel(): Promise<RemoteResult<{\n        accepted: true;\n    }>>;\n    rename(title: string): Promise<RemoteResult<{\n        title: string;\n        seq: SessionSeq;\n    }>>;\n    edit(messageSeq: number, checkpointId: CheckpointView[\'id\'], text: string, signal?: AbortSignal): Promise<RemoteResult<{\n        sessionId: SessionId;\n    }>>;\n    retry(messageSeq: number, checkpointId: CheckpointView[\'id\'], signal?: AbortSignal): Promise<RemoteResult<{\n        accepted: true;\n    }>>;\n    activate(): Promise<RemoteResult<{\n        restored: boolean;\n        checkpointId?: CheckpointView[\'id\'];\n        unavailable?: boolean;\n    }>>;\n    loadOlder(): Promise<void>;\n    loadThrough(seq: SessionSeq): Promise<void>;\n    command(line: string): Promise<RemoteResult<{\n        matched: boolean;\n    }>>;\n}',
   },
   {
     name: 'KeyedHooksSources',
@@ -763,6 +775,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface SessionBinding {\n    readonly sessionId: SessionId;\n    readonly session: SessionFace;\n    readonly eventSource: SessionEventSource;\n    readonly ctx: AgentContext;\n}',
   },
   {
+    name: 'SessionCheckpointFrame',
+    declaration: 'export interface SessionCheckpointFrame {\n    readonly type: \'session/checkpoints\';\n    readonly sessionId: SessionId;\n    readonly checkpoints: readonly CheckpointView[];\n    readonly enabled: boolean;\n    readonly appliedCheckpointId?: CheckpointView[\'id\'];\n    readonly operation?: CheckpointOperationView;\n    readonly branchCheckpoint?: CheckpointView;\n    readonly branchLabelIndex?: number;\n    readonly workspaceResumable?: boolean;\n    readonly recoveryRequired?: string;\n}',
+  },
+  {
     name: 'SessionEventChange',
     declaration: 'export type SessionEventChange = {\n    readonly kind: \'replace\';\n    readonly entries: readonly SessionEventLikeEntry[];\n} | {\n    readonly kind: \'prepend\';\n    readonly entries: readonly SessionEventLikeEntry[];\n} | {\n    readonly kind: \'append\';\n    readonly entries: readonly SessionEventLikeEntry[];\n} | {\n    readonly kind: \'settle-assistant\';\n    readonly attemptId: LlmAttemptId;\n    readonly entry?: SessionAssistantSettlementEntry;\n};',
   },
@@ -804,7 +820,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'SessionSnapshot',
-    declaration: 'export interface SessionSnapshot {\n    readonly sessionId: SessionId;\n    readonly queue: readonly QueuedMessage[];\n    readonly pendingSubmissions: readonly PendingSubmission[];\n    readonly running: boolean;\n    readonly subagent: {\n        readonly address: SubagentAddress;\n        readonly parentAvailable?: boolean;\n    } | null;\n    readonly removed: boolean;\n    readonly openState: OpenState;\n    readonly openError: RemoteFailure | null;\n    readonly hasMore: boolean;\n    readonly loadingOlder: boolean;\n    readonly promptError: PromptError | null;\n    readonly blank: boolean;\n    readonly lastAgentError: string | null;\n    readonly promptAttempted: boolean;\n    readonly awaitingFirstTurn: boolean;\n}',
+    declaration: 'export interface SessionSnapshot {\n    readonly sessionId: SessionId;\n    readonly queue: readonly QueuedMessage[];\n    readonly checkpoints?: CheckpointSnapshot;\n    readonly pendingSubmissions: readonly PendingSubmission[];\n    readonly running: boolean;\n    readonly subagent: {\n        readonly address: SubagentAddress;\n        readonly parentAvailable?: boolean;\n    } | null;\n    readonly removed: boolean;\n    readonly openState: OpenState;\n    readonly openError: RemoteFailure | null;\n    readonly hasMore: boolean;\n    readonly loadingOlder: boolean;\n    readonly promptError: PromptError | null;\n    readonly blank: boolean;\n    readonly lastAgentError: string | null;\n    readonly promptAttempted: boolean;\n    readonly awaitingFirstTurn: boolean;\n}',
   },
   {
     name: 'SessionStandardProps',

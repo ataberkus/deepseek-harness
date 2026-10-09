@@ -101,7 +101,7 @@ describe('mcp-manager settings section', () => {
 
     await bench.settingsFiber.dispose()
 
-    expect(bench.ctx.settings.get(MCP_SETTINGS_NAMESPACE)).toBeUndefined()
+    expect(bench.ctx.get('settings')?.get(MCP_SETTINGS_NAMESPACE)).toBeUndefined()
     await bench.ctx.fiber.dispose()
   })
 

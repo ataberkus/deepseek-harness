@@ -33,8 +33,7 @@ class MemorySettings extends SettingsProvider {
 
 /** Tool names currently registered on the harness tool runtime. */
 function toolNames(ctx: Context): string[] {
-  const tools = (ctx as unknown as { tools: { list(): Array<{ name: string }> } }).tools
-  return tools.list().map(tool => tool.name)
+  return ctx.tools.schemas().map(tool => tool.name)
 }
 
 describe('mcp-manager fleet', () => {

@@ -331,7 +331,7 @@ interface AppIdentity {
 
 ## `TokenUsage`
 
-逐调用 token 记账。各计数**互不重叠**：`inputTokens` 只包含未缓存输入；缓存输入单独报告，计费输入是三者之和。若提供方把缓存命中折入单一提示词总数（如 DeepSeek 的 `prompt_tokens`），适配器会再将其扣除。可选的 `totalTokens` 是精确的提示词与输出聚合计数，由适配器保留提供方原值或从权威聚合计数重建；不可用或不一致时省略。`reasoningTokens` 存在时只是信息性细节，已经包含在 `outputTokens` 中；汇总时不得重复相加。
+逐调用 token 记账。各计数**互不重叠**：`inputTokens` 只包含未缓存输入；缓存输入单独报告，计费输入是三者之和。若提供方把缓存命中折入单一提示词总数（如 DeepSeek 的 `prompt_tokens`），适配器会再将其扣除。可选的 `totalTokens` 是精确的提示词与输出聚合计数，由适配器保留提供方原值或从权威聚合计数重建；不可用或不一致时省略。`reasoningTokens` 存在时只是信息性细节，已经包含在 `outputTokens` 中；汇总时不得重复相加。可选的 `costUsd` 是适配器报告的本次调用美元费用；没有费率或计价总额为 0 的适配器会省略它。
 
 ```ts type-equiv
 /**
@@ -356,6 +356,11 @@ interface TokenUsage {
   cacheReadTokens?: number
   cacheWriteTokens?: number
   reasoningTokens?: number
+  /**
+   * Adapter-reported USD for this call; pi-ai copies `usage.cost.total` from
+   * catalog rates; omit when the adapter has no rates or the priced total is 0.
+   */
+  costUsd?: number
 }
 ```
 
@@ -682,10 +687,10 @@ interface ToolSchema {
  */
 interface LlmModelDiscoveryRequest {
   /**
-   * Route the draft is editing, when it edits an existing one. A route whose
-   * adapter already knows its models answers from that knowledge instead of
-   * asking the endpoint — the adapter's own registry is the better answer, and
-   * it costs no network call.
+   * Route the draft is editing, when it edits an existing one. A catalog
+   * route answers from the installed registry, plus any live listing the
+   * owning adapter overlays; a route the catalog does not describe is asked
+   * over the wire.
    */
   provider?: string
   /**
@@ -971,6 +976,13 @@ registerModelDiscovery( settingsNs: string, discover: ( request: LlmModelDiscove
 async discoverModels( settingsNs: string, request: LlmModelDiscoveryRequest, signal?: AbortSignal, ): Promise<LlmDiscoveredModel[]>
 
 /**
+ * Disconnect a provider-managed route through its registered adapter.
+ * @param provider - registered provider route to disconnect.
+ * @returns nothing; a successful call unregisters the live route.
+ */
+@Remote('logout') async logout(provider: string): Promise<void>
+
+/**
  * Remote adapter for one draft provider interrogation.
  * @param settingsNs - namespace whose registered discovery serves this draft.
  * @param request - endpoint, protocol, and one-shot credential to use.
@@ -979,6 +991,67 @@ async discoverModels( settingsNs: string, request: LlmModelDiscoveryRequest, sig
  * @throws RemoteError with `llm/model-discovery-rejected` when discovery refuses or fails.
  */
 @Remote('discoverModels') async remoteDiscoverModels( settingsNs: string, request: LlmModelDiscoveryRequest, signal: AbortSignal, ): Promise<LlmDiscoveredModel[]>
+
+/**
+ * Offer to sign a provider route in through OAuth on behalf of the settings
+ * namespace this plugin owns. The namespace is the key for the same reason
+ * discovery is keyed that way: a route being signed in has no live
+ * registration to name yet. Disposed with the fiber.
+ * @param settingsNs - the namespace whose routes this login serves.
+ * @param login - signs in one provider and must honor the supplied signal.
+ * @returns the disposer that withdraws the offer.
+ */
+registerOAuthLogin( settingsNs: string, login: (provider: string, signal?: AbortSignal) => Promise<void>, ): () => void
+
+/**
+ * Sign one provider route in through its namespace's OAuth offer.
+ * @param settingsNs - namespace whose registered login serves this provider.
+ * @param provider - dormant OAuth route to sign in.
+ * @param signal - caller cancellation.
+ * @returns nothing; a successful call registers the live route.
+ */
+async loginOAuth(settingsNs: string, provider: string, signal?: AbortSignal): Promise<void>
+
+/**
+ * Remote adapter for one provider sign-in.
+ * @param settingsNs - namespace whose registered login serves this provider.
+ * @param provider - dormant OAuth route to sign in.
+ * @param signal - caller cancellation supplied by the Remote carrier.
+ * @returns nothing; a successful call registers the live route.
+ * @throws RemoteError with `llm/login-rejected` when login refuses or fails.
+ */
+@Remote('loginOAuth') async remoteLoginOAuth(settingsNs: string, provider: string, signal: AbortSignal): Promise<void>
+
+/**
+ * Offer to store one provider API key through the provider's own login
+ * method on behalf of the settings namespace this plugin owns. Disposed
+ * with the fiber.
+ * @param settingsNs - the namespace whose routes this login serves.
+ * @param login - stores one provider key and must honor the supplied signal.
+ * @returns the disposer that withdraws the offer.
+ */
+registerApiKeyLogin( settingsNs: string, login: (provider: string, apiKey: string, signal?: AbortSignal) => Promise<void>, ): () => void
+
+/**
+ * Store one provider key through its namespace's API-key login offer.
+ * @param settingsNs - namespace whose registered login serves this provider.
+ * @param provider - dormant API-key route to connect.
+ * @param apiKey - secret supplied for this login alone.
+ * @param signal - caller cancellation.
+ * @returns nothing; a successful call registers the live route.
+ */
+async loginApiKey( settingsNs: string, provider: string, apiKey: string, signal?: AbortSignal, ): Promise<void>
+
+/**
+ * Remote adapter for one provider API-key login.
+ * @param settingsNs - namespace whose registered login serves this provider.
+ * @param provider - dormant API-key route to connect.
+ * @param apiKey - secret supplied for this login alone.
+ * @param signal - caller cancellation supplied by the Remote carrier.
+ * @returns nothing; a successful call registers the live route.
+ * @throws RemoteError with `llm/login-rejected` when login refuses or fails.
+ */
+@Remote('loginApiKey') async remoteLoginApiKey( settingsNs: string, provider: string, apiKey: string, signal: AbortSignal, ): Promise<void>
 
 /**
  * Resolve the retry policy captured when one provider route was registered.

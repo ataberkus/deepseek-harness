@@ -293,6 +293,7 @@ export class SessionInputShell implements SessionInput {
   /**
    * Enter edit mode for a durable direct user message. The target's previous
    * draft is captured once so cancellation never loses text typed before edit.
+   * @param target - the durable message to edit and its replacement draft.
    */
   beginEdit(target: ConversationEditDraft): void {
     if (this.snapshot.phase === 'adjudicating' || this.snapshot.phase === 'submitting') return

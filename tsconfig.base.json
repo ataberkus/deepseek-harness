@@ -331,6 +331,7 @@
       "@deepseek-ai/dsh-lsp": ["./packages/lsp/lsp/src"],
       "@deepseek-ai/dsh-lsp-stdio": ["./packages/lsp/lsp-stdio/src"],
       "@deepseek-ai/dsh-mcp-client": ["./packages/mcp/mcp-client/src"],
+      "@deepseek-ai/dsh-mcp-manager": ["./packages/mcp/mcp-manager/src"],
       "@deepseek-ai/dsh-message-feedback": ["./packages/feedback/message-feedback/src"],
       "@deepseek-ai/dsh-native-command": ["./packages/util/native-command/src"],
       "@deepseek-ai/dsh-output-retention": ["./packages/util/output-retention/src"],
@@ -461,9 +462,7 @@
       "@deepseek-ai/dsh-workflow-worker-thread": ["./packages/workflow/workflow-worker-thread/src"],
       "@deepseek-ai/dsh-workspace/invariant": ["./packages/workspace/workspace/src/invariant.ts"],
       "@deepseek-ai/dsh-workspace-checkpoint": ["./packages/session/workspace-checkpoint/src"],
-      "@deepseek-ai/dsh-workspace-checkpoint/invariant": ["./packages/session/workspace-checkpoint/src/invariant.ts"],
       "@deepseek-ai/dsh-workspace-checkpoint-capture": ["./packages/session/workspace-checkpoint-capture/src"],
-      "@deepseek-ai/dsh-workspace-checkpoint-capture/invariant": ["./packages/session/workspace-checkpoint-capture/src/invariant.ts"],
       "@deepseek-ai/dsh-workspace-checkpoint-local": ["./packages/session/workspace-checkpoint-local/src"],
       "@deepseek-ai/dsh-workspace-checkpoint-local/invariant": ["./packages/session/workspace-checkpoint-local/src/invariant.ts"]
       // END generated package aliases

@@ -9,7 +9,7 @@ kind: "package-group"
 
 ## 概述
 
-`mcp/` 组把 harness 连接到 Model Context Protocol（MCP）工具服务器生态。其中一个包挂载单台外部服务器——文件系统、GitHub、数据库或记忆服务器——使该服务器的工具以稳定的服务器限定名称提供给模型，并可作为原生工具调用；配套的管理器为 `mcp` 设置分节中每个启用的条目挂载一个这样的客户端，因此运维人员无需编辑 `cordis.yml` 即可配置整个舰队。每个服务器对应一个配置项；默认不启用任何服务器，因此按需逐个启用。只桥接 Tools 能力：MCP resources 与 prompts 不受支持。本页提供该组的索引；具体包的约定由其 README 说明。
+`mcp/` 组把 harness 连接到 Model Context Protocol（MCP）工具服务器。`mcp-client` 挂载一台外部服务器——文件系统、GitHub、数据库或记忆服务器——使模型以稳定的服务器限定名称把它的工具当作原生工具调用。`mcp-manager` 为 `mcp` 设置分节中每个启用的条目挂载一个客户端，因此运维人员无需编辑 `cordis.yml` 即可配置服务器。默认不启用任何服务器，需按服务器逐个启用。只桥接 Tools 能力：MCP resources 与 prompts 不受支持。本页提供该组的索引；各包的约定由其 README 说明。
 
 ## 目录
 

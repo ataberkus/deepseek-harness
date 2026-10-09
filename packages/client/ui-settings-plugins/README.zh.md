@@ -25,7 +25,7 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用本包
 
-打开设置中的「插件」分区并选择**插件配置**标签页，即可编辑本部署所组装的宿主平面插件。卡片依次为 shell 执行器（`bash`）、agent loop（智能体循环）的工具调用并行度（`agent-loop`）、subagent 模型选择（`subagent-model-selection`）、DeepSeek 搜索提供方（`web-search-deepseek`）、工作区检查点，以及 MCP 舰队（`mcp`）。
+打开设置中的「插件」分区并选择**插件配置**标签页，即可编辑本部署所组装的宿主平面插件。卡片依次为 shell 执行器（`bash`）、agent loop（智能体循环）的工具调用并行度（`agent-loop`）、subagent 模型选择（`subagent-model-selection`）、DeepSeek 搜索提供方（`web-search-deepseek`）、工作区检查点（`workspace-checkpoint`），以及 MCP 舰队（`mcp`）。
 
 ### 这里会出现什么
 

@@ -117,7 +117,7 @@ export function McpCard(props: McpCardProps) {
               type="text"
               value={form.name}
               disabled={disabled}
-              placeholder="github"
+              placeholder={t('mcpNamePlaceholder')}
               autoComplete="off"
               spellCheck={false}
               onChange={event => { edit({ name: event.target.value }) }}
@@ -147,7 +147,7 @@ export function McpCard(props: McpCardProps) {
                     type="text"
                     value={form.command}
                     disabled={disabled}
-                    placeholder="npx"
+                    placeholder={t('mcpCommandPlaceholder')}
                     autoComplete="off"
                     spellCheck={false}
                     onChange={event => { edit({ command: event.target.value }) }}
@@ -160,7 +160,7 @@ export function McpCard(props: McpCardProps) {
                     className={css.area}
                     value={form.argsText}
                     disabled={disabled}
-                    placeholder={'-y\n@modelcontextprotocol/server-github'}
+                    placeholder={t('mcpArgsPlaceholder')}
                     spellCheck={false}
                     onChange={event => { edit({ argsText: event.target.value }) }}
                   />
@@ -176,7 +176,7 @@ export function McpCard(props: McpCardProps) {
                   type="text"
                   value={form.url}
                   disabled={disabled}
-                  placeholder="http://localhost:3000/mcp"
+                  placeholder={t('mcpUrlPlaceholder')}
                   autoComplete="off"
                   spellCheck={false}
                   onChange={event => { edit({ url: event.target.value }) }}
