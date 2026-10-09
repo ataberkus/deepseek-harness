@@ -202,7 +202,7 @@ describe('LocalWorkspaceCheckpoint capture', () => {
           ? { ...entry, hash: '0'.repeat(64) }
           : entry),
       }
-    }) as typeof original
+    })
     try {
       const record = await harness.ctx.workspaceCheckpoint.capture({
         sessionId: SessionId('s1'),

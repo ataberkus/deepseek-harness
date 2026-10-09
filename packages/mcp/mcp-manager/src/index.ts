@@ -179,6 +179,8 @@ export function apply(ctx: Context, config: ResolvedConfig): void {
   ctx.effect(() => () => {
     closed = true
   }, 'mcp-manager.close')
+  /** Read the close flag fresh after each await; disposal can land mid-reconcile. */
+  const isClosed = (): boolean => closed
   let tail: Promise<void> = Promise.resolve()
   /**
    * Reconcile live children with the currently authoritative section. Removals
@@ -187,11 +189,11 @@ export function apply(ctx: Context, config: ResolvedConfig): void {
    * refused entry keeps the previous generation serving.
    */
   const reconcile = async (): Promise<void> => {
-    if (closed) return
+    if (isClosed()) return
     const resolved = current()
     const desired = new Map<string, McpClient.Config>()
     for (const [serverName, entry] of Object.entries(resolved.servers)) {
-      if (entry.enabled === false) continue
+      if (!entry.enabled) continue
       desired.set(serverName, toClientConfig(serverName, entry))
     }
     for (const [serverName, child] of [...live]) {
@@ -205,7 +207,7 @@ export function apply(ctx: Context, config: ResolvedConfig): void {
         }
       }
     }
-    if (closed) return
+    if (isClosed()) return
     for (const [serverName, next] of desired) {
       const prev = live.get(serverName)
       if (prev !== undefined && deepEqualJson(prev.config, next)) continue
@@ -225,11 +227,11 @@ export function apply(ctx: Context, config: ResolvedConfig): void {
           ctx.logger.error(`mcp-manager: disposing server "${serverName}" before remount failed`)
           ctx.logger.error(error)
         }
-        if (closed) return
+        if (isClosed()) return
       }
       try {
         const fiber = await ctx.plugin(McpClient, parsed)
-        if (closed) {
+        if (isClosed()) {
           await fiber.dispose().catch((error: unknown) => {
             ctx.logger.error(`mcp-manager: disposing late-mounted server "${serverName}" failed`)
             ctx.logger.error(error)
@@ -262,7 +264,7 @@ export function apply(ctx: Context, config: ResolvedConfig): void {
     settingsCtx.settings.installSection(ctx, MCP_SETTINGS_NAMESPACE, Config, config, {
       validate: assertServiceableMcpConfig,
       setSource: (source) => {
-        current = source as () => ResolvedConfig
+        current = source
       },
       onChange: () => {
         schedule()
