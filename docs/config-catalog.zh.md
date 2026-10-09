@@ -215,7 +215,7 @@ export interface Config {
 }
 ```
 
-来源：[`packages/api/session-controller/src/index.ts:69`](../packages/api/session-controller/src/index.ts)
+来源：[`packages/api/session-controller/src/index.ts:77`](../packages/api/session-controller/src/index.ts)
 
 <a id="deepseek-aidsh-api-settings-controller"></a>
 
@@ -1119,19 +1119,21 @@ export interface Config {
 export interface PiAiProviderProfile {
   /** Credential reference (environment-variable name) resolved per request through `ctx.credentials`. */
   apiKeyEnv?: string
-  /** Name shown by configuration surfaces; defaults to the route key. */
+  /** Name shown by configuration surfaces; LM Studio defaults to its product name, other routes to the route key. */
   displayName?: string
   /**
    * Wire protocol every model on this route speaks. Omission keeps each
    * installed catalog model's own protocol, which is why a catalog route needs
-   * no protocol at all; a route the catalog does not ship must name one.
+   * no protocol at all; LM Studio supplies its OpenAI-compatible default, and every
+   * other route the catalog does not ship must name one.
    */
   api?: string
-  /** Endpoint for this route's models; defaults to the installed catalog's endpoint. */
+  /** Endpoint for this route's models; LM Studio defaults locally, other catalog routes use their installed endpoint. */
   baseURL?: string
   /**
    * This route's model catalog. Omission serves the installed catalog for the
-   * route unchanged; an explicit list replaces it, each entry defaulting its
+   * route unchanged, except that LM Studio requires an explicit list; an explicit
+   * list replaces it, each entry defaulting its
    * unset fields from the installed model of the same id.
    */
   models?: PiAiModelProfile[]
@@ -1371,7 +1373,7 @@ export type PiAiThinkingTokenBudgetField = NonNullable<OpenAICompletionsCompat['
 
 依赖：`Api`（`@earendil-works/pi-ai`）· `CacheRetention`（`@earendil-works/pi-ai`）· `Model`（`@earendil-works/pi-ai`）· `ModelThinkingLevel`（`@earendil-works/pi-ai`）· `OpenAICompletionsCompat`（`@earendil-works/pi-ai`）· [`RetryPolicyConfig`](../packages/llm/llm/src/index.ts) · `ThinkingBudgets`（`@earendil-works/pi-ai`）· `Transport`（`@earendil-works/pi-ai`)
 
-来源：[`packages/llm/llm-pi-ai/src/config.ts:221`](../packages/llm/llm-pi-ai/src/config.ts)
+来源：[`packages/llm/llm-pi-ai/src/config.ts:232`](../packages/llm/llm-pi-ai/src/config.ts)
 
 <a id="deepseek-aidsh-llm-replay"></a>
 
@@ -1579,6 +1581,87 @@ export interface ReconnectConfig {
 ```
 
 来源：[`packages/mcp/mcp-client/src/index.ts:98`](../packages/mcp/mcp-client/src/index.ts)
+
+<a id="deepseek-aidsh-mcp-manager"></a>
+
+## `@deepseek-ai/dsh-mcp-manager`
+
+需要：`tools`
+
+```ts config-catalog
+/** Resolved manager configuration after schemastery applied the defaults. */
+type ResolvedConfig = {
+  /** Servers by name, each with its defaults applied. */
+  servers: Record<string, ResolvedEntry>
+}
+
+/** One resolved entry with defaults applied. */
+type ResolvedEntry = (
+  | Omit<McpStdioServerEntry, 'enabled' | 'args' | 'env' | 'cwd' | 'toolCallTimeoutMs' | 'failOnStartupError'>
+  | Omit<McpHttpServerEntry, 'enabled' | 'headers' | 'toolCallTimeoutMs' | 'failOnStartupError'>
+) & {
+  /** False keeps the configuration but mounts nothing. */
+  enabled: boolean
+  /** Per-tool-call timeout in milliseconds. */
+  toolCallTimeoutMs: number
+  /** Fail plugin activation when the initial connection or tool synchronization fails. */
+  failOnStartupError: boolean
+} & Record<string, unknown>
+
+/** One stdio server entry; the dict key supplies `serverName`. */
+export interface McpStdioServerEntry {
+  /** Selects child-process stdio transport. */
+  transport: 'stdio'
+  /** False keeps the configuration but mounts nothing. */
+  enabled?: boolean
+  /** Executable used to start the server. */
+  command: string
+  /** Arguments passed directly, without shell interpolation. */
+  args?: string[]
+  /** Extra env vars merged on top of scrubbed ambient env, stored in plain text. */
+  env?: Record<string, string>
+  /** Working directory for the child process. */
+  cwd?: string
+  /** Per-tool-call timeout in milliseconds. */
+  toolCallTimeoutMs?: number
+  /** Fail plugin activation when the initial connection or tool synchronization fails. */
+  failOnStartupError?: boolean
+  /** Automatic reconnect policy after a lost connection; omission uses the defaults. */
+  reconnect?: McpReconnectEntry
+}
+
+/** One Streamable HTTP server entry; the dict key supplies `serverName`. */
+export interface McpHttpServerEntry {
+  /** Selects Streamable HTTP transport. */
+  transport: 'streamable-http'
+  /** False keeps the configuration but mounts nothing. */
+  enabled?: boolean
+  /** MCP endpoint URL. */
+  url: string
+  /** Additional headers attached to MCP requests, stored in plain text. */
+  headers?: Record<string, string>
+  /** Per-tool-call timeout in milliseconds. */
+  toolCallTimeoutMs?: number
+  /** Fail plugin activation when the initial connection or tool synchronization fails. */
+  failOnStartupError?: boolean
+  /** Automatic reconnect policy after a lost connection; omission uses the defaults. */
+  reconnect?: McpReconnectEntry
+}
+
+/** Automatic reconnect policy for one settings-driven server entry. */
+export interface McpReconnectEntry {
+  /** Reconnect automatically after a lost connection. */
+  enabled?: boolean
+  /** First reconnect delay in milliseconds; doubles per consecutive failed attempt. */
+  initialDelayMs?: number
+  /** Backoff ceiling in milliseconds; also the uptime after which the attempt budget resets. */
+  maxDelayMs?: number
+  /** Consecutive failed attempts per outage before giving up for good. */
+  maxAttempts?: number
+}
+```
+
+来源：[`packages/mcp/mcp-manager/src/index.ts:101`](../packages/mcp/mcp-manager/src/index.ts)
 
 <a id="deepseek-aidsh-message-feedback"></a>
 
@@ -3440,6 +3523,34 @@ export interface Config {
 
 来源：[`packages/workflow/workflow-worker-thread/src/index.ts:32`](../packages/workflow/workflow-worker-thread/src/index.ts)
 
+<a id="deepseek-aidsh-workspace-checkpoint-local"></a>
+
+## `@deepseek-ai/dsh-workspace-checkpoint-local`
+
+需要：`storageDomain`
+
+```ts config-catalog
+/** Deployment-varying local provider settings. */
+export interface Config {
+  /** Whether automatic workspace capture and recovery admission are enabled. Defaults to false. */
+  enabled?: boolean
+  /** Object-store root. When omitted, `{dshHome}/workspace-checkpoints`. */
+  objectRoot?: string
+  /** Harness-home override used when `objectRoot` is omitted. */
+  dshHome?: string
+  /** Hard cap on stored blob bytes. Capture above this is fail-soft unavailable. */
+  maxTotalBytes: number
+  /** Glob patterns skipped by capture and restore planning. */
+  excludeGlobs: string[]
+  /** Extra `buildManifest` attempts after `CHECKPOINT_CONCURRENT_WRITE`. */
+  captureRetryCount: number
+  /** Delay between concurrent-write retries, in milliseconds. */
+  captureRetryDelayMs: number
+}
+```
+
+来源：[`packages/session/workspace-checkpoint-local/src/config.ts:11`](../packages/session/workspace-checkpoint-local/src/config.ts)
+
 ## 无配置的可加载插件
 
 这些插件通过 `cordis.yml` 中不含 `config:` 块的条目加载；它们未声明任何配置接口。
@@ -3527,6 +3638,7 @@ export interface Config {
 - `@deepseek-ai/dsh-user-questions`（[`packages/interaction/user-questions/src/index.ts`](../packages/interaction/user-questions/src/index.ts)）
 - `@deepseek-ai/dsh-webhook` — 需要 `agents` · `agentDefaultModel` · `agentPresets` · `permissionPresets` · `sessionTitle` · `workspaceRegistry`（[`packages/webhook/webhook/src/index.ts`](../packages/webhook/webhook/src/index.ts)）
 - `@deepseek-ai/dsh-workspace` — 需要 `storageDomain` · `sessionPersistence`（[`packages/workspace/workspace/src/index.ts`](../packages/workspace/workspace/src/index.ts)）
+- `@deepseek-ai/dsh-workspace-checkpoint-capture` — 需要 `workspaceCheckpoint` · `sessions` · `llm` · `tools`（[`packages/session/workspace-checkpoint-capture/src/index.ts`](../packages/session/workspace-checkpoint-capture/src/index.ts)）
 
 ## Seam 包（不可直接加载）
 
@@ -3548,6 +3660,7 @@ export interface Config {
 - `@deepseek-ai/dsh-spill` — 抽象 `SpillStore`（[`packages/spill/spill/src/index.ts`](../packages/spill/spill/src/index.ts)）
 - `@deepseek-ai/dsh-subprocess` — 抽象 `SubprocessRuntime`（[`packages/subprocess/subprocess/src/index.ts`](../packages/subprocess/subprocess/src/index.ts)）
 - `@deepseek-ai/dsh-workflow` — 抽象 `WorkflowEngine`（[`packages/workflow/workflow/src/index.ts`](../packages/workflow/workflow/src/index.ts)）
+- `@deepseek-ai/dsh-workspace-checkpoint` — 抽象 `WorkspaceCheckpoint`（[`packages/session/workspace-checkpoint/src/index.ts`](../packages/session/workspace-checkpoint/src/index.ts)）
 ## 库包（无插件入口）
 
 由其他包作为库导入；`cordis.yml` 无法加载它们。
