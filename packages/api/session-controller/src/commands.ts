@@ -586,7 +586,7 @@ export class SessionCommandController {
           sessionId: childId,
           cwd,
           parentCheckpointId: selected.id,
-          boundarySeq: turnStartIndex > 0 ? source.events[turnStartIndex - 1]?.seq ?? -1 : -1,
+          boundarySeq: lastEventSeq(source.events.slice(0, turnStartIndex)),
           role: 'initial',
           turnOutcome: 'initial',
           lease,
@@ -689,25 +689,28 @@ export class SessionCommandController {
     const applied = checkpoint.sessionIndex(request.sessionId)?.appliedCheckpointId
     if (applied === selected.id) return { restored: true, checkpointId: selected.id }
     this.emitCheckpointOperation(checkpoint, request.sessionId, views, selected, true, { phase: 'restoring' })
-    let lease: Awaited<ReturnType<WorkspaceCheckpoint['acquireLease']>> | undefined
-    let emergency: Awaited<ReturnType<WorkspaceCheckpoint['capture']>> | undefined
+    let lease: WorkspaceLease | undefined
+    let captured: CapturedEmergency | undefined
     try {
       lease = await checkpoint.acquireLease(workspaceKey)
-      emergency = await checkpoint.capture({
-        sessionId: request.sessionId,
-        cwd,
-        boundarySeq: source.events.at(-1)?.seq ?? -1,
-        role: 'emergency',
-        turnOutcome: 'failed',
+      captured = {
         lease,
-      })
+        emergency: await checkpoint.capture({
+          sessionId: request.sessionId,
+          cwd,
+          boundarySeq: lastEventSeq(source.events),
+          role: 'emergency',
+          turnOutcome: 'failed',
+          lease,
+        }),
+      }
       await checkpoint.restore({ checkpointId: selected.id, cwd, lease })
       await checkpoint.clearRecoveryRequired(workspaceKey)
       return { restored: true, checkpointId: selected.id }
     } catch (error) {
-      if (emergency !== undefined) {
+      if (captured !== undefined) {
         await rollbackToEmergency(checkpoint, {
-          sessionId: request.sessionId, cwd, workspaceKey, emergency, lease, clearRecovery: false,
+          sessionId: request.sessionId, cwd, workspaceKey, ...captured, clearRecovery: false,
         })
       }
       return rejectCheckpointCommand(error, 'activation', request.sessionId, selected.id)
@@ -908,27 +911,28 @@ export class SessionCommandController {
     const { checkpoint, request, source, cwd, workspaceKey, selected, report } = transaction
     report('preparing')
     let lease: WorkspaceLease | undefined
-    let emergency: CheckpointRecord | undefined
+    let captured: CapturedEmergency | undefined
     try {
       report('capturing-emergency')
       lease = await checkpoint.acquireLease(workspaceKey)
-      emergency = await checkpoint.capture({
+      const emergency = await checkpoint.capture({
         sessionId: request.sessionId,
         cwd,
-        boundarySeq: source.events.at(-1)?.seq ?? -1,
+        boundarySeq: lastEventSeq(source.events),
         role: 'emergency',
         turnOutcome: 'failed',
         lease,
       })
+      captured = { lease, emergency }
       if (emergency.status.kind !== 'ready') throw new Error(emergency.status.reason)
       report('restoring')
       await checkpoint.restore({ checkpointId: selected.id, cwd, lease })
       return await transaction.apply(lease, emergency)
     } catch (error) {
       report('failed', String(error))
-      if (emergency !== undefined) {
+      if (captured !== undefined) {
         await rollbackToEmergency(checkpoint, {
-          sessionId: request.sessionId, cwd, workspaceKey, emergency, lease, clearRecovery: true,
+          sessionId: request.sessionId, cwd, workspaceKey, ...captured, clearRecovery: true,
         })
       }
       return rejectCheckpointCommand(error, transaction.command, request.sessionId, request.checkpointId)
@@ -1076,6 +1080,21 @@ interface CheckpointTurn {
   readonly turnEndIndex: number
 }
 
+/** Emergency checkpoint plus the lease it was captured under. */
+interface CapturedEmergency {
+  readonly lease: WorkspaceLease
+  readonly emergency: CheckpointRecord
+}
+
+/**
+ * Sequence of the last event, or `-1` for an empty log.
+ * @param events - Session events in log order.
+ * @returns the checkpoint boundary sequence after those events.
+ */
+function lastEventSeq(events: readonly SessionEvent[]): number {
+  return events.at(-1)?.seq ?? -1
+}
+
 interface SelectedTurnCheckpoint {
   /** Seq of the last `turn/end` before the target turn; `-1` when none. */
   readonly sourceBoundarySeq: number
@@ -1141,7 +1160,7 @@ async function rollbackToEmergency(
     readonly cwd: string
     readonly workspaceKey: string
     readonly emergency: CheckpointRecord
-    readonly lease: WorkspaceLease | undefined
+    readonly lease: WorkspaceLease
     readonly clearRecovery: boolean
   },
 ): Promise<void> {
@@ -1150,7 +1169,7 @@ async function rollbackToEmergency(
     await checkpoint.restore({
       checkpointId: emergency.id,
       cwd,
-      ...lease === undefined ? {} : { lease },
+      lease,
     })
     if (rollback.clearRecovery) await checkpoint.clearRecoveryRequired(workspaceKey)
   } catch (rollbackError) {

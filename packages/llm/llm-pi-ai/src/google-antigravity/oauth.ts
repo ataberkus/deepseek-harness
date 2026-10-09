@@ -51,19 +51,11 @@ export interface AntigravityCallbackServer {
 export async function createAntigravityCallbackServer(
   port = GOOGLE_ANTIGRAVITY_CALLBACK_PORT,
 ): Promise<AntigravityCallbackServer> {
-  let settled = false
-  let notify: ((result: CallbackResult | CallbackFailure) => void) | undefined
-  const callbackPromise = new Promise<CallbackResult | CallbackFailure>((resolve) => {
-    notify = resolve
-  })
+  const callback = Promise.withResolvers<CallbackResult | CallbackFailure>()
+  const callbackPromise = callback.promise
 
   const server = createServer((req, res) => {
-    handleCallbackRequest(req, res, (result) => {
-      if (!settled && notify !== undefined) {
-        settled = true
-        notify(result)
-      }
-    })
+    handleCallbackRequest(req, res, callback.resolve)
   })
 
   await new Promise<void>((resolve, reject) => {
@@ -95,7 +87,7 @@ export async function createAntigravityCallbackServer(
         }
         signal?.addEventListener('abort', onAbort)
 
-        callbackPromise
+        void callbackPromise
           .then((result) => {
             signal?.removeEventListener('abort', onAbort)
             void closeServer(server).finally(() => {
@@ -104,12 +96,6 @@ export async function createAntigravityCallbackServer(
               } else {
                 reject(new Error(`Antigravity OAuth failed: ${result.message}`))
               }
-            })
-          })
-          .catch((error: unknown) => {
-            signal?.removeEventListener('abort', onAbort)
-            void closeServer(server).finally(() => {
-              reject(error instanceof Error ? error : new Error(String(error)))
             })
           })
       })
@@ -342,7 +328,7 @@ export async function discoverProject(accessToken: string, signal?: AbortSignal)
   // Provision via onboardUser
   const onboardHeaders: Record<string, string> = {
     ...headers,
-    'User-Agent': `${headers['User-Agent'] ?? antigravityUserAgent()} google-api-nodejs-client/10.3.0`,
+    'User-Agent': `${antigravityUserAgent()} google-api-nodejs-client/10.3.0`,
     'X-Goog-Api-Client': 'gl-node/22.21.1',
   }
   const onboardBody = {
@@ -483,7 +469,7 @@ function handleCallbackRequest(
   response: ServerResponse,
   done: (result: CallbackResult | CallbackFailure) => void,
 ): void {
-  const url = new URL(request.url ?? '/', 'http://127.0.0.1')
+  const url = new URL(request.url as string, 'http://127.0.0.1')
   if (url.pathname !== GOOGLE_ANTIGRAVITY_CALLBACK_PATH) {
     writeHtml(response, 404, 'Not Found')
     return

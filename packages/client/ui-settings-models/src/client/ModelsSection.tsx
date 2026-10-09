@@ -554,7 +554,6 @@ function Loaded({ injected, renderSlot }: { injected: ModelsSectionFace; renderS
           const failure = connectFailure?.provider === row.entry.provider ? connectFailure.message : undefined
           const apiKey = loginApiKeys[row.entry.provider] ?? ''
           const connect = (): void => {
-            if (connecting !== undefined) return
             setConnectFailure(undefined)
             if (row.entry.auth === 'api-key') {
               const invalid = apiKey.length === 0 ? 'keyRequired' : apiKeyFailure(apiKey)

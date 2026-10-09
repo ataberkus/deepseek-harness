@@ -309,7 +309,7 @@ export class PiAiAdapter extends LlmAdapter {
     try {
       return await pending
     } catch (error) {
-      if (snapshot.served.get(provider) === pending) snapshot.served.delete(provider)
+      snapshot.served.delete(provider)
       throw error
     }
   }

@@ -186,6 +186,7 @@ async function runCursorStream(
           const id = fieldVarint(execFields, 1)
           const execId = fieldString(execFields, 15)
           const idNum = id !== undefined && id <= BigInt(Number.MAX_SAFE_INTEGER) ? Number(id) : undefined
+          const mcpArgs = fieldRepeated(execFields, 11)[0]
           if (idNum !== undefined) {
             if (fieldRepeated(execFields, 10).length > 0) {
               sendToCursor?.(encodeRequestContextResponse(idNum, execId, context.systemPrompt, context.tools))
@@ -195,8 +196,8 @@ async function runCursorStream(
               sendToCursor?.(encodeAllowlistPrecheckResponse(idNum, execId, 42))
             } else if (fieldRepeated(execFields, 43).length > 0) {
               sendToCursor?.(encodeAllowlistPrecheckResponse(idNum, execId, 43))
-            } else if (fieldRepeated(execFields, 11).length > 0) {
-              const mcpArgsFields = decodeFields(fieldRepeated(execFields, 11)[0] ?? new Uint8Array())
+            } else if (mcpArgs !== undefined) {
+              const mcpArgsFields = decodeFields(mcpArgs)
               const isApproval = fieldVarint(mcpArgsFields, 7) === 1n || fieldRepeated(mcpArgsFields, 6).length > 0
               if (isApproval) {
                 const execClientMsg = concat(
