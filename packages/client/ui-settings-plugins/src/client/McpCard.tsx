@@ -120,7 +120,7 @@ export function McpCard(props: McpCardProps) {
               placeholder={t('mcpNamePlaceholder')}
               autoComplete="off"
               spellCheck={false}
-              onChange={event => { edit({ name: event.target.value }) }}
+              onChange={(event) => { edit({ name: event.target.value }) }}
             />
           </div>
           <div className={css.field}>
@@ -130,7 +130,7 @@ export function McpCard(props: McpCardProps) {
               className={css.control}
               value={form.transport}
               disabled={disabled}
-              onChange={event => { edit({ transport: event.target.value as McpAddForm['transport'] }) }}
+              onChange={(event) => { edit({ transport: event.target.value as McpAddForm['transport'] }) }}
             >
               <option value="stdio">{t('mcpTransportStdio')}</option>
               <option value="streamable-http">{t('mcpTransportHttp')}</option>
@@ -150,7 +150,7 @@ export function McpCard(props: McpCardProps) {
                     placeholder={t('mcpCommandPlaceholder')}
                     autoComplete="off"
                     spellCheck={false}
-                    onChange={event => { edit({ command: event.target.value }) }}
+                    onChange={(event) => { edit({ command: event.target.value }) }}
                   />
                 </div>
                 <div className={`${css.field} ${css.span}`}>
@@ -162,7 +162,7 @@ export function McpCard(props: McpCardProps) {
                     disabled={disabled}
                     placeholder={t('mcpArgsPlaceholder')}
                     spellCheck={false}
-                    onChange={event => { edit({ argsText: event.target.value }) }}
+                    onChange={(event) => { edit({ argsText: event.target.value }) }}
                   />
                 </div>
               </>
@@ -179,7 +179,7 @@ export function McpCard(props: McpCardProps) {
                   placeholder={t('mcpUrlPlaceholder')}
                   autoComplete="off"
                   spellCheck={false}
-                  onChange={event => { edit({ url: event.target.value }) }}
+                  onChange={(event) => { edit({ url: event.target.value }) }}
                 />
               </div>
             )}

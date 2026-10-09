@@ -21,8 +21,8 @@ import type {
   TextContent,
   ThinkingContent,
   ToolCall,
-  Usage,
 } from '@earendil-works/pi-ai'
+import { abortedAssistant, emptyAssistant, failAssistantStream } from '../assistant-stream.ts'
 import {
   CURSOR_BASE_URL,
   CURSOR_CLIENT_HEARTBEAT_INTERVAL_MS,
@@ -57,15 +57,6 @@ import {
   latestTurnText,
   streamMaxMode,
 } from './request.ts'
-
-const ZERO_USAGE: Usage = {
-  input: 0,
-  output: 0,
-  cacheRead: 0,
-  cacheWrite: 0,
-  totalTokens: 0,
-  cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
-}
 
 interface SessionState {
   conversationId: string
@@ -107,7 +98,7 @@ async function runCursorStream(
   const pushPartial = (): AssistantMessage => ({ ...partial, content: [...partial.content] })
   try {
     if (options?.signal?.aborted) {
-      fail(stream, aborted(partial), 'aborted')
+      failAssistantStream(stream, abortedAssistant(partial), 'aborted')
       return
     }
     const accessToken = accessTokenFromOptions(options)
@@ -158,7 +149,7 @@ async function runCursorStream(
         ...options?.signal === undefined ? {} : { signal: options.signal },
       })) {
         if (options?.signal?.aborted) {
-          fail(stream, aborted(partial), 'aborted')
+          failAssistantStream(stream, abortedAssistant(partial), 'aborted')
           return
         }
         const message = decodeFields(payload)
@@ -302,7 +293,7 @@ async function runCursorStream(
     }
     closeOpenBlocks(stream, partial, textIndex, thinkingIndex, pushPartial)
     if (options?.signal?.aborted) {
-      fail(stream, aborted(partial), 'aborted')
+      failAssistantStream(stream, abortedAssistant(partial), 'aborted')
       return
     }
     if (toolCalls.length > 0) {
@@ -318,7 +309,7 @@ async function runCursorStream(
     stream.end(pushPartial())
   } catch (error) {
     if (options?.signal?.aborted) {
-      fail(stream, aborted(partial), 'aborted')
+      failAssistantStream(stream, abortedAssistant(partial), 'aborted')
       return
     }
     const failed: AssistantMessage = {
@@ -326,7 +317,7 @@ async function runCursorStream(
       stopReason: 'error',
       errorMessage: error instanceof Error ? error.message : String(error),
     }
-    fail(stream, failed, 'error')
+    failAssistantStream(stream, failed, 'error')
   }
 }
 
@@ -353,32 +344,6 @@ function accessTokenFromOptions(options: Omit<SimpleStreamOptions, 'toolChoice'>
   }
   const apiKey = options?.apiKey?.trim()
   return apiKey === undefined || apiKey.length === 0 ? undefined : apiKey
-}
-
-function emptyAssistant(model: Model<Api>): AssistantMessage {
-  return {
-    role: 'assistant',
-    content: [],
-    api: model.api,
-    provider: model.provider,
-    model: model.id,
-    usage: ZERO_USAGE,
-    stopReason: 'stop',
-    timestamp: Date.now(),
-  }
-}
-
-function aborted(partial: AssistantMessage): AssistantMessage {
-  return { ...partial, content: [...partial.content], stopReason: 'aborted', errorMessage: 'Request was aborted' }
-}
-
-function fail(
-  stream: AssistantMessageEventStream,
-  message: AssistantMessage,
-  reason: 'error' | 'aborted',
-): void {
-  stream.push({ type: 'error', reason, error: message })
-  stream.end(message)
 }
 
 function openText(

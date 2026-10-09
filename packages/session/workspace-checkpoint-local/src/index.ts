@@ -36,8 +36,7 @@ import { evictCheckpoints } from './retention.ts'
 import { captureCheckpoint, inspectCheckpoint, listCheckpoints, loadSessionIndex } from './store.ts'
 import { restoreCheckpoint } from './restore.ts'
 
-export { Config } from './config.ts'
-export type { Config as LocalWorkspaceCheckpointConfig } from './config.ts'
+export type { Config, Config as LocalWorkspaceCheckpointConfig } from './config.ts'
 export { hashCanonicalJson, hashFile } from './hash.ts'
 export { buildManifest } from './manifest.ts'
 export type { ManifestBuildOptions } from './manifest.ts'
@@ -51,6 +50,7 @@ export { restoreInternals } from './restore.ts'
  */
 export class LocalWorkspaceCheckpoint extends WorkspaceCheckpoint {
   static inject = ['storageDomain']
+  /** Loader schema. `objectRoot` and `dshHome` are optional; every other field is required. */
   static Config = z.object({
     enabled: z.boolean().default(false),
     objectRoot: z.string(),
@@ -224,21 +224,7 @@ export class LocalWorkspaceCheckpoint extends WorkspaceCheckpoint {
   override async markRecoveryRequired(workspaceKey: string, reason: string): Promise<void> {
     const key = await this.recoveryKey(workspaceKey)
     this.recovery.set(key, reason)
-    const domain = this.domain
-    if (domain === undefined) return
-    const checkpoints = domain.table('checkpoints')
-    const sessions = domain.table('sessions')
-    for (const [sessionId, index] of sessions.entries()) {
-      if (!index.checkpointIds.some(id => checkpoints.get(CheckpointId(id))?.workspaceKey === key)) continue
-      await sessions.put(sessionId, {
-        checkpointIds: index.checkpointIds,
-        ...index.appliedCheckpointId === undefined ? {} : { appliedCheckpointId: index.appliedCheckpointId },
-        ...index.emergencyCheckpointId === undefined ? {} : { emergencyCheckpointId: index.emergencyCheckpointId },
-        recoveryRequired: reason,
-        ...index.edit === undefined ? {} : { edit: index.edit },
-      })
-      this.ctx.emit('workspace-checkpoint/changed', SessionId(sessionId))
-    }
+    await this.rewriteRecoveryRequired(key, reason)
   }
 
   /**
@@ -247,6 +233,18 @@ export class LocalWorkspaceCheckpoint extends WorkspaceCheckpoint {
   override async clearRecoveryRequired(workspaceKey: string): Promise<void> {
     const key = await this.recoveryKey(workspaceKey)
     this.recovery.delete(key)
+    await this.rewriteRecoveryRequired(key, undefined)
+  }
+
+  /**
+   * Rewrite every session index row that references a checkpoint of the
+   * workspace, setting `recoveryRequired` to `reason` or removing it when
+   * `reason` is `undefined`, and emit `workspace-checkpoint/changed` per row.
+   * No-op before the storage domain is opened.
+   * @param key - canonical recovery key of the workspace.
+   * @param reason - durable diagnostic to record, or `undefined` to clear it.
+   */
+  private async rewriteRecoveryRequired(key: string, reason: string | undefined): Promise<void> {
     const domain = this.domain
     if (domain === undefined) return
     const checkpoints = domain.table('checkpoints')
@@ -257,6 +255,7 @@ export class LocalWorkspaceCheckpoint extends WorkspaceCheckpoint {
         checkpointIds: index.checkpointIds,
         ...index.appliedCheckpointId === undefined ? {} : { appliedCheckpointId: index.appliedCheckpointId },
         ...index.emergencyCheckpointId === undefined ? {} : { emergencyCheckpointId: index.emergencyCheckpointId },
+        ...reason === undefined ? {} : { recoveryRequired: reason },
         ...index.edit === undefined ? {} : { edit: index.edit },
       })
       this.ctx.emit('workspace-checkpoint/changed', SessionId(sessionId))

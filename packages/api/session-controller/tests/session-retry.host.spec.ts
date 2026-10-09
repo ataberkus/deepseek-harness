@@ -258,7 +258,7 @@ describe('session.retry', () => {
         session.append('turn/start', { turn })
         session.append('user/message', message, { surfaceOp: 'append' })
         session.append('turn/end', { turn, reason: { kind: 'completed' } })
-      }) as Agent['followup']
+      })
       ctx.agents.register(live)
 
       const value = await host(ctx, cwd).retry({
@@ -381,7 +381,7 @@ describe('session.retry', () => {
       const messageB = session.snapshotEvents().find(event => event.type === 'user/message' && messageText(event) === 'B')
       if (messageB === undefined) throw new Error('test message B was not appended')
       ctx.agents.register(agentFixture(ctx, session))
-      vi.mocked(checkpoint.recoveryRequired).mockResolvedValueOnce('rollback failed earlier')
+      vi.mocked(checkpoint).recoveryRequired.mockResolvedValueOnce('rollback failed earlier')
       await expect(host(ctx, cwd).retry({
         sessionId: session.id,
         messageSeq: messageB.seq,

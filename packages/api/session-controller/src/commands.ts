@@ -24,8 +24,10 @@ import { assertNever } from '@deepseek-ai/dsh-util-values'
 import { RemoteError, remoteErrorOf } from '@deepseek-ai/dsh-typert-protocol'
 import type {
   CheckpointEditLink,
+  CheckpointId,
   CheckpointOperationPhase,
   CheckpointRecord,
+  CheckpointView,
   WorkspaceCheckpoint,
   WorkspaceLease,
 } from '@deepseek-ai/dsh-workspace-checkpoint'
@@ -517,7 +519,7 @@ export class SessionCommandController {
         messageSeq: request.messageSeq,
       })
     }
-    let source = await this.readEditableSource(request.sessionId, request.messageSeq)
+    let source = await this.readCheckpointTurnSource(request.sessionId, request.messageSeq, editRefusal)
     const sourceAgent = this.ctx.agents.get(request.sessionId)
     if (sourceAgent !== undefined && sourceAgent.status !== 'idle') {
       sourceAgent.cancel({ kind: 'user' }, { keepInbox: true })
@@ -528,160 +530,83 @@ export class SessionCommandController {
           reason: 'agent did not become idle',
         })
       }
-      source = await this.readEditableSource(request.sessionId, request.messageSeq)
+      source = await this.readCheckpointTurnSource(request.sessionId, request.messageSeq, editRefusal)
     }
     if (sourceAgent !== undefined && (sourceAgent.inbox.nextTurn.length > 0 || sourceAgent.inbox.nextStep.length > 0)) {
       throw new RemoteError('session/agent-busy', `session "${request.sessionId}" has pending work`, {
         reason: 'pending inbox messages',
       })
     }
-    const cwd = source.header.cwd
-    if (cwd === undefined) throw editRefusal(request)
-    const workspaceKey = await canonicalWorkspaceKey(cwd)
-    const recovery = await checkpoint.recoveryRequired(workspaceKey)
-    if (recovery !== undefined) {
-      throw new RemoteError('checkpoint-recovery-required', recovery, {
-        sessionId: request.sessionId,
-        reason: recovery,
-      })
-    }
-    const targetIndex = source.events.findIndex(event => event.seq === request.messageSeq)
-    const target = source.events[targetIndex]
-    if (target === undefined
-      || target.type !== 'user/message'
-      || target.data.source.kind !== 'user'
-      || !isAppendSurfaceEvent(target)) {
-      throw editRefusal(request)
-    }
-    const turnStartIndex = source.events.findLastIndex((event, index) =>
-      index < targetIndex && event.type === 'turn/start')
-    const turnEndIndex = source.events.findIndex((event, index) =>
-      index > targetIndex && event.type === 'turn/end')
-    if (turnStartIndex < 0 || turnEndIndex < 0) throw editRefusal(request)
-    const sourceBoundarySeq = source.events
-      .slice(0, turnStartIndex)
-      .findLast(event => event.type === 'turn/end')?.seq ?? -1
-    const views = await checkpoint.list(request.sessionId)
-    const selected = await checkpoint.inspect(request.checkpointId).catch(() => undefined)
-    if (selected === undefined
-      || selected.sessionId !== request.sessionId
-      || selected.workspaceKey !== workspaceKey
-      || selected.boundarySeq !== sourceBoundarySeq
-      || selected.role === 'emergency'
-      || selected.status.kind !== 'ready'
-      || !selected.restoreEligible) {
-      throw checkpointUnavailable(request)
-    }
+    const turn = await this.locateCheckpointTurn(checkpoint, request, source, editRefusal)
+    const { cwd, workspaceKey, turnStartIndex } = turn
+    const { sourceBoundarySeq, views, selected } = await this.selectTurnCheckpoint(
+      checkpoint, request, source, workspaceKey, turnStartIndex,
+    )
     const operation = (phase: CheckpointOperationPhase, childSessionId?: SessionId, message?: string): void => {
-      this.ctx.emit('session/checkpoints', {
-        type: 'session/checkpoints',
-        sessionId: request.sessionId,
-        checkpoints: views,
-        enabled: checkpoint.enabled,
-        appliedCheckpointId: selected.id,
-        operation: {
-          sourceSessionId: request.sessionId,
-          ...(childSessionId === undefined ? {} : { childSessionId }),
-          checkpointId: selected.id,
-          phase,
-          fileCount: selected.fileCount,
-          ...(message === undefined ? {} : { message }),
-        },
-        branchCheckpoint: selected,
-        branchLabelIndex: selected.labelIndex,
-        workspaceResumable: true,
+      this.emitCheckpointOperation(checkpoint, request.sessionId, views, selected, true, {
+        phase,
+        ...(childSessionId === undefined ? {} : { childSessionId }),
+        ...(message === undefined ? {} : { message }),
       })
     }
-    operation('preparing')
-    let lease: WorkspaceLease | undefined
-    let emergency: CheckpointRecord | undefined
-    try {
-      operation('capturing-emergency')
-      lease = await checkpoint.acquireLease(workspaceKey)
-      emergency = await checkpoint.capture({
-        sessionId: request.sessionId,
-        cwd,
-        boundarySeq: source.events.at(-1)?.seq ?? -1,
-        role: 'emergency',
-        turnOutcome: 'failed',
-        lease,
-      })
-      if (emergency.status.kind !== 'ready') throw new Error(emergency.status.reason)
-      operation('restoring')
-      await checkpoint.restore({ checkpointId: selected.id, cwd, lease })
-      const childId = brandString<SessionId>(`session-${randomUUID()}`)
-      operation('creating-branch', childId)
-      const composition = await this.agents.composeAgent(
-        sourceAgent === undefined ? undefined : this.agents.presetForSession(sourceAgent.session),
-      )
-      const { provider, model } = this.ctx.agentDefaultModel.currentSelection()
-      await this.ctx.agents.create({
-        sessionId: childId,
-        seed: source.events.slice(0, turnStartIndex),
-        inheritedEventCount: SessionLogOffset(turnStartIndex),
-        meta: {
-          cwd,
-          parentSession: request.sessionId,
-          isSeeded: true,
-          ...(composition.agentPreset === undefined ? {} : { agentPreset: composition.agentPreset }),
-        },
-        agentOptions: { provider, model },
-        setup: composition.setup,
-      })
-      const workspace = await this.forkWorkspace(source.header)
-      if (workspace !== undefined) await workspace.attachSession(childId)
-      const childAgent = this.ctx.agents.get(childId)
-      if (childAgent === undefined) throw new Error(`child Agent "${childId}" was not attached`)
-      const childInitial = await checkpoint.capture({
-        sessionId: childId,
-        cwd,
-        parentCheckpointId: selected.id,
-        boundarySeq: turnStartIndex > 0 ? source.events[turnStartIndex - 1]?.seq ?? -1 : -1,
-        role: 'initial',
-        turnOutcome: 'initial',
-        lease,
-      })
-      if (childInitial.status.kind !== 'ready') throw new Error(childInitial.status.reason)
-      await checkpoint.recordEdit({
-        sourceSessionId: request.sessionId,
-        sourceBoundarySeq,
-        selectedCheckpointId: selected.id,
-        emergencyCheckpointId: emergency.id,
-        childSessionId: childId,
-      } satisfies CheckpointEditLink)
-      childAgent.followup(createUserMessage({
-        content: editedContent(target.data, request.text),
-        source: { kind: 'user' },
-      }))
-      operation('ready', childId)
-      return { sessionId: childId }
-    } catch (error) {
-      operation('failed', undefined, String(error))
-      if (emergency !== undefined) {
-        try {
-          await checkpoint.restore({
-            checkpointId: emergency.id,
+    return await this.restoreTurnCheckpoint({
+      checkpoint,
+      request,
+      source,
+      cwd,
+      workspaceKey,
+      selected,
+      command: 'edit',
+      report: (phase, message) => { operation(phase, undefined, message) },
+      apply: async (lease, emergency) => {
+        const childId = brandString<SessionId>(`session-${randomUUID()}`)
+        operation('creating-branch', childId)
+        const composition = await this.agents.composeAgent(
+          sourceAgent === undefined ? undefined : this.agents.presetForSession(sourceAgent.session),
+        )
+        const { provider, model } = this.ctx.agentDefaultModel.currentSelection()
+        await this.ctx.agents.create({
+          sessionId: childId,
+          seed: source.events.slice(0, turnStartIndex),
+          inheritedEventCount: SessionLogOffset(turnStartIndex),
+          meta: {
             cwd,
-            ...lease === undefined ? {} : { lease },
-          })
-          await checkpoint.clearRecoveryRequired(workspaceKey)
-        } catch (rollbackError) {
-          const reason = `checkpoint rollback failed: ${String(rollbackError)}`
-          await checkpoint.markRecoveryRequired(workspaceKey, reason)
-          throw new RemoteError('checkpoint-recovery-required', reason, {
-            sessionId: request.sessionId,
-            reason,
-          })
-        }
-      }
-      if (remoteErrorOf(error) !== undefined) throw error
-      throw new RemoteError('checkpoint-unavailable', `session edit failed: ${String(error)}`, {
-        sessionId: request.sessionId,
-        checkpointId: request.checkpointId,
-      })
-    } finally {
-      lease?.release()
-    }
+            parentSession: request.sessionId,
+            isSeeded: true,
+            ...(composition.agentPreset === undefined ? {} : { agentPreset: composition.agentPreset }),
+          },
+          agentOptions: { provider, model },
+          setup: composition.setup,
+        })
+        const workspace = await this.forkWorkspace(source.header)
+        if (workspace !== undefined) await workspace.attachSession(childId)
+        const childAgent = this.ctx.agents.get(childId)
+        if (childAgent === undefined) throw new Error(`child Agent "${childId}" was not attached`)
+        const childInitial = await checkpoint.capture({
+          sessionId: childId,
+          cwd,
+          parentCheckpointId: selected.id,
+          boundarySeq: turnStartIndex > 0 ? source.events[turnStartIndex - 1]?.seq ?? -1 : -1,
+          role: 'initial',
+          turnOutcome: 'initial',
+          lease,
+        })
+        if (childInitial.status.kind !== 'ready') throw new Error(childInitial.status.reason)
+        await checkpoint.recordEdit({
+          sourceSessionId: request.sessionId,
+          sourceBoundarySeq,
+          selectedCheckpointId: selected.id,
+          emergencyCheckpointId: emergency.id,
+          childSessionId: childId,
+        } satisfies CheckpointEditLink)
+        childAgent.followup(createUserMessage({
+          content: editedContent(turn.message, request.text),
+          source: { kind: 'user' },
+        }))
+        operation('ready', childId)
+        return { sessionId: childId }
+      },
+    })
   }
 
   /**
@@ -692,7 +617,7 @@ export class SessionCommandController {
    */
   async retry(request: SessionRetryRequest): Promise<SessionRetryValue> {
     const checkpoint = this.requireCheckpointService(request.sessionId)
-    const source = await this.readRetryableSource(request.sessionId, request.messageSeq)
+    const source = await this.readCheckpointTurnSource(request.sessionId, request.messageSeq, retryRefusal)
     let agent = this.ctx.agents.get(request.sessionId)
     if (agent === undefined) agent = await this.resolveAgent(request.sessionId)
     if (agent.status !== 'idle' || agent.inbox.nextTurn.length > 0 || agent.inbox.nextStep.length > 0) {
@@ -700,113 +625,37 @@ export class SessionCommandController {
         reason: 'retry requires an idle Agent with an empty inbox',
       })
     }
-    const cwd = source.header.cwd
-    if (cwd === undefined) throw retryRefusal(request)
-    const workspaceKey = await canonicalWorkspaceKey(cwd)
-    const recovery = await checkpoint.recoveryRequired(workspaceKey)
-    if (recovery !== undefined) {
-      throw new RemoteError('checkpoint-recovery-required', recovery, {
-        sessionId: request.sessionId,
-        reason: recovery,
-      })
-    }
-    const targetIndex = source.events.findIndex(event => event.seq === request.messageSeq)
-    const target = source.events[targetIndex]
-    if (target === undefined
-      || target.type !== 'user/message'
-      || target.data.source.kind !== 'user'
-      || !isAppendSurfaceEvent(target)) {
-      throw retryRefusal(request)
-    }
-    const turnStartIndex = source.events.findLastIndex((event, index) =>
-      index < targetIndex && event.type === 'turn/start')
-    const turnEndIndex = source.events.findIndex((event, index) =>
-      index > targetIndex && event.type === 'turn/end')
-    if (turnStartIndex < 0 || turnEndIndex < 0) throw retryRefusal(request)
-    const turnEnd = source.events[turnEndIndex]
+    const turn = await this.locateCheckpointTurn(checkpoint, request, source, retryRefusal)
+    const turnEnd = source.events[turn.turnEndIndex]
     if (turnEnd?.type !== 'turn/end' || turnEnd.data.reason.kind !== 'error') throw retryRefusal(request)
-    const sourceBoundarySeq = source.events
-      .slice(0, turnStartIndex)
-      .findLast(event => event.type === 'turn/end')?.seq ?? -1
-    const views = await checkpoint.list(request.sessionId)
-    const selected = await checkpoint.inspect(request.checkpointId).catch(() => undefined)
-    if (selected === undefined
-      || selected.sessionId !== request.sessionId
-      || selected.workspaceKey !== workspaceKey
-      || selected.boundarySeq !== sourceBoundarySeq
-      || selected.role === 'emergency'
-      || selected.status.kind !== 'ready'
-      || !selected.restoreEligible) {
-      throw checkpointUnavailable(request)
-    }
+    const { views, selected } = await this.selectTurnCheckpoint(
+      checkpoint, request, source, turn.workspaceKey, turn.turnStartIndex,
+    )
     const operation = (phase: CheckpointOperationPhase, message?: string): void => {
-      this.ctx.emit('session/checkpoints', {
-        type: 'session/checkpoints',
-        sessionId: request.sessionId,
-        checkpoints: views,
-        enabled: checkpoint.enabled,
-        appliedCheckpointId: selected.id,
-        operation: {
-          sourceSessionId: request.sessionId,
-          checkpointId: selected.id,
-          phase,
-          fileCount: selected.fileCount,
-          ...(message === undefined ? {} : { message }),
-        },
-        workspaceResumable: true,
+      this.emitCheckpointOperation(checkpoint, request.sessionId, views, selected, false, {
+        phase,
+        ...(message === undefined ? {} : { message }),
       })
     }
-    operation('preparing')
-    let lease: WorkspaceLease | undefined
-    let emergency: CheckpointRecord | undefined
-    try {
-      operation('capturing-emergency')
-      lease = await checkpoint.acquireLease(workspaceKey)
-      emergency = await checkpoint.capture({
-        sessionId: request.sessionId,
-        cwd,
-        boundarySeq: source.events.at(-1)?.seq ?? -1,
-        role: 'emergency',
-        turnOutcome: 'failed',
-        lease,
-      })
-      if (emergency.status.kind !== 'ready') throw new Error(emergency.status.reason)
-      operation('restoring')
-      await checkpoint.restore({ checkpointId: selected.id, cwd, lease })
-      const live = this.ctx.agents.get(request.sessionId) ?? await this.resolveAgent(request.sessionId)
-      live.followup(createUserMessage({
-        content: [...target.data.content],
-        source: { kind: 'user' },
-      }))
-      operation('ready')
-      return { accepted: true }
-    } catch (error) {
-      operation('failed', String(error))
-      if (emergency !== undefined) {
-        try {
-          await checkpoint.restore({
-            checkpointId: emergency.id,
-            cwd,
-            ...lease === undefined ? {} : { lease },
-          })
-          await checkpoint.clearRecoveryRequired(workspaceKey)
-        } catch (rollbackError) {
-          const reason = `checkpoint rollback failed: ${String(rollbackError)}`
-          await checkpoint.markRecoveryRequired(workspaceKey, reason)
-          throw new RemoteError('checkpoint-recovery-required', reason, {
-            sessionId: request.sessionId,
-            reason,
-          })
-        }
-      }
-      if (remoteErrorOf(error) !== undefined) throw error
-      throw new RemoteError('checkpoint-unavailable', `session retry failed: ${String(error)}`, {
-        sessionId: request.sessionId,
-        checkpointId: request.checkpointId,
-      })
-    } finally {
-      lease?.release()
-    }
+    return await this.restoreTurnCheckpoint({
+      checkpoint,
+      request,
+      source,
+      cwd: turn.cwd,
+      workspaceKey: turn.workspaceKey,
+      selected,
+      command: 'retry',
+      report: operation,
+      apply: async () => {
+        const live = this.ctx.agents.get(request.sessionId) ?? await this.resolveAgent(request.sessionId)
+        live.followup(createUserMessage({
+          content: [...turn.message.content],
+          source: { kind: 'user' },
+        }))
+        operation('ready')
+        return { accepted: true }
+      },
+    })
   }
 
   /**
@@ -825,14 +674,7 @@ export class SessionCommandController {
     }
     const cwd = source.header.cwd
     if (cwd === undefined) return { restored: false, unavailable: true }
-    const workspaceKey = await canonicalWorkspaceKey(cwd)
-    const recovery = await checkpoint.recoveryRequired(workspaceKey)
-    if (recovery !== undefined) {
-      throw new RemoteError('checkpoint-recovery-required', recovery, {
-        sessionId: request.sessionId,
-        reason: recovery,
-      })
-    }
+    const workspaceKey = await requireRecoveredWorkspace(checkpoint, request.sessionId, cwd)
     const views = await checkpoint.list(request.sessionId)
     const selectedView = views
       .filter(view => view.role !== 'emergency' && view.status.kind === 'ready' && view.restoreEligible)
@@ -846,22 +688,7 @@ export class SessionCommandController {
     }
     const applied = checkpoint.sessionIndex(request.sessionId)?.appliedCheckpointId
     if (applied === selected.id) return { restored: true, checkpointId: selected.id }
-    this.ctx.emit('session/checkpoints', {
-      type: 'session/checkpoints',
-      sessionId: request.sessionId,
-      checkpoints: views,
-      enabled: checkpoint.enabled,
-      appliedCheckpointId: selected.id,
-      operation: {
-        sourceSessionId: request.sessionId,
-        checkpointId: selected.id,
-        phase: 'restoring',
-        fileCount: selected.fileCount,
-      },
-      branchCheckpoint: selected,
-      branchLabelIndex: selected.labelIndex,
-      workspaceResumable: true,
-    })
+    this.emitCheckpointOperation(checkpoint, request.sessionId, views, selected, true, { phase: 'restoring' })
     let lease: Awaited<ReturnType<WorkspaceCheckpoint['acquireLease']>> | undefined
     let emergency: Awaited<ReturnType<WorkspaceCheckpoint['capture']>> | undefined
     try {
@@ -874,35 +701,16 @@ export class SessionCommandController {
         turnOutcome: 'failed',
         lease,
       })
-      await checkpoint.restore({
-        checkpointId: selected.id,
-        cwd,
-        ...lease === undefined ? {} : { lease },
-      })
+      await checkpoint.restore({ checkpointId: selected.id, cwd, lease })
       await checkpoint.clearRecoveryRequired(workspaceKey)
       return { restored: true, checkpointId: selected.id }
     } catch (error) {
       if (emergency !== undefined) {
-        try {
-          await checkpoint.restore({
-            checkpointId: emergency.id,
-            cwd,
-            ...lease === undefined ? {} : { lease },
-          })
-        } catch (rollbackError) {
-          const reason = `checkpoint rollback failed: ${String(rollbackError)}`
-          await checkpoint.markRecoveryRequired(workspaceKey, reason)
-          throw new RemoteError('checkpoint-recovery-required', reason, {
-            sessionId: request.sessionId,
-            reason,
-          })
-        }
+        await rollbackToEmergency(checkpoint, {
+          sessionId: request.sessionId, cwd, workspaceKey, emergency, lease, clearRecovery: false,
+        })
       }
-      if (remoteErrorOf(error) !== undefined) throw error
-      throw new RemoteError('checkpoint-unavailable', `session activation failed: ${String(error)}`, {
-        sessionId: request.sessionId,
-        checkpointId: selected.id,
-      })
+      return rejectCheckpointCommand(error, 'activation', request.sessionId, selected.id)
     } finally {
       lease?.release()
     }
@@ -967,10 +775,14 @@ export class SessionCommandController {
     return service
   }
 
-  private async readEditableSource(sessionId: SessionId, messageSeq: number): Promise<SessionReadState> {
+  private async readCheckpointTurnSource(
+    sessionId: SessionId,
+    messageSeq: number,
+    refusal: CheckpointTurnRefusal,
+  ): Promise<SessionReadState> {
     try {
       const source = await this.readSessionState(sessionId)
-      if (!Number.isSafeInteger(messageSeq) || messageSeq < 0) throw editRefusal({ sessionId, messageSeq })
+      if (!Number.isSafeInteger(messageSeq) || messageSeq < 0) throw refusal({ sessionId, messageSeq })
       return source
     } catch (error) {
       if (remoteErrorOf(error) !== undefined) throw error
@@ -981,17 +793,147 @@ export class SessionCommandController {
     }
   }
 
-  private async readRetryableSource(sessionId: SessionId, messageSeq: number): Promise<SessionReadState> {
+  /**
+   * Locate the completed user turn that edit or retry targets.
+   * @param checkpoint - enabled checkpoint service for the recovery check.
+   * @param request - Session and user-message sequence named by the caller.
+   * @param source - Session header and events read for the request.
+   * @param refusal - command-specific error thrown when the message is not eligible.
+   * @returns the workspace, user message, and enclosing turn indices.
+   */
+  private async locateCheckpointTurn(
+    checkpoint: WorkspaceCheckpoint,
+    request: Pick<SessionEditRequest, 'sessionId' | 'messageSeq'>,
+    source: SessionReadState,
+    refusal: CheckpointTurnRefusal,
+  ): Promise<CheckpointTurn> {
+    const cwd = source.header.cwd
+    if (cwd === undefined) throw refusal(request)
+    const workspaceKey = await requireRecoveredWorkspace(checkpoint, request.sessionId, cwd)
+    const targetIndex = source.events.findIndex(event => event.seq === request.messageSeq)
+    const target = source.events[targetIndex]
+    if (target === undefined
+      || target.type !== 'user/message'
+      || target.data.source.kind !== 'user'
+      || !isAppendSurfaceEvent(target)) {
+      throw refusal(request)
+    }
+    const turnStartIndex = source.events.findLastIndex((event, index) =>
+      index < targetIndex && event.type === 'turn/start')
+    const turnEndIndex = source.events.findIndex((event, index) =>
+      index > targetIndex && event.type === 'turn/end')
+    if (turnStartIndex < 0 || turnEndIndex < 0) throw refusal(request)
+    return { cwd, workspaceKey, message: target.data, turnStartIndex, turnEndIndex }
+  }
+
+  /**
+   * Validate that the requested checkpoint restores the boundary before a turn.
+   * @param checkpoint - enabled checkpoint service.
+   * @param request - Session and checkpoint named by the caller.
+   * @param source - Session events read for the request.
+   * @param workspaceKey - canonical workspace the checkpoint must belong to.
+   * @param turnStartIndex - index of the target turn's `turn/start` event.
+   * @returns the pre-turn boundary, the Session's checkpoint views, and the selected record.
+   * @throws RemoteError `checkpoint-unavailable` when the checkpoint is missing or not restorable there.
+   */
+  private async selectTurnCheckpoint(
+    checkpoint: WorkspaceCheckpoint,
+    request: Pick<SessionEditRequest, 'sessionId' | 'checkpointId'>,
+    source: SessionReadState,
+    workspaceKey: string,
+    turnStartIndex: number,
+  ): Promise<SelectedTurnCheckpoint> {
+    const sourceBoundarySeq = source.events
+      .slice(0, turnStartIndex)
+      .findLast(event => event.type === 'turn/end')?.seq ?? -1
+    const views = await checkpoint.list(request.sessionId)
+    const selected = await checkpoint.inspect(request.checkpointId).catch(() => undefined)
+    if (selected === undefined
+      || selected.sessionId !== request.sessionId
+      || selected.workspaceKey !== workspaceKey
+      || selected.boundarySeq !== sourceBoundarySeq
+      || selected.role === 'emergency'
+      || selected.status.kind !== 'ready'
+      || !selected.restoreEligible) {
+      throw checkpointUnavailable(request)
+    }
+    return { sourceBoundarySeq, views, selected }
+  }
+
+  /**
+   * Emit one `session/checkpoints` operation progress notification.
+   * @param checkpoint - enabled checkpoint service.
+   * @param sessionId - source Session of the operation.
+   * @param views - checkpoint views listed for the source Session.
+   * @param selected - checkpoint being applied.
+   * @param branch - whether the payload names `selected` as the branch checkpoint.
+   * @param progress - operation phase plus optional child Session and failure message.
+   */
+  private emitCheckpointOperation(
+    checkpoint: WorkspaceCheckpoint,
+    sessionId: SessionId,
+    views: readonly CheckpointView[],
+    selected: CheckpointRecord,
+    branch: boolean,
+    progress: CheckpointOperationProgress,
+  ): void {
+    this.ctx.emit('session/checkpoints', {
+      type: 'session/checkpoints',
+      sessionId,
+      checkpoints: views,
+      enabled: checkpoint.enabled,
+      appliedCheckpointId: selected.id,
+      operation: {
+        sourceSessionId: sessionId,
+        ...(progress.childSessionId === undefined ? {} : { childSessionId: progress.childSessionId }),
+        checkpointId: selected.id,
+        phase: progress.phase,
+        fileCount: selected.fileCount,
+        ...(progress.message === undefined ? {} : { message: progress.message }),
+      },
+      ...(branch ? { branchCheckpoint: selected, branchLabelIndex: selected.labelIndex } : {}),
+      workspaceResumable: true,
+    })
+  }
+
+  /**
+   * Capture an emergency checkpoint, restore `selected`, and run `apply` under
+   * one workspace lease. Any failure restores the emergency checkpoint; a failed
+   * rollback marks the workspace recovery-required. The lease is released on
+   * every exit.
+   * @param transaction - workspace, selected checkpoint, progress reporter, and post-restore step.
+   * @returns the value returned by `apply`.
+   */
+  private async restoreTurnCheckpoint<T>(transaction: CheckpointTurnRestore<T>): Promise<T> {
+    const { checkpoint, request, source, cwd, workspaceKey, selected, report } = transaction
+    report('preparing')
+    let lease: WorkspaceLease | undefined
+    let emergency: CheckpointRecord | undefined
     try {
-      const source = await this.readSessionState(sessionId)
-      if (!Number.isSafeInteger(messageSeq) || messageSeq < 0) throw retryRefusal({ sessionId, messageSeq })
-      return source
+      report('capturing-emergency')
+      lease = await checkpoint.acquireLease(workspaceKey)
+      emergency = await checkpoint.capture({
+        sessionId: request.sessionId,
+        cwd,
+        boundarySeq: source.events.at(-1)?.seq ?? -1,
+        role: 'emergency',
+        turnOutcome: 'failed',
+        lease,
+      })
+      if (emergency.status.kind !== 'ready') throw new Error(emergency.status.reason)
+      report('restoring')
+      await checkpoint.restore({ checkpointId: selected.id, cwd, lease })
+      return await transaction.apply(lease, emergency)
     } catch (error) {
-      if (remoteErrorOf(error) !== undefined) throw error
-      if (error instanceof ApiSessionNotFound) {
-        throw new RemoteError('session/not-found', error.message, { sessionId })
+      report('failed', String(error))
+      if (emergency !== undefined) {
+        await rollbackToEmergency(checkpoint, {
+          sessionId: request.sessionId, cwd, workspaceKey, emergency, lease, clearRecovery: true,
+        })
       }
-      throw new RemoteError('gateway/internal', `session "${sessionId}" is unavailable: ${String(error)}`, {})
+      return rejectCheckpointCommand(error, transaction.command, request.sessionId, request.checkpointId)
+    } finally {
+      lease?.release()
     }
   }
 
@@ -1121,6 +1063,126 @@ async function canonicalWorkspaceKey(cwd: string): Promise<string> {
   }
 }
 
+type CheckpointTurnRefusal = (
+  request: Pick<SessionEditRequest, 'sessionId' | 'messageSeq'>,
+) => RemoteError<'edit-not-editable' | 'retry-not-retryable'>
+
+/** Completed user turn located for edit or retry. */
+interface CheckpointTurn {
+  readonly cwd: string
+  readonly workspaceKey: string
+  readonly message: UserMessage
+  readonly turnStartIndex: number
+  readonly turnEndIndex: number
+}
+
+interface SelectedTurnCheckpoint {
+  /** Seq of the last `turn/end` before the target turn; `-1` when none. */
+  readonly sourceBoundarySeq: number
+  readonly views: readonly CheckpointView[]
+  readonly selected: CheckpointRecord
+}
+
+interface CheckpointOperationProgress {
+  readonly phase: CheckpointOperationPhase
+  readonly childSessionId?: SessionId
+  readonly message?: string
+}
+
+interface CheckpointTurnRestore<T> {
+  readonly checkpoint: WorkspaceCheckpoint
+  readonly request: Pick<SessionEditRequest, 'sessionId' | 'checkpointId'>
+  readonly source: SessionReadState
+  readonly cwd: string
+  readonly workspaceKey: string
+  readonly selected: CheckpointRecord
+  /** Command name used in the wrapped `checkpoint-unavailable` failure message. */
+  readonly command: 'edit' | 'retry'
+  readonly report: (phase: CheckpointOperationPhase, message?: string) => void
+  /** Runs after `selected` is restored, still holding `lease`. */
+  readonly apply: (lease: WorkspaceLease, emergency: CheckpointRecord) => Promise<T>
+}
+
+/**
+ * Canonicalize `cwd` and refuse a workspace whose previous rollback failed.
+ * @param checkpoint - enabled checkpoint service.
+ * @param sessionId - Session named in the refusal.
+ * @param cwd - Session working directory.
+ * @returns the canonical workspace key.
+ * @throws RemoteError `checkpoint-recovery-required` while the workspace awaits recovery.
+ */
+async function requireRecoveredWorkspace(
+  checkpoint: WorkspaceCheckpoint,
+  sessionId: SessionId,
+  cwd: string,
+): Promise<string> {
+  const workspaceKey = await canonicalWorkspaceKey(cwd)
+  const recovery = await checkpoint.recoveryRequired(workspaceKey)
+  if (recovery !== undefined) {
+    throw new RemoteError('checkpoint-recovery-required', recovery, {
+      sessionId,
+      reason: recovery,
+    })
+  }
+  return workspaceKey
+}
+
+/**
+ * Restore the emergency checkpoint captured before a failed restore.
+ * @param checkpoint - enabled checkpoint service.
+ * @param rollback - workspace, emergency checkpoint, held lease, and whether a
+ *   successful rollback clears the workspace's recovery-required mark.
+ * @throws RemoteError `checkpoint-recovery-required` after marking the workspace when the rollback fails.
+ */
+async function rollbackToEmergency(
+  checkpoint: WorkspaceCheckpoint,
+  rollback: {
+    readonly sessionId: SessionId
+    readonly cwd: string
+    readonly workspaceKey: string
+    readonly emergency: CheckpointRecord
+    readonly lease: WorkspaceLease | undefined
+    readonly clearRecovery: boolean
+  },
+): Promise<void> {
+  const { sessionId, cwd, workspaceKey, emergency, lease } = rollback
+  try {
+    await checkpoint.restore({
+      checkpointId: emergency.id,
+      cwd,
+      ...lease === undefined ? {} : { lease },
+    })
+    if (rollback.clearRecovery) await checkpoint.clearRecoveryRequired(workspaceKey)
+  } catch (rollbackError) {
+    const reason = `checkpoint rollback failed: ${String(rollbackError)}`
+    await checkpoint.markRecoveryRequired(workspaceKey, reason)
+    throw new RemoteError('checkpoint-recovery-required', reason, {
+      sessionId,
+      reason,
+    })
+  }
+}
+
+/**
+ * Rethrow a checkpoint command failure, wrapping non-Remote errors.
+ * @param error - failure caught by the command.
+ * @param command - command name used in the wrapped message.
+ * @param sessionId - source Session.
+ * @param checkpointId - checkpoint the command was applying.
+ * @returns never; always throws.
+ */
+function rejectCheckpointCommand(
+  error: unknown,
+  command: 'edit' | 'retry' | 'activation',
+  sessionId: SessionId,
+  checkpointId: CheckpointId,
+): never {
+  if (remoteErrorOf(error) !== undefined) throw error
+  throw new RemoteError('checkpoint-unavailable', `session ${command} failed: ${String(error)}`, {
+    sessionId,
+    checkpointId,
+  })
+}
 function editRefusal(request: Pick<SessionEditRequest, 'sessionId' | 'messageSeq'>): RemoteError<'edit-not-editable'> {
   return new RemoteError(
     'edit-not-editable',
@@ -1148,11 +1210,7 @@ function checkpointUnavailable(
 }
 
 function editedContent(message: UserMessage, text: string): ContentBlock[] {
-  let replaced = false
-  const content: ContentBlock[] = message.content.map((block) => {
-    if (block.type !== 'text' || replaced) return block
-    replaced = true
-    return { type: 'text' as const, text }
-  })
-  return replaced ? content : [{ type: 'text' as const, text }, ...content]
+  const replacedIndex = message.content.findIndex(block => block.type === 'text')
+  if (replacedIndex < 0) return [{ type: 'text' as const, text }, ...message.content]
+  return message.content.map((block, index) => index === replacedIndex ? { type: 'text' as const, text } : block)
 }

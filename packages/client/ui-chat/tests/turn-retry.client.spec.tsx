@@ -23,7 +23,7 @@ const t = makeTranslate(zh, commonZh)
 function checkpointRow(id: string, boundarySeq: number): CheckpointSnapshot['checkpoints'][number] {
   return {
     id: id as never,
-    sessionId: SID as never,
+    sessionId: SID,
     boundarySeq,
     labelIndex: 0,
     role: 'turn',
