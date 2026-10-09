@@ -10,7 +10,7 @@
 
 import { randomUUID } from '@deepseek-ai/dsh-util-crypto'
 import { createHash } from 'node:crypto'
-import type { Context, SimpleStreamOptions, Tool } from '@earendil-works/pi-ai'
+import type { Context, Message, SimpleStreamOptions, Tool } from '@earendil-works/pi-ai'
 import {
   concat,
   encodeBool,
@@ -160,9 +160,7 @@ export function buildRootPromptMessagesJson(
   blobIds.push(storeBlob(blobStore, new TextEncoder().encode(systemJson)))
 
   const historyEnd = activeUserIndex >= 0 ? activeUserIndex : context.messages.length
-  for (let i = 0; i < historyEnd; i++) {
-    const msg = context.messages[i]
-    if (msg === undefined) continue
+  for (const msg of context.messages.slice(0, historyEnd)) {
     if (msg.role === 'user') {
       const text = userContentText(msg.content)
       if (text.length === 0) continue
@@ -228,7 +226,7 @@ export function buildConversationTurns(
   let i = 0
   while (i < historyEnd) {
     const msg = context.messages[i]
-    if (msg === undefined || msg.role !== 'user') {
+    if (msg?.role !== 'user') {
       i++
       continue
     }
@@ -239,12 +237,9 @@ export function buildConversationTurns(
     const stepBlobIds: Uint8Array[] = []
     i++
 
-    while (i < historyEnd && context.messages[i]?.role !== 'user') {
-      const stepMsg = context.messages[i]
-      if (stepMsg === undefined) {
-        i++
-        continue
-      }
+    const stepStart = i
+    while (i < historyEnd && context.messages[i]?.role !== 'user') i++
+    for (const stepMsg of context.messages.slice(stepStart, i).filter(isNonUserMessage)) {
       if (stepMsg.role === 'assistant') {
         for (const item of stepMsg.content) {
           if (item.type === 'text') {
@@ -267,13 +262,12 @@ export function buildConversationTurns(
             stepBlobIds.push(storeBlob(blobStore, step))
           }
         }
-      } else if (stepMsg.role === 'toolResult') {
+      } else {
         const text = userContentText(stepMsg.content)
         const prefix = stepMsg.isError ? '[Tool Error]' : '[Tool Result]'
         const step = encodeMessage(1, encodeString(1, `${prefix}\n${text}`))
         stepBlobIds.push(storeBlob(blobStore, step))
       }
-      i++
     }
 
     const agentTurn = concat(
@@ -285,6 +279,10 @@ export function buildConversationTurns(
   }
 
   return turns
+}
+
+function isNonUserMessage(message: Message): message is Exclude<Message, { role: 'user' }> {
+  return message.role !== 'user'
 }
 
 /**

@@ -55,7 +55,7 @@ function generateSessionId(context: Context): string {
       let text = ''
       if (typeof message.content === 'string') {
         text = message.content
-      } else if (Array.isArray(message.content)) {
+      } else {
         const textPart = message.content.find(p => p.type === 'text')
         if (textPart && 'text' in textPart && typeof textPart.text === 'string') {
           text = textPart.text
@@ -63,20 +63,11 @@ function generateSessionId(context: Context): string {
       }
       if (text.trim().length > 0) {
         const hash = createHash('sha256').update(text).digest()
-        let val = 0n
-        for (let i = 0; i < 8; i++) {
-          val = (val << 8n) | BigInt(hash[i] ?? 0)
-        }
-        return `-${(val & MASK_63BIT).toString()}`
+        return `-${(hash.readBigUInt64BE(0) & MASK_63BIT).toString()}`
       }
     }
   }
-  const bytes = randomBytes(8)
-  let val = 0n
-  for (const b of bytes) {
-    val = (val << 8n) | BigInt(b)
-  }
-  return `-${(val & MASK_63BIT).toString()}`
+  return `-${(randomBytes(8).readBigUInt64BE(0) & MASK_63BIT).toString()}`
 }
 
 /**
@@ -119,15 +110,13 @@ export function buildAntigravityRequest(
     }
   }
 
-  if (context.tools !== undefined && context.tools.length > 0) {
-    const converted = convertTools(context.tools, true)
-    if (converted !== undefined) {
-      innerRequest.tools = converted
-      innerRequest.toolConfig = {
-        functionCallingConfig: {
-          mode: 'VALIDATED',
-        },
-      }
+  const converted = context.tools === undefined ? undefined : convertTools(context.tools, true)
+  if (converted !== undefined) {
+    innerRequest.tools = converted
+    innerRequest.toolConfig = {
+      functionCallingConfig: {
+        mode: 'VALIDATED',
+      },
     }
   }
 

@@ -62,7 +62,7 @@ export class WorkspaceLeaseTable {
     const next = new Promise<void>((resolve) => {
       releaseQueue = resolve
     })
-    this.queue.set(workspaceKey, previous.then(() => next, () => next))
+    this.queue.set(workspaceKey, previous.then(() => next))
     await previous
     while (this.hostHolds.has(workspaceKey)) {
       await this.hostHolds.get(workspaceKey)?.released

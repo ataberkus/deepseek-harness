@@ -319,7 +319,6 @@ export function apply(ctx: Context, config: Config): void {
     )
   }
 
-  let onCredentialChange: () => void = () => undefined
   // One store and one ambient context for the whole plugin instance: both read
   // through `ctx` per call, so they stay correct across the collection rebuilds
   // a configuration change causes, and a sign-in survives one.
@@ -469,7 +468,7 @@ export function apply(ctx: Context, config: Config): void {
   }
   ensureRegistrationFacts()
 
-  onCredentialChange = () => {
+  const onCredentialChange = (): void => {
     lastRaw = undefined
     lastLoginRevision = undefined
     try {
