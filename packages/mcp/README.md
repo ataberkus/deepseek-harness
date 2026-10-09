@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-The `mcp/` group connects the harness to the Model Context Protocol (MCP) ecosystem of tool servers. One package attaches a single external server — a filesystem, GitHub, database, or memory server — so its tools are available to the model as native tools under stable server-qualified names. The companion manager mounts one such client per enabled entry in the `mcp` settings section, so operators configure the fleet without editing `cordis.yml`. Each server is one configuration entry; nothing ships enabled, so you opt in per server. Only the Tools capability is bridged: MCP resources and prompts are not supported. This page maps the group; the package README owns the per-package contract.
+The `mcp/` group connects the harness to Model Context Protocol (MCP) tool servers. `mcp-client` attaches one external server — a filesystem, GitHub, database, or memory server — so the model calls its tools as native tools under stable server-qualified names. `mcp-manager` mounts one client per enabled entry in the `mcp` settings section, so operators configure servers without editing `cordis.yml`. Nothing ships enabled; you opt in per server. Only the Tools capability is bridged: MCP resources and prompts are not supported. This page maps the group; each package README owns its contract.
 
 ## Table of Contents
 
@@ -22,7 +22,7 @@ The `mcp/` group connects the harness to the Model Context Protocol (MCP) ecosys
 <a id="packages"></a>
 ## Packages
 
-The group holds two packages; the package README and the links below own the details.
+The group holds two packages; the package READMEs and the links below own the details.
 
 | Package | What it provides |
 |---|---|

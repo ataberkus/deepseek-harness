@@ -54,12 +54,12 @@ mcp:
 | `command` / `args` / `env` / `cwd` | — | stdio: executable, arguments, extra env over scrubbed ambient env, working directory |
 | `url` / `headers` | — | streamable-http: endpoint URL and extra request headers |
 | `toolCallTimeoutMs` | `60,000` | Timeout per `tools/call` invocation |
-| `failOnStartupError` | `false` | Reject the child activation when the initial connection fails |
+| `failOnStartupError` | `false` | Reject the child activation when the initial connection or tool synchronization fails |
 | `reconnect.*` | `true` / `500` / `30,000` / `10` | Automatic reconnect policy after a lost connection |
 
 The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-mcp-manager) is the exhaustive source for every accepted field.
 
-`env` and `headers` are stored in plain text in the settings document and are visible to configuration surfaces. Do not store production secrets here when the credentials store is available; prefer a deployment-pinned `dsh-mcp-client` row with `!!js process.env.*` for secret-bearing servers.
+`env` and `headers` are stored in plain text in the settings document and are visible to configuration surfaces. Do not store production secrets here; put secret-bearing servers in a deployment-pinned `dsh-mcp-client` row with `!!js process.env.*`.
 
 Disabling is the removal path for deployment-base servers: the settings merge cannot delete a composition key, so set `enabled: false` instead of deleting the entry. `replace({})` re-inherits the composition entry.
 
@@ -77,7 +77,7 @@ This section explains the design decisions behind the fleet and points at the co
 
 - **The dict key is the identity.** The settings key supplies `serverName`, so one name has one entry by construction and no entry can disagree with its key about what it is called.
 - **Validate at the write, sync after the commit.** An illegal server name refuses the settings write through `validate`; field errors refuse through the schema. Sync only mounts schema-valid entries, so a refused entry keeps the previous generation serving.
-- **One child per enabled entry.** Disabled entries mount nothing. Removals dispose first; additions and changed entries validate through the client schema before replacing the previous child.
+- **One child per enabled entry.** Disabled entries mount nothing. Removals and disables dispose first; additions and changed entries validate through the client schema before replacing the previous child.
 - **Bursts serialize.** Settings bursts queue behind one reconciliation chain so a dispose and a remount of the same server never interleave.
 
 ### Source map
@@ -85,6 +85,7 @@ This section explains the design decisions behind the fleet and points at the co
 | File | Role |
 |---|---|
 | [`src/index.ts`](src/index.ts) | Plugin entry: `mcp` settings section, fleet reconciliation, child lifecycle |
+| — | No runtime invariant companion is published; the live-child map is private reconciliation state, child tools belong to each `dsh-mcp-client` registration, and a refused or failed mount intentionally leaves the settings section and the mounted fleet different. |
 
 ### Lifecycle and sync
 
@@ -101,6 +102,7 @@ Read these pages when the package-level contract is not enough. They move from t
 
 - [MCP client bridge](../mcp-client/README.md) — one server's connection, naming, execution, and reconnection contract.
 - [MCP group](../README.md) — the two packages of the MCP group and their roles.
+- [MCP settings fleet Agent Note](../../../.agents/notes/implemented/feature/2026-09-13-mcp-settings-fleet.md) — the fleet's settings-section, reconciliation, and Plugins-card design.
 - [Third-party memory MCP guide](../../../docs/user/guide/mcp-memory.md) — overlay rows that the same server entries now express as settings.
 - [Generated configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-mcp-manager) — every accepted config field and its source declaration.
 
