@@ -1659,7 +1659,7 @@ export interface McpReconnectEntry {
 }
 ```
 
-Source: [`packages/mcp/mcp-manager/src/index.ts:101`](../packages/mcp/mcp-manager/src/index.ts)
+Source: [`packages/mcp/mcp-manager/src/index.ts:97`](../packages/mcp/mcp-manager/src/index.ts)
 
 <a id="deepseek-aidsh-message-feedback"></a>
 
@@ -3547,7 +3547,7 @@ export interface Config {
 }
 ```
 
-Source: [`packages/session/workspace-checkpoint-local/src/config.ts:11`](../packages/session/workspace-checkpoint-local/src/config.ts)
+Source: [`packages/session/workspace-checkpoint-local/src/config.ts:9`](../packages/session/workspace-checkpoint-local/src/config.ts)
 
 ## Loadable plugins with no config
 

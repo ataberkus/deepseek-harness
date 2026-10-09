@@ -84,7 +84,7 @@ The provider serializes capture, restore, and eviction through one in-process qu
 | File | Role |
 |---|---|
 | [`src/index.ts`](src/index.ts) | `LocalWorkspaceCheckpoint` service: settings section, operation queue, lease checks, recovery flags, `recordEdit` |
-| [`src/config.ts`](src/config.ts) | Plugin `Config` schema |
+| [`src/config.ts`](src/config.ts) | Plugin `Config` interface; the loader schema is `LocalWorkspaceCheckpoint.Config` in `src/index.ts` |
 | [`src/manifest.ts`](src/manifest.ts) | `lstat` walk into a cwd-relative manifest and concurrent-write detection |
 | [`src/store.ts`](src/store.ts) | Capture, inspection, listing, and session-index persistence |
 | [`src/objects.ts`](src/objects.ts) and [`src/hash.ts`](src/hash.ts) | Content-addressed blob store and hashing |

@@ -113,7 +113,7 @@ This section explains the design decisions behind the bridge and points at the c
 
 | File | Role |
 |---|---|
-| [`src/index.ts`](src/index.ts) | Plugin entry: `Config` schema, `serverName` reservation, activation await |
+| [`src/index.ts`](src/index.ts) | Plugin entry: `Config` schema plus the `StdioServerFields` and `StreamableHttpServerFields` field schemas that `dsh-mcp-manager` reuses for fleet entries, `serverName` reservation, activation await |
 | [`src/connection.ts`](src/connection.ts) | Connection supervisor: client generations, reconnect policy, attempt budget, disposal |
 | [`src/tools.ts`](src/tools.ts) | Tool bridge: discovery, naming, registration swap, execution, image projection |
 | [`src/transport.ts`](src/transport.ts) | Transport factory: stdio spawn with scrubbed env, Streamable HTTP |

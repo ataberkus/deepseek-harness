@@ -16,7 +16,6 @@
 
 import type { Context, Fiber } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
-import { MAX_TIMER_DELAY_MS } from '@deepseek-ai/dsh-timeout'
 import { deepEqualJson } from '@deepseek-ai/dsh-util-values'
 import * as McpClient from '@deepseek-ai/dsh-mcp-client'
 import type {} from '@deepseek-ai/dsh-settings'
@@ -32,9 +31,6 @@ export const MCP_SETTINGS_NAMESPACE = 'mcp'
 
 /** Valid server names, matching the client bridge namespace budget. */
 const SERVER_NAME_PATTERN = /^[A-Za-z0-9_-]{1,32}$/
-
-/** Default per-tool-call timeout, mirroring the client bridge default. */
-const DEFAULT_TOOL_CALL_TIMEOUT_MS = 60_000
 
 /** Automatic reconnect policy for one settings-driven server entry. */
 export interface McpReconnectEntry {
@@ -116,33 +112,16 @@ type ResolvedEntry = (
   failOnStartupError: boolean
 } & Record<string, unknown>
 
-const Reconnect: z<McpReconnectEntry> = z.object({
-  enabled: z.boolean().default(true),
-  initialDelayMs: z.number().min(1).max(MAX_TIMER_DELAY_MS).default(500),
-  maxDelayMs: z.number().min(1).max(MAX_TIMER_DELAY_MS).default(30_000),
-  maxAttempts: z.number().step(1).min(1).max(Number.MAX_SAFE_INTEGER).default(10),
-})
-
 const StdioEntry = z.object({
   transport: z.const('stdio'),
   enabled: z.boolean().default(true),
-  command: z.string().required(),
-  args: z.array(String).default([]),
-  env: z.dict(String).default({}),
-  cwd: z.string().default(''),
-  toolCallTimeoutMs: z.number().default(DEFAULT_TOOL_CALL_TIMEOUT_MS),
-  failOnStartupError: z.boolean().default(false),
-  reconnect: Reconnect,
+  ...McpClient.StdioServerFields,
 })
 
 const HttpEntry = z.object({
   transport: z.const('streamable-http'),
   enabled: z.boolean().default(true),
-  url: z.string().required(),
-  headers: z.dict(String).default({}),
-  toolCallTimeoutMs: z.number().default(DEFAULT_TOOL_CALL_TIMEOUT_MS),
-  failOnStartupError: z.boolean().default(false),
-  reconnect: Reconnect,
+  ...McpClient.StreamableHttpServerFields,
 })
 
 /** Schema for the `mcp` settings section and the manager composition entry. */

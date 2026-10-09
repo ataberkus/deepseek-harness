@@ -1661,7 +1661,7 @@ export interface McpReconnectEntry {
 }
 ```
 
-来源：[`packages/mcp/mcp-manager/src/index.ts:101`](../packages/mcp/mcp-manager/src/index.ts)
+来源：[`packages/mcp/mcp-manager/src/index.ts:97`](../packages/mcp/mcp-manager/src/index.ts)
 
 <a id="deepseek-aidsh-message-feedback"></a>
 
@@ -3549,7 +3549,7 @@ export interface Config {
 }
 ```
 
-来源：[`packages/session/workspace-checkpoint-local/src/config.ts:11`](../packages/session/workspace-checkpoint-local/src/config.ts)
+来源：[`packages/session/workspace-checkpoint-local/src/config.ts:9`](../packages/session/workspace-checkpoint-local/src/config.ts)
 
 ## 无配置的可加载插件
 

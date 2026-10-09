@@ -1,11 +1,9 @@
 /**
  * Plugin configuration for the local workspace-checkpoint provider.
- * Retention and exclusion are restated in composition YAML; this schema has
- * no hidden defaults for those fields.
+ * Retention and exclusion are restated in composition YAML; the loader schema
+ * (`LocalWorkspaceCheckpoint.Config`) has no hidden defaults for those fields.
  * @module @deepseek-ai/dsh-workspace-checkpoint-local/src/config
  */
-
-import z from '@deepseek-ai/schemastery'
 
 /** Deployment-varying local provider settings. */
 export interface Config {
@@ -24,14 +22,3 @@ export interface Config {
   /** Delay between concurrent-write retries, in milliseconds. */
   captureRetryDelayMs: number
 }
-
-/** Loader schema. `objectRoot` and `dshHome` are optional; every other field is required. */
-export const Config: z<Config> = z.object({
-  enabled: z.boolean().default(false),
-  objectRoot: z.string(),
-  dshHome: z.string(),
-  maxTotalBytes: z.number().required(),
-  excludeGlobs: z.array(z.string()).required(),
-  captureRetryCount: z.number().required(),
-  captureRetryDelayMs: z.number().required(),
-})

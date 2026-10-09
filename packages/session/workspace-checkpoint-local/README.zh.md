@@ -84,7 +84,7 @@ kind: "package-reference"
 | 文件 | 职责 |
 |---|---|
 | [`src/index.ts`](src/index.ts) | `LocalWorkspaceCheckpoint` 服务：设置段、操作队列、租约检查、恢复标记、`recordEdit` |
-| [`src/config.ts`](src/config.ts) | 插件 `Config` schema |
+| [`src/config.ts`](src/config.ts) | 插件 `Config` 接口；加载器 schema 是 `src/index.ts` 中的 `LocalWorkspaceCheckpoint.Config` |
 | [`src/manifest.ts`](src/manifest.ts) | 基于 `lstat` 遍历生成相对 cwd 的清单，并检测并发写入 |
 | [`src/store.ts`](src/store.ts) | 捕获、查看、列出与会话索引持久化 |
 | [`src/objects.ts`](src/objects.ts) 与 [`src/hash.ts`](src/hash.ts) | 内容寻址 blob 库与哈希 |

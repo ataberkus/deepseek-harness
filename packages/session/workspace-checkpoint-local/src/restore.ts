@@ -181,24 +181,35 @@ async function planOps(
   return ops
 }
 
+/**
+ * Copy one manifest entry without following links: a symlink is recreated
+ * with its own target, a directory is created empty, and a regular file's
+ * bytes are written owner-only. Missing parents are created `0o700`.
+ * @param source - existing entry path.
+ * @param dest - destination path; must not already exist for symlinks.
+ */
+async function copyEntry(source: string, dest: string): Promise<void> {
+  const info = await lstat(source)
+  if (info.isSymbolicLink()) {
+    await mkdir(dirname(dest), { recursive: true, mode: 0o700 })
+    await symlink(await readlink(source), dest)
+    return
+  }
+  if (info.isDirectory()) {
+    await mkdir(dest, { recursive: true, mode: 0o700 })
+    return
+  }
+  await mkdir(dirname(dest), { recursive: true, mode: 0o700 })
+  await writeFile(dest, await readFile(source), { mode: 0o600 })
+}
+
 async function backupCurrent(cwd: string, backup: string, excludeGlobs: readonly string[]): Promise<void> {
   const current = await buildManifest(cwd, { excludeGlobs })
   await mkdir(backup, { recursive: true, mode: 0o700 })
   for (const entry of current.entries) {
     const source = fromManifestPath(cwd, entry.relativePath)
     const dest = fromManifestPath(backup, entry.relativePath)
-    const info = await lstat(source)
-    if (info.isSymbolicLink()) {
-      await mkdir(dirname(dest), { recursive: true, mode: 0o700 })
-      await symlink(await readlink(source), dest)
-      continue
-    }
-    if (info.isDirectory()) {
-      await mkdir(dest, { recursive: true, mode: 0o700 })
-      continue
-    }
-    await mkdir(dirname(dest), { recursive: true, mode: 0o700 })
-    await writeFile(dest, await readFile(source), { mode: 0o600 })
+    await copyEntry(source, dest)
   }
 }
 
@@ -234,17 +245,6 @@ async function rollbackJournal(journal: RestoreJournal, excludeGlobs: readonly s
   for (const entry of backup.entries) {
     const source = fromManifestPath(journal.backupDir, entry.relativePath)
     const dest = fromManifestPath(journal.cwd, entry.relativePath)
-    const info = await lstat(source)
-    if (info.isSymbolicLink()) {
-      await mkdir(dirname(dest), { recursive: true, mode: 0o700 })
-      await symlink(await readlink(source), dest)
-      continue
-    }
-    if (info.isDirectory()) {
-      await mkdir(dest, { recursive: true, mode: 0o700 })
-      continue
-    }
-    await mkdir(dirname(dest), { recursive: true, mode: 0o700 })
-    await writeFile(dest, await readFile(source), { mode: 0o600 })
+    await copyEntry(source, dest)
   }
 }
