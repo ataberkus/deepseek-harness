@@ -1,4 +1,4 @@
-import { mkdtemp, mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
+import { mkdtemp, mkdir, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -197,5 +197,53 @@ describe('LocalWorkspaceCheckpoint restore', () => {
     const key = await canonicalizeCwd(harness.cwd)
     await expect(harness.ctx.workspaceCheckpoint.recoveryRequired(key))
       .resolves.toEqual(expect.stringContaining('recovery'))
+  })
+
+  it('fails closed and keeps the workspace when the backup is missing during rollback', async () => {
+    const harness = await boot()
+    dispose.push(() => harness.dispose())
+    await writeFile(join(harness.cwd, 'a.txt'), 'one')
+    const cp = await harness.ctx.workspaceCheckpoint.capture({
+      sessionId: SessionId('s1'),
+      cwd: harness.cwd,
+      boundarySeq: -1,
+      role: 'initial',
+      turnOutcome: 'initial',
+    })
+    restoreInternals.rename = async () => {
+      await writeFile(join(harness.cwd, 'late.txt'), 'late')
+      await rm(join(harness.objectRoot, 'journals', cp.id, 'backup'), { recursive: true, force: true })
+      throw new Error('injected rename failure')
+    }
+    await expect(harness.ctx.workspaceCheckpoint.restore({ checkpointId: cp.id, cwd: harness.cwd }))
+      .rejects.toMatchObject({ code: 'CHECKPOINT_CONTAINMENT' })
+    expect(await readFile(join(harness.cwd, 'late.txt'), 'utf8')).toBe('late')
+    const key = await canonicalizeCwd(harness.cwd)
+    await expect(harness.ctx.workspaceCheckpoint.recoveryRequired(key))
+      .resolves.toEqual(expect.stringContaining('recovery required'))
+    expect((await readdir(join(harness.objectRoot, 'journals'))).some(name => name.endsWith('.json'))).toBe(true)
+  })
+
+  it('removes the journal after a successful rollback', async () => {
+    const harness = await boot()
+    dispose.push(() => harness.dispose())
+    await writeFile(join(harness.cwd, 'a.txt'), 'one')
+    const cp = await harness.ctx.workspaceCheckpoint.capture({
+      sessionId: SessionId('s1'),
+      cwd: harness.cwd,
+      boundarySeq: -1,
+      role: 'initial',
+      turnOutcome: 'initial',
+    })
+    restoreInternals.rename = async () => {
+      await writeFile(join(harness.cwd, 'partial-a.txt'), 'a')
+      await writeFile(join(harness.cwd, 'partial-b.txt'), 'b')
+      throw new Error('injected rename failure')
+    }
+    await expect(harness.ctx.workspaceCheckpoint.restore({ checkpointId: cp.id, cwd: harness.cwd }))
+      .rejects.toThrow('injected rename failure')
+    expect(await readFile(join(harness.cwd, 'a.txt'), 'utf8')).toBe('one')
+    await expect(stat(join(harness.cwd, 'partial-a.txt'))).rejects.toMatchObject({ code: 'ENOENT' })
+    expect((await readdir(join(harness.objectRoot, 'journals'))).filter(name => name.endsWith('.json'))).toEqual([])
   })
 })

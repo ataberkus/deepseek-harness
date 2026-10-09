@@ -117,6 +117,7 @@ export async function restoreCheckpoint(
       try {
         if (restoreInternals.rollback !== undefined) await restoreInternals.rollback(journal)
         else await rollbackJournal(journal, options.excludeGlobs)
+        await removeJournal(journalPath(options.objectRoot, cwd))
       } catch (rollbackError) {
         await options.markRecoveryRequired(cwd, `recovery required: ${String(rollbackError)}`)
         throw rollbackError
@@ -235,13 +236,20 @@ async function applyJournal(journal: RestoreJournal): Promise<void> {
   }
 }
 
+/**
+ * Replace the non-excluded workspace content with the pre-restore backup.
+ * The backup manifest is read before any workspace entry is removed, so an
+ * unreadable backup leaves the workspace untouched.
+ * @param journal - journal of the failed restore.
+ * @param excludeGlobs - paths that are neither removed nor restored.
+ * @throws when the backup directory cannot be read; the caller marks recovery required.
+ */
 async function rollbackJournal(journal: RestoreJournal, excludeGlobs: readonly string[]): Promise<void> {
+  const backup = await buildManifest(journal.backupDir, { excludeGlobs: [] })
   const current = await buildManifest(journal.cwd, { excludeGlobs })
   for (const entry of [...current.entries].sort((left, right) => right.relativePath.length - left.relativePath.length)) {
     await rm(fromManifestPath(journal.cwd, entry.relativePath), { recursive: true, force: true })
   }
-  const backup = await buildManifest(journal.backupDir, { excludeGlobs: [] }).catch(() => undefined)
-  if (backup === undefined) return
   for (const entry of backup.entries) {
     const source = fromManifestPath(journal.backupDir, entry.relativePath)
     const dest = fromManifestPath(journal.cwd, entry.relativePath)

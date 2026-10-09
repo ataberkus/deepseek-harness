@@ -63,7 +63,7 @@ The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-a
 
 ### Capture, restore, and retention
 
-Capture stores regular file bytes in the content-addressed object store and keeps checkpoint metadata in the `workspace_checkpoint` storage domain. Walking uses `lstat` and does not follow symlinks. Restore uses a journal and a backup of the current tree to roll back partial filesystem mutations; recovery flags block new model work until a usable checkpoint is restored. A capture request carrying the matching lease runs inside the caller's multi-step lease instead of waiting for that lease to be released. Retention preserves applied and emergency chains, and `recordEdit` persists the source/child branch relation in both session sidecars.
+Capture stores regular file bytes in the content-addressed object store and keeps checkpoint metadata in the `workspace_checkpoint` storage domain. Walking uses `lstat` and does not follow symlinks. Restore uses a journal and a backup of the current tree to roll back partial filesystem mutations. Rollback reads the backup manifest before it removes anything from the cwd, so an unreadable backup fails the rollback with the cwd untouched, and a successful rollback removes the journal. A failed rollback keeps the journal; recovery flags block new model work until a usable checkpoint is restored. A capture request carrying the matching lease runs inside the caller's multi-step lease instead of waiting for that lease to be released. Retention preserves applied and emergency chains, and `recordEdit` persists the source/child branch relation in both session sidecars.
 
 -----
 
