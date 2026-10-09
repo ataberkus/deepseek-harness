@@ -375,6 +375,7 @@ jobs:
         if: >-
           inputs.ci
           && runner.os != 'Windows'
+          && (github.repository_owner == 'deepseek-harness' || vars.DSH_E2E_ENABLED == 'true')
           && (github.event_name != 'pull_request'
               || !(github.event.pull_request.head.repo.fork
                    || github.event.pull_request.user.login == 'dependabot[bot]'))
@@ -391,6 +392,7 @@ jobs:
         if: >-
           inputs.ci
           && runner.os == 'Windows'
+          && (github.repository_owner == 'deepseek-harness' || vars.DSH_E2E_ENABLED == 'true')
           && (github.event_name != 'pull_request'
               || !(github.event.pull_request.head.repo.fork
                    || github.event.pull_request.user.login == 'dependabot[bot]'))
@@ -406,6 +408,7 @@ jobs:
         if: >-
           inputs.ci
           && runner.os != 'Windows'
+          && (github.repository_owner == 'deepseek-harness' || vars.DSH_E2E_ENABLED == 'true')
           && (github.event_name != 'pull_request'
               || !(github.event.pull_request.head.repo.fork
                    || github.event.pull_request.user.login == 'dependabot[bot]'))
@@ -426,6 +429,7 @@ jobs:
         if: >-
           inputs.ci
           && runner.os == 'Windows'
+          && (github.repository_owner == 'deepseek-harness' || vars.DSH_E2E_ENABLED == 'true')
           && (github.event_name != 'pull_request'
               || !(github.event.pull_request.head.repo.fork
                    || github.event.pull_request.user.login == 'dependabot[bot]'))
