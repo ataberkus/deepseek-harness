@@ -78,6 +78,8 @@ async function composed(enabled = true): Promise<{
   ctx: Context
   checkpoint: WorkspaceCheckpoint
   capture: ReturnType<typeof vi.fn>
+  restore: ReturnType<typeof vi.fn>
+  acquireLease: ReturnType<typeof vi.fn>
 }> {
   const ctx = new Context()
   await ctx.plugin(SessionStore)
@@ -119,6 +121,17 @@ async function composed(enabled = true): Promise<{
   const snapshots = new Map<string, string>()
   const records = new Map<string, CheckpointRecord>()
   let nextCheckpoint = 1
+  const restore = vi.fn(async (restoreRequest: RestoreRequest) => {
+    const record = records.get(String(restoreRequest.checkpointId))
+    if (record === undefined) throw new Error(`checkpoint not found: ${String(restoreRequest.checkpointId)}`)
+    await writeFile(join(restoreRequest.cwd, 'note.txt'), snapshots.get(String(record.id)) ?? '')
+    ctx.emit('workspace-checkpoint/changed', record.sessionId)
+    return { checkpointId: record.id, fileCount: record.fileCount }
+  })
+  const acquireLease = vi.fn(async (workspaceKey: string) => ({
+    workspaceKey,
+    release: vi.fn(),
+  }))
   const capture = vi.fn(async (captureRequest: CaptureRequest): Promise<CheckpointRecord> => {
     const id = CheckpointId(`cp-${String(nextCheckpoint++)}`)
     const value = await readFile(join(captureRequest.cwd, 'note.txt'), 'utf8')
@@ -168,17 +181,8 @@ async function composed(enabled = true): Promise<{
           fileCount: record.fileCount,
           createdAt: record.createdAt,
         }))),
-    restore: vi.fn(async (restoreRequest: RestoreRequest) => {
-      const record = records.get(String(restoreRequest.checkpointId))
-      if (record === undefined) throw new Error(`checkpoint not found: ${String(restoreRequest.checkpointId)}`)
-      await writeFile(join(restoreRequest.cwd, 'note.txt'), snapshots.get(String(record.id)) ?? '')
-      ctx.emit('workspace-checkpoint/changed', record.sessionId)
-      return { checkpointId: record.id, fileCount: record.fileCount }
-    }),
-    acquireLease: vi.fn(async (workspaceKey: string) => ({
-      workspaceKey,
-      release: vi.fn(),
-    })),
+    restore,
+    acquireLease,
     recordEdit: vi.fn(async () => undefined),
     sessionIndex: vi.fn(() => undefined),
     recoveryRequired: vi.fn(async () => undefined),
@@ -187,7 +191,7 @@ async function composed(enabled = true): Promise<{
     evict: vi.fn(async () => undefined),
   } as unknown as WorkspaceCheckpoint
   ctx.provide('workspaceCheckpoint', checkpoint)
-  return { ctx, checkpoint, capture }
+  return { ctx, checkpoint, capture, restore, acquireLease }
 }
 
 function addTurn(session: ReturnType<Context['sessions']['create']>, turn: number, text: string): void {
@@ -322,7 +326,7 @@ describe('session.edit and session.activate', () => {
   })
 
   it.each(['nextTurn', 'nextStep'] as const)('refuses edit and activation while %s contains pending work', async (target) => {
-    const { ctx, checkpoint, capture } = await composed()
+    const { ctx, capture, restore, acquireLease } = await composed()
     try {
       const session = ctx.sessions.create(sid(`pending-${target}`), { meta: { cwd: process.cwd() } })
       addTurn(session, 1, 'original')
@@ -347,8 +351,8 @@ describe('session.edit and session.activate', () => {
       expect(inbox[target]).toEqual([pending])
       expect(session.snapshotEvents()).toEqual(original)
       expect(capture).not.toHaveBeenCalled()
-      expect(checkpoint.restore).not.toHaveBeenCalled()
-      expect(checkpoint.acquireLease).not.toHaveBeenCalled()
+      expect(restore).not.toHaveBeenCalled()
+      expect(acquireLease).not.toHaveBeenCalled()
     } finally {
       await ctx.fiber.dispose()
     }
