@@ -333,7 +333,7 @@ interface AppIdentity {
 
 ## `TokenUsage`
 
-Per-call token accounting. Counts are **disjoint**: `inputTokens` is uncached input only; cached input is reported separately, and billed input is the sum of the three. Adapters whose providers fold cache hits into a single prompt total (DeepSeek's `prompt_tokens`) subtract them back out. Optional `totalTokens` is an exact aggregate prompt-plus-output count preserved from the provider or reconstructed from authoritative aggregate counters; adapters omit it when unavailable or inconsistent. `reasoningTokens`, when present, is informational detail already included in `outputTokens`; totals must not add it again.
+Per-call token accounting. Counts are **disjoint**: `inputTokens` is uncached input only; cached input is reported separately, and billed input is the sum of the three. Adapters whose providers fold cache hits into a single prompt total (DeepSeek's `prompt_tokens`) subtract them back out. Optional `totalTokens` is an exact aggregate prompt-plus-output count preserved from the provider or reconstructed from authoritative aggregate counters; adapters omit it when unavailable or inconsistent. `reasoningTokens`, when present, is informational detail already included in `outputTokens`; totals must not add it again. Optional `costUsd` is the adapter-reported USD for the call; adapters without rates, or whose priced total is 0, omit it.
 
 ```ts type-equiv
 /**
@@ -1008,6 +1008,13 @@ registerModelDiscovery( settingsNs: string, discover: ( request: LlmModelDiscove
 async discoverModels( settingsNs: string, request: LlmModelDiscoveryRequest, signal?: AbortSignal, ): Promise<LlmDiscoveredModel[]>
 
 /**
+ * Disconnect a provider-managed route through its registered adapter.
+ * @param provider - registered provider route to disconnect.
+ * @returns nothing; a successful call unregisters the live route.
+ */
+@Remote('logout') async logout(provider: string): Promise<void>
+
+/**
  * Remote adapter for one draft provider interrogation.
  * @param settingsNs - namespace whose registered discovery serves this draft.
  * @param request - endpoint, protocol, and one-shot credential to use.
@@ -1016,6 +1023,67 @@ async discoverModels( settingsNs: string, request: LlmModelDiscoveryRequest, sig
  * @throws RemoteError with `llm/model-discovery-rejected` when discovery refuses or fails.
  */
 @Remote('discoverModels') async remoteDiscoverModels( settingsNs: string, request: LlmModelDiscoveryRequest, signal: AbortSignal, ): Promise<LlmDiscoveredModel[]>
+
+/**
+ * Offer to sign a provider route in through OAuth on behalf of the settings
+ * namespace this plugin owns. The namespace is the key for the same reason
+ * discovery is keyed that way: a route being signed in has no live
+ * registration to name yet. Disposed with the fiber.
+ * @param settingsNs - the namespace whose routes this login serves.
+ * @param login - signs in one provider and must honor the supplied signal.
+ * @returns the disposer that withdraws the offer.
+ */
+registerOAuthLogin( settingsNs: string, login: (provider: string, signal?: AbortSignal) => Promise<void>, ): () => void
+
+/**
+ * Sign one provider route in through its namespace's OAuth offer.
+ * @param settingsNs - namespace whose registered login serves this provider.
+ * @param provider - dormant OAuth route to sign in.
+ * @param signal - caller cancellation.
+ * @returns nothing; a successful call registers the live route.
+ */
+async loginOAuth(settingsNs: string, provider: string, signal?: AbortSignal): Promise<void>
+
+/**
+ * Remote adapter for one provider sign-in.
+ * @param settingsNs - namespace whose registered login serves this provider.
+ * @param provider - dormant OAuth route to sign in.
+ * @param signal - caller cancellation supplied by the Remote carrier.
+ * @returns nothing; a successful call registers the live route.
+ * @throws RemoteError with `llm/login-rejected` when login refuses or fails.
+ */
+@Remote('loginOAuth') async remoteLoginOAuth(settingsNs: string, provider: string, signal: AbortSignal): Promise<void>
+
+/**
+ * Offer to store one provider API key through the provider's own login
+ * method on behalf of the settings namespace this plugin owns. Disposed
+ * with the fiber.
+ * @param settingsNs - the namespace whose routes this login serves.
+ * @param login - stores one provider key and must honor the supplied signal.
+ * @returns the disposer that withdraws the offer.
+ */
+registerApiKeyLogin( settingsNs: string, login: (provider: string, apiKey: string, signal?: AbortSignal) => Promise<void>, ): () => void
+
+/**
+ * Store one provider key through its namespace's API-key login offer.
+ * @param settingsNs - namespace whose registered login serves this provider.
+ * @param provider - dormant API-key route to connect.
+ * @param apiKey - secret supplied for this login alone.
+ * @param signal - caller cancellation.
+ * @returns nothing; a successful call registers the live route.
+ */
+async loginApiKey( settingsNs: string, provider: string, apiKey: string, signal?: AbortSignal, ): Promise<void>
+
+/**
+ * Remote adapter for one provider API-key login.
+ * @param settingsNs - namespace whose registered login serves this provider.
+ * @param provider - dormant API-key route to connect.
+ * @param apiKey - secret supplied for this login alone.
+ * @param signal - caller cancellation supplied by the Remote carrier.
+ * @returns nothing; a successful call registers the live route.
+ * @throws RemoteError with `llm/login-rejected` when login refuses or fails.
+ */
+@Remote('loginApiKey') async remoteLoginApiKey( settingsNs: string, provider: string, apiKey: string, signal: AbortSignal, ): Promise<void>
 
 /**
  * Resolve the retry policy captured when one provider route was registered.

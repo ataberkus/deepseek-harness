@@ -13,21 +13,21 @@ kind: "package-reference"
 
 ## 目录
 
-- [Use this package](#use-this-package)
-- [Understand the implementation](#understand-the-implementation)
-- [Further Exploration](#further-exploration)
-- [Model Experience](#model-experience)
-- [Known Limitations and Deferred Work](#known-limitations-and-deferred-work)
-- [Dev Note](#dev-note)
+- [使用本包](#use-this-package)
+- [理解实现](#understand-the-implementation)
+- [进一步探索](#further-exploration)
+- [模型体验](#model-experience)
+- [已知限制与延期工作](#known-limitations-and-deferred-work)
+- [开发备注](#dev-note)
 
 -----
 
 <a id="use-this-package"></a>
-## Use this package
+## 使用本包
 
 当 MCP 服务器需要在运行时由用户配置时，添加 `dsh-mcp-manager`。每个服务器只需一个条目：取一个服务器名称、选择一种传输方式，它的工具就会以 `mcp__<serverName>__<tool>` 形式出现。插件页的 **MCP 服务器**卡片暂存同一份映射，并在保存时写入。
 
-### Minimal configuration
+### 最小配置
 
 挂载一次管理器（`dsh-base` 已默认挂载），然后在本条目自己的 `servers` 映射中描述服务器：
 
@@ -45,15 +45,15 @@ servers:
     url: http://localhost:3000/mcp
 ```
 
-| Field | Default | Meaning |
+| 字段 | 默认值 | 含义 |
 |---|---|---|
 | `servers` | `{}` | 以服务器名称为键的舰队；键同时是工具命名空间，必须匹配 `[A-Za-z0-9_-]{1,32}` |
 | `servers.<name>.enabled` | `true` | `false` 表示保留配置但不挂载 |
-| `transport` | required | `stdio` 或 `streamable-http` |
-| `command` / `args` / `env` / `cwd` | — | stdio：可执行文件、参数、合并到清洗后环境之上的额外变量、工作目录 |
-| `url` / `headers` | — | streamable-http：端点 URL 与额外请求头 |
+| `transport` | 必填 | `stdio` 或 `streamable-http` |
+| `command` / `args` / `env` / `cwd` | — | stdio：可执行文件、参数、合并到清洗后环境之上的额外环境变量、工作目录 |
+| `url` / `headers` | — | streamable-http：端点 URL 与额外请求标头 |
 | `toolCallTimeoutMs` | `60,000` | 每次 `tools/call` 调用的超时 |
-| `failOnStartupError` | `false` | 初始连接失败时是否拒绝子实例激活 |
+| `failOnStartupError` | `false` | 初始连接或工具同步失败时拒绝子实例激活 |
 | `reconnect.*` | `true` / `500` / `30,000` / `10` | 连接丢失后的自动重连策略 |
 
 生成的[配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-mcp-manager)是每个受支持字段的穷尽式真源。
@@ -65,14 +65,14 @@ servers:
 -----
 
 <a id="understand-the-implementation"></a>
-## Understand the implementation
+## 理解实现
 
 <details>
-<summary>Implementation internals — click to expand</summary>
+<summary>实现细节——点击展开</summary>
 
-This section explains the design decisions behind the fleet and points at the code that realizes them; the observable behavior is fully covered in [Use this package](#use-this-package).
+本节解释舰队背后的设计决策，并指出实现它们的代码位置；可观察行为已在[使用本包](#use-this-package)中完整说明。
 
-### Design philosophy
+### 设计理念
 
 - **字典键就是身份。** 映射的键直接提供 `serverName`，因此一个名称只有一个条目，条目不可能与自己的键持有不同的名字。
 - **舰队字段是易变的。** 提交的值经 Loader 到达正在运行的管理器，无需重新挂载；每次同步都读取当前引用，因此保存在下一轮即可见。
@@ -80,13 +80,14 @@ This section explains the design decisions behind the fleet and points at the co
 - **每个启用的条目对应一个子实例。** 禁用的条目不挂载任何内容。移除与禁用先释放旧子实例；新增与变更条目先经客户端 schema 校验，再替换旧子实例。
 - **突发变更串行化。** 设置突发写入排在同一条同步链上，因此同一服务器的释放与重挂不会交错。
 
-### Source map
+### 源码地图
 
-| File | Role |
+| 文件 | 职责 |
 |---|---|
 | [`src/index.ts`](src/index.ts) | 插件入口：易变的 `servers` 舰队、舰队同步、子实例生命周期 |
+| — | 不发布运行时不变式伴生入口；存活子实例映射是私有的同步状态，子实例的工具归各自的 `dsh-mcp-client` 注册所有，而被拒绝或挂载失败的条目会有意让已配置舰队与已挂载舰队不一致。 |
 
-### Lifecycle and sync
+### 生命周期与同步
 
 `apply` 从自己的配置引用读取舰队，拒绝一份无法挂载的映射，并在每次活提交与每次 `loader/volatile-update` 后调度一次同步。同步用 `deepEqualJson` 比较期望的启用条目与存活子实例，先释放过期子实例，再经 `McpClient.Config` 校验新增条目，最后用 `ctx.plugin` 挂载。子 fiber 归属管理器 fiber，因此管理器释放时舰队一并释放。挂载失败会明确记录日志并保持该服务器未挂载，其他服务器继续服务。
 
@@ -95,12 +96,12 @@ This section explains the design decisions behind the fleet and points at the co
 -----
 
 <a id="further-exploration"></a>
-## Further Exploration
+## 进一步探索
 
-Read these pages when the package-level contract is not enough. They move from the bridged tools to the fleet's design evidence and worked example configurations.
+当包级约定不够用时阅读以下页面。它们从已桥接的工具逐步进入舰队的设计证据与可运行的示例配置。
 
 - [MCP client bridge](../mcp-client/README.zh.md) — 单个服务器的连接、命名、执行与重连约定。
-- [MCP group](../README.zh.md) — MCP 组的两个包及其分工。
+- [MCP group](../README.zh.md) — MCP 组的各个包及其分工。
 - [MCP servers settings page](../../client/ui-settings-mcp/README.zh.md) — 暂存并写入本舰队的浏览器页面。
 - [Third-party memory MCP guide](../../../docs/user/guide/mcp-memory.zh.md) — 同一份服务器配置行现在表达为一份映射。
 - [Generated configuration catalog](../../../docs/config-catalog.zh.md#deepseek-aidsh-mcp-manager) — 每个受支持配置字段及其源声明。
@@ -108,19 +109,19 @@ Read these pages when the package-level contract is not enough. They move from t
 -----
 
 <a id="model-experience"></a>
-## Model Experience
+## 模型体验
 
-Indirectly, through managed `dsh-mcp-client` children, which own any model-facing tools and results; the manager registers nothing model-facing itself.
+间接地，通过受管的 `dsh-mcp-client` 子实例体现，它们拥有所有面向模型的工具与结果；管理器自身不注册任何面向模型的内容。
 
-#### KV Cache effect
+#### KV Cache 影响
 
-No direct invalidation; a managed child that folds its tools into the request prefix owns that change.
+没有直接失效；把工具并入请求前缀的受管子实例拥有该变化。
 
-## Known Limitations and Deferred Work
+## 已知限制与延期工作
 
 <a id="known-limitations-and-deferred-work"></a>
 
-These limits describe what you cannot do with this package and when it needs operational attention. They are current package constraints, not a comparison with other MCP clients or a task backlog.
+这些限制说明你无法用本包做什么、以及何时需要运维注意。它们是当前包约束，不是与其他 MCP 客户端的对比，也不是任务积压。
 
 - **profile 值均为明文** — `env` 与 `headers` 以明文保存在 profile 中，并原样出现在各配置界面。目前舰队条目没有凭据引用或 secret 角色；携带密钥的服务器请使用固定部署的客户端配置行。
 - **一次保存会替换整份映射** — 页面会写入它显示的所有服务器，因此在页面之外固定下来的服务器必须出现在草稿里，否则将不再挂载；`enabled: false` 则保留名称。
@@ -130,9 +131,9 @@ These limits describe what you cannot do with this package and when it needs ope
 ### 开发备注
 
 <details>
-<summary>Working context for maintainers — click to expand</summary>
+<summary>维护者的工作上下文——点击展开</summary>
 
-This Dev Note is working context for maintainers: open design directions that are not decided. It is explicitly non-authoritative — shipped behavior, limits, and accepted rationale live in the sections above and the package code.
+本开发备注是维护者的工作上下文：尚未决定的开放设计方向。它明确不具权威性——已交付行为、限制与既定理由以上文与包代码为准。
 
 - 舰队 `env`/`headers` 的凭据引用（类似 `apiKeyEnv`）是明文密钥的 deferred 答案；它需要设置页面可以渲染的逐服务器引用词汇。
 - `env`/`headers` 字典值的 fail-closed secret 角色同样 deferred：wire 界面隐藏它们之前，walker 必须证明每条密钥路径，正如设置脱敏限制中所述。

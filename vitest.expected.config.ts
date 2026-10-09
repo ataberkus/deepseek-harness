@@ -14,6 +14,8 @@ export default defineConfig({
     ],
     testTimeout: 120_000,
     hookTimeout: 30_000,
-    maxWorkers: Math.min(5, availableParallelism()),
+    // Each file boots complete dsh process trees under a 30s process deadline, so
+    // a worker needs about two cores: 5 workers on 10+ cores, 2 on a 4-core runner.
+    maxWorkers: Math.min(5, Math.max(1, Math.floor(availableParallelism() / 2))),
   },
 })

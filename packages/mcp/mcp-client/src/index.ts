@@ -109,6 +109,7 @@ type StreamableHttpConfigInput = Omit<StreamableHttpConfig, 'headers' | 'toolCal
   & Partial<Pick<StreamableHttpConfig, 'headers' | 'toolCallTimeoutMs' | 'failOnStartupError'>>
 type ConfigInput = StdioConfigInput | StreamableHttpConfigInput
 
+/** Schema for the automatic reconnect policy; omitted fields resolve to `RECONNECT_DEFAULTS`. */
 const Reconnect: z<ReconnectConfig> = z.object({
   enabled: z.boolean().default(RECONNECT_DEFAULTS.enabled),
   initialDelayMs: z.number().min(1).max(MAX_TIMER_DELAY_MS).default(RECONNECT_DEFAULTS.initialDelayMs),
@@ -116,28 +117,60 @@ const Reconnect: z<ReconnectConfig> = z.object({
   maxAttempts: z.number().step(1).min(1).max(Number.MAX_SAFE_INTEGER).default(RECONNECT_DEFAULTS.maxAttempts),
 })
 
+/** Field schemas shared by every transport: tool-call timeout, startup failure policy, instruction cap, and reconnect policy. */
+const CommonServerFields = {
+  toolCallTimeoutMs: z.number().default(DEFAULT_TOOL_CALL_TIMEOUT_MS),
+  failOnStartupError: z.boolean().default(false),
+  maxInstructionBytes: z.number().step(1).min(1).default(DEFAULT_MAX_INSTRUCTION_BYTES),
+  reconnect: Reconnect,
+}
+
+/**
+ * Stdio server field schemas after `transport` and the server identity:
+ * `command`, `args`, `env`, `cwd`, and the transport-independent fields.
+ * Used by a `z.object` that supplies `transport` and identity fields.
+ */
+export const StdioServerFields = {
+  command: z.string().required(),
+  args: z.array(String).default([]),
+  env: z.dict(String).default({}),
+  cwd: z.string().default(''),
+  ...CommonServerFields,
+}
+
+/**
+ * Streamable HTTP server field schemas after `transport` and the server
+ * identity: `url`, `headers`, and the transport-independent fields. Used by a
+ * `z.object` that supplies `transport` and identity fields.
+ */
+export const StreamableHttpServerFields = {
+  url: z.string().required(),
+  headers: z.dict(String).default({}),
+  ...CommonServerFields,
+}
+
 export const Config = z.union([
   z.object({
     transport: z.const('stdio'),
     serverName: z.string().required().pattern(SERVER_NAME_PATTERN),
-    command: z.string().required(),
-    args: z.array(String).default([]),
-    env: z.dict(String).default({}),
-    cwd: z.string().default(''),
-    toolCallTimeoutMs: z.number().default(DEFAULT_TOOL_CALL_TIMEOUT_MS),
-    failOnStartupError: z.boolean().default(false),
-    maxInstructionBytes: z.number().step(1).min(1).default(DEFAULT_MAX_INSTRUCTION_BYTES),
-    reconnect: Reconnect,
+    command: StdioServerFields.command,
+    args: StdioServerFields.args,
+    env: StdioServerFields.env,
+    cwd: StdioServerFields.cwd,
+    toolCallTimeoutMs: StdioServerFields.toolCallTimeoutMs,
+    failOnStartupError: StdioServerFields.failOnStartupError,
+    maxInstructionBytes: StdioServerFields.maxInstructionBytes,
+    reconnect: StdioServerFields.reconnect,
   }),
   z.object({
     transport: z.const('streamable-http'),
     serverName: z.string().required().pattern(SERVER_NAME_PATTERN),
-    url: z.string().required(),
-    headers: z.dict(String).default({}),
-    toolCallTimeoutMs: z.number().default(DEFAULT_TOOL_CALL_TIMEOUT_MS),
-    failOnStartupError: z.boolean().default(false),
-    maxInstructionBytes: z.number().step(1).min(1).default(DEFAULT_MAX_INSTRUCTION_BYTES),
-    reconnect: Reconnect,
+    url: StreamableHttpServerFields.url,
+    headers: StreamableHttpServerFields.headers,
+    toolCallTimeoutMs: StreamableHttpServerFields.toolCallTimeoutMs,
+    failOnStartupError: StreamableHttpServerFields.failOnStartupError,
+    maxInstructionBytes: StreamableHttpServerFields.maxInstructionBytes,
+    reconnect: StreamableHttpServerFields.reconnect,
   }),
 ]) as z<ConfigInput, Config>
 
@@ -184,7 +217,6 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
   const dispose = (): Promise<void> => stopping ??= connection.dispose()
   // Cordis announces unload before awaiting an unfinished apply(). Closing
   // the transport here releases startup requests that are still awaiting a reply.
-  // oxlint-disable-next-line typescript/no-misused-promises -- Cordis contains observer failures; the effect also awaits this promise.
   ctx.on('internal/plugin', (fiber) => {
     if (fiber !== ctx.fiber || fiber.uid !== null) return
     return dispose()

@@ -16,7 +16,6 @@
 
 import type { Context, Fiber, Volatile } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
-import { MAX_TIMER_DELAY_MS } from '@deepseek-ai/dsh-timeout'
 import { deepEqualJson } from '@deepseek-ai/dsh-util-values'
 import * as McpClient from '@deepseek-ai/dsh-mcp-client'
 // Type-only: pulls the Loader's entry and `loader/volatile-update` merges into
@@ -31,9 +30,6 @@ export const inject = ['tools']
 
 /** Valid server names, matching the client bridge namespace budget. */
 const SERVER_NAME_PATTERN = /^[A-Za-z0-9_-]{1,32}$/
-
-/** Default per-tool-call timeout, mirroring the client bridge default. */
-const DEFAULT_TOOL_CALL_TIMEOUT_MS = 60_000
 
 /** Automatic reconnect policy for one settings-driven server entry. */
 export interface McpReconnectEntry {
@@ -119,33 +115,16 @@ type ResolvedEntry = (
   failOnStartupError: boolean
 } & Record<string, unknown>
 
-const Reconnect: z<McpReconnectEntry> = z.object({
-  enabled: z.boolean().default(true),
-  initialDelayMs: z.number().min(1).max(MAX_TIMER_DELAY_MS).default(500),
-  maxDelayMs: z.number().min(1).max(MAX_TIMER_DELAY_MS).default(30_000),
-  maxAttempts: z.number().step(1).min(1).max(Number.MAX_SAFE_INTEGER).default(10),
-})
-
 const StdioEntry = z.object({
   transport: z.const('stdio'),
   enabled: z.boolean().default(true),
-  command: z.string().required(),
-  args: z.array(String).default([]),
-  env: z.dict(String).default({}),
-  cwd: z.string().default(''),
-  toolCallTimeoutMs: z.number().default(DEFAULT_TOOL_CALL_TIMEOUT_MS),
-  failOnStartupError: z.boolean().default(false),
-  reconnect: Reconnect,
+  ...McpClient.StdioServerFields,
 })
 
 const HttpEntry = z.object({
   transport: z.const('streamable-http'),
   enabled: z.boolean().default(true),
-  url: z.string().required(),
-  headers: z.dict(String).default({}),
-  toolCallTimeoutMs: z.number().default(DEFAULT_TOOL_CALL_TIMEOUT_MS),
-  failOnStartupError: z.boolean().default(false),
-  reconnect: Reconnect,
+  ...McpClient.StreamableHttpServerFields,
 })
 
 /** Schema for the `mcp` settings section and the manager composition entry. */
@@ -204,6 +183,8 @@ export function apply(ctx: Context, config: ResolvedConfig): void {
   ctx.effect(() => () => {
     closed = true
   }, 'mcp-manager.close')
+  /** Read the close flag fresh after each await; disposal can land mid-reconcile. */
+  const isClosed = (): boolean => closed
   let tail: Promise<void> = Promise.resolve()
   /**
    * Reconcile live children with the currently authoritative section. Removals
@@ -212,7 +193,7 @@ export function apply(ctx: Context, config: ResolvedConfig): void {
    * refused entry keeps the previous generation serving.
    */
   const reconcile = async (): Promise<void> => {
-    if (closed) return
+    if (isClosed()) return
     const desired = new Map<string, McpClient.Config>()
     for (const [serverName, entry] of Object.entries(servers())) {
       if (!entry.enabled) continue
@@ -236,8 +217,7 @@ export function apply(ctx: Context, config: ResolvedConfig): void {
         }
       }
     }
-    // oxlint-disable-next-line typescript/no-unnecessary-condition -- dispose() can flip this during the await.
-    if (closed) return
+    if (isClosed()) return
     for (const [serverName, next] of desired) {
       const prev = live.get(serverName)
       if (prev !== undefined && deepEqualJson(prev.config, next)) continue
@@ -257,13 +237,11 @@ export function apply(ctx: Context, config: ResolvedConfig): void {
           ctx.logger.error(`mcp-manager: disposing server "${serverName}" before remount failed`)
           ctx.logger.error(error)
         }
-        // oxlint-disable-next-line typescript/no-unnecessary-condition -- dispose() can flip this during the await.
-        if (closed) return
+        if (isClosed()) return
       }
       try {
         const fiber = await ctx.plugin(McpClient, parsed)
-        // oxlint-disable-next-line typescript/no-unnecessary-condition -- dispose() can flip this during the await.
-        if (closed) {
+        if (isClosed()) {
           await fiber.dispose().catch((error: unknown) => {
             ctx.logger.error(`mcp-manager: disposing late-mounted server "${serverName}" failed`)
             ctx.logger.error(error)

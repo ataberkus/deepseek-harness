@@ -170,23 +170,12 @@ export async function refreshAntigravityToken(
   if (projectId === undefined) {
     throw new Error('Antigravity OAuth credential is missing projectId; run /login google-antigravity again')
   }
-  const body = new URLSearchParams({
-    client_id: GOOGLE_ANTIGRAVITY_CLIENT_ID,
-    client_secret: GOOGLE_ANTIGRAVITY_CLIENT_SECRET,
-    refresh_token: credential.refresh,
-    grant_type: 'refresh_token',
-  })
-  const response = await antigravityOAuthInternals.fetch(GOOGLE_ANTIGRAVITY_TOKEN_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: body.toString(),
-    signal: requestSignal(signal),
-  })
-  if (!response.ok) {
-    const errorText = await response.text()
-    throw new Error(`Antigravity token refresh failed: ${errorText}`)
-  }
-  const parsed = parseTokenJson(await response.json(), 'token refresh')
+  const parsed = await requestToken(
+    { refresh_token: credential.refresh, grant_type: 'refresh_token' },
+    'Antigravity token refresh failed',
+    'token refresh',
+    signal,
+  )
   return antigravityCredential(
     parsed.access,
     parsed.refresh ?? credential.refresh,
@@ -228,24 +217,12 @@ async function exchangeAuthorizationCode(
   redirectUri: string,
   signal?: AbortSignal,
 ): Promise<{ access: string; refresh: string; expiresIn: number }> {
-  const body = new URLSearchParams({
-    client_id: GOOGLE_ANTIGRAVITY_CLIENT_ID,
-    client_secret: GOOGLE_ANTIGRAVITY_CLIENT_SECRET,
-    code,
-    grant_type: 'authorization_code',
-    redirect_uri: redirectUri,
-  })
-  const response = await antigravityOAuthInternals.fetch(GOOGLE_ANTIGRAVITY_TOKEN_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: body.toString(),
-    signal: requestSignal(signal),
-  })
-  if (!response.ok) {
-    const errorText = await response.text()
-    throw new Error(`Token exchange failed: ${errorText}`)
-  }
-  const parsed = parseTokenJson(await response.json(), 'token exchange')
+  const parsed = await requestToken(
+    { code, grant_type: 'authorization_code', redirect_uri: redirectUri },
+    'Token exchange failed',
+    'token exchange',
+    signal,
+  )
   if (parsed.refresh === undefined) {
     throw new Error('No refresh token received. Please try again.')
   }
@@ -402,6 +379,38 @@ export async function discoverProject(accessToken: string, signal?: AbortSignal)
   }
 
   throw new Error(`onboardUser did not return a provisioned project id after ${ONBOARD_MAX_ATTEMPTS} attempts`)
+}
+
+/**
+ * POST one grant to the Google token endpoint with the Antigravity client credentials.
+ * @param grant - grant-specific form fields, appended after `client_id` and `client_secret`.
+ * @param failure - error message prefix for a non-2xx reply; the reply text follows it.
+ * @param endpoint - label naming the grant in JSON validation errors.
+ * @param signal - optional abort signal, combined with the auth request timeout.
+ * @returns the validated token fields.
+ */
+async function requestToken(
+  grant: Record<string, string>,
+  failure: string,
+  endpoint: string,
+  signal: AbortSignal | undefined,
+): Promise<{ access: string; refresh?: string; expiresIn: number }> {
+  const body = new URLSearchParams({
+    client_id: GOOGLE_ANTIGRAVITY_CLIENT_ID,
+    client_secret: GOOGLE_ANTIGRAVITY_CLIENT_SECRET,
+    ...grant,
+  })
+  const response = await antigravityOAuthInternals.fetch(GOOGLE_ANTIGRAVITY_TOKEN_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: body.toString(),
+    signal: requestSignal(signal),
+  })
+  if (!response.ok) {
+    const errorText = await response.text()
+    throw new Error(`${failure}: ${errorText}`)
+  }
+  return parseTokenJson(await response.json(), endpoint)
 }
 
 function parseTokenJson(

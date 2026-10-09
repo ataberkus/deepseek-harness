@@ -9,7 +9,7 @@ kind: "package-group"
 
 ## 概述
 
-`mcp/` 组让模型调用外部 Model Context Protocol（MCP）工具并读取服务器资源。只需配置 `mcp-client` 条目；随附 profile 已统一挂载 `mcp-resources` 一次。只有作用域中存在已配置服务器的调用方才会看到 MCP 工具与提示词文本。连接还会提供服务器指令。配置与限制由各包的 README 说明。
+`mcp/` 组让模型调用外部 Model Context Protocol（MCP）工具并读取服务器资源。可以直接配置 `mcp-client` 条目，也可以让 `mcp-manager` 为其 `servers` 映射中每个启用的条目挂载一个客户端；随附 profile 已统一挂载 `mcp-resources` 一次。只有作用域中存在已配置服务器的调用方才会看到 MCP 工具与提示词文本。连接还会提供服务器指令。配置与限制由各包的 README 说明。
 
 ## 目录
 
@@ -22,11 +22,12 @@ kind: "package-group"
 <a id="packages"></a>
 ## 包
 
-客户端拥有每个已配置连接；共享资源包为这些连接提供资源工具。
+客户端拥有每个已配置连接；管理器挂载一支可配置的客户端舰队；共享资源包为这些连接提供资源工具。
 
 | 包 | 提供的能力 |
 |---|---|
 | [`mcp-client/`](mcp-client/README.zh.md) | 连接一台 MCP 服务器，暴露其工具与指令，并提供其资源操作 |
+| [`mcp-manager/`](mcp-manager/README.zh.md) | 为每个启用的 `servers` 条目挂载一个客户端，使舰队在运行时可由用户配置 |
 | [`mcp-resources/`](mcp-resources/README.zh.md) | 通过显式选择服务器的共享工具发现和读取资源 |
 
 -----

@@ -60,8 +60,7 @@ describe('mcp-manager real Loader composition', () => {
     })
     await context.loader.await()
 
-    const names = context.tools.schemas()
-      .map(tool => tool.name)
+    const names = context.tools.schemas().map(tool => tool.name)
     expect(names.filter(toolName => toolName.startsWith('mcp__'))).toEqual([])
     // The settings card edits this field live; the Loader only commits values
     // into the running reference when the schema declares them volatile.

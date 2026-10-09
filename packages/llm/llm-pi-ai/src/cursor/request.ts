@@ -8,9 +8,9 @@
  * @module dsh-llm-pi-ai/cursor/request
  */
 
+import { randomUUID } from '@deepseek-ai/dsh-util-crypto'
 import { createHash } from 'node:crypto'
 import type { Context, SimpleStreamOptions, Tool } from '@earendil-works/pi-ai'
-import { randomUUID } from '@deepseek-ai/dsh-util-crypto'
 import {
   concat,
   encodeBool,

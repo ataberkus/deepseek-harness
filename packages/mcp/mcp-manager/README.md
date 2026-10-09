@@ -53,7 +53,7 @@ servers:
 | `command` / `args` / `env` / `cwd` | — | stdio: executable, arguments, extra env over scrubbed ambient env, working directory |
 | `url` / `headers` | — | streamable-http: endpoint URL and extra request headers |
 | `toolCallTimeoutMs` | `60,000` | Timeout per `tools/call` invocation |
-| `failOnStartupError` | `false` | Reject the child activation when the initial connection fails |
+| `failOnStartupError` | `false` | Reject the child activation when the initial connection or tool synchronization fails |
 | `reconnect.*` | `true` / `500` / `30,000` / `10` | Automatic reconnect policy after a lost connection |
 
 The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-mcp-manager) is the exhaustive source for every accepted field.
@@ -85,6 +85,7 @@ This section explains the design decisions behind the fleet and points at the co
 | File | Role |
 |---|---|
 | [`src/index.ts`](src/index.ts) | Plugin entry: the volatile `servers` fleet, fleet reconciliation, child lifecycle |
+| — | No runtime invariant companion is published; the live-child map is private reconciliation state, child tools belong to each `dsh-mcp-client` registration, and a refused or failed mount intentionally leaves the configured fleet and the mounted fleet different. |
 
 ### Lifecycle and sync
 
@@ -100,7 +101,7 @@ This section explains the design decisions behind the fleet and points at the co
 Read these pages when the package-level contract is not enough. They move from the bridged tools to the fleet's design evidence and worked example configurations.
 
 - [MCP client bridge](../mcp-client/README.md) — one server's connection, naming, execution, and reconnection contract.
-- [MCP group](../README.md) — the two packages of the MCP group and their roles.
+- [MCP group](../README.md) — the packages of the MCP group and their roles.
 - [MCP servers settings page](../../client/ui-settings-mcp/README.md) — the browser page that stages and writes this fleet.
 - [Third-party memory MCP guide](../../../docs/user/guide/mcp-memory.md) — overlay rows that the same server entries express as one mapping.
 - [Generated configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-mcp-manager) — every accepted config field and its source declaration.

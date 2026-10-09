@@ -13,37 +13,37 @@
   zh: 11842876c6b1f8bf
 /deepseek-ai-dsh-mcp-manager/table-of-contents:
   en: d152484eb41ac6b4
-  zh: ffab54373e9e61f0
+  zh: 09388d293f9be9cb
 /deepseek-ai-dsh-mcp-manager/use-this-package:
   en: 85b2ca7b1a911716
-  zh: 29f0b324503d5aff
+  zh: e1d37004c2aca5d1
 /deepseek-ai-dsh-mcp-manager/use-this-package/minimal-configuration:
-  en: 0e3ca3f7a6583943
-  zh: 520350033eea21c4
+  en: dac0ca958e7b8a8c
+  zh: 1dde16ddcff0467e
 /deepseek-ai-dsh-mcp-manager/understand-the-implementation:
   en: 323157f0b573a5eb
-  zh: 323157f0b573a5eb
+  zh: 309719ad813970bb
 /deepseek-ai-dsh-mcp-manager/understand-the-implementation/design-philosophy:
   en: 26411ef3697f0574
-  zh: 4eeb169e5b8844d1
+  zh: 0447fc52001e1c50
 /deepseek-ai-dsh-mcp-manager/understand-the-implementation/source-map:
-  en: 3b8a7bad783684ab
-  zh: bb1c89adb7b065cf
+  en: 88dd171df62400ea
+  zh: 14b2b73a42c60296
 /deepseek-ai-dsh-mcp-manager/understand-the-implementation/lifecycle-and-sync:
   en: 75042311f6dab5e9
-  zh: b14a200baa4d3e29
+  zh: cc88bb29ac60c6d1
 /deepseek-ai-dsh-mcp-manager/further-exploration:
-  en: d475cba52fd7516a
-  zh: befa9984239e7d28
+  en: c599f4ac6af908e9
+  zh: b86c0a2a7b980672
 /deepseek-ai-dsh-mcp-manager/model-experience:
   en: 2e3305dde87195c2
-  zh: 2e3305dde87195c2
+  zh: ee3fcf9d1656dd0e
 /deepseek-ai-dsh-mcp-manager/model-experience/kv-cache-effect:
   en: 7cc01d26d3957104
-  zh: 7cc01d26d3957104
+  zh: df21c1d7d88fec06
 /deepseek-ai-dsh-mcp-manager/known-limitations-and-deferred-work:
   en: 84a828280f122230
-  zh: 5832bb15ed854458
+  zh: f610625146a806af
 /deepseek-ai-dsh-mcp-manager/known-limitations-and-deferred-work/dev-note:
   en: 47ca3c844c2854cb
-  zh: f8e1b2372346b941
+  zh: 56bf20d1d1f69bb2

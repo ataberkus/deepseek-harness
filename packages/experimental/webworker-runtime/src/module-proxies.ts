@@ -61,6 +61,7 @@ export const MODULE_PROXIES: Record<string, string> = {
   // Structural mocks: every symbol exists, every call throws.
   'node:dns/promises': './node/builtin_modules/mock/dns/promises.ts',
   'dns/promises': './node/builtin_modules/mock/dns/promises.ts',
+  'node:http2': './node/builtin_modules/mock/http2.ts',
   'node:net': './node/builtin_modules/mock/net.ts',
   'node:stream': './node/builtin_modules/implemented/stream.ts',
   'node:stream/promises': './node/builtin_modules/implemented/stream/promises.ts',

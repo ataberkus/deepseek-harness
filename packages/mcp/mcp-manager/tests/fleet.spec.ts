@@ -15,8 +15,7 @@ import { startHttpMcpFixture } from '../../mcp-client/tests/http-fixture.ts'
 
 /** Tool names currently registered on the harness tool runtime. */
 function toolNames(ctx: Context): string[] {
-  const tools = (ctx as unknown as { tools: { schemas(): Array<{ name: string }> } }).tools
-  return tools.schemas().map(tool => tool.name)
+  return ctx.tools.schemas().map(tool => tool.name)
 }
 
 /** One manager mounted behind a real Loader entry, so edits take the volatile commit path. */

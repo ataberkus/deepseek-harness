@@ -43,6 +43,7 @@ import * as nodeUtil from './builtin_modules/implemented/util.ts'
 import * as nodeUtilTypes from './builtin_modules/implemented/util/types.ts'
 import * as nodeZlib from './builtin_modules/implemented/zlib.ts'
 import * as nodeChildProcess from './builtin_modules/implemented/child_process.ts'
+import * as nodeHttp2 from './builtin_modules/mock/http2.ts'
 import * as nodeNet from './builtin_modules/mock/net.ts'
 import * as nodeSqlite from './builtin_modules/mock/sqlite.ts'
 import * as nodeVm from './builtin_modules/mock/vm.ts'
@@ -72,6 +73,7 @@ const BUILTINS: Record<string, StaticModuleFactory> = {
   fs: () => nodeFs,
   'fs/promises': () => nodeFsPromises,
   http: () => nodeHttp,
+  http2: () => nodeHttp2,
   module: () => nodeModule,
   net: () => nodeNet,
   os: () => nodeOs,

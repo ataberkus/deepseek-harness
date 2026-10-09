@@ -2128,6 +2128,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     declaredBy: 'an entry in \'main\' (client-ui-plugin-manager), so it exists while that entry is mounted',
     occupants: [
       'client-ui-settings-agent-loop AgentLoopCard id \'agent-loop\'',
+      'client-ui-settings-mcp McpServersCard id \'mcp\'',
       'client-ui-settings-shell ShellCard id \'shell\'',
       'client-ui-settings-subagent SubagentCard id \'subagent\'',
       'client-ui-settings-web-search WebSearchCard id \'web-search\'',

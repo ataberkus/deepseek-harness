@@ -2103,7 +2103,7 @@ export interface ReconnectConfig {
 
 - `inject`: `tools`
 - `refs`: `Volatile` (`@deepseek-ai/cordis`)
-- `source`: [`packages/mcp/mcp-manager/src/index.ts:104`](../packages/mcp/mcp-manager/src/index.ts)
+- `source`: [`packages/mcp/mcp-manager/src/index.ts:100`](../packages/mcp/mcp-manager/src/index.ts)
 
 ```ts config-catalog
 /**

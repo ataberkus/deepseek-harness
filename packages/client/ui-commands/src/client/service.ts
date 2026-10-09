@@ -506,6 +506,10 @@ export class CommandUiRuntime extends Service implements CommandUiContract {
    * echoes it. A handler error result reports an error outcome so the
    * composer keeps the draft and attachments for correction.
    * A refused call throws.
+   * @param session - the session whose agent receives the command.
+   * @param line - the composer line, including the leading command name.
+   * @param attachments - staged attachments submitted with the line.
+   * @returns the admission outcome the composer renders.
    */
   async execute(
     session: ClientSessionContext,
