@@ -21,7 +21,9 @@ export type PluginsSettingsLocaleKey =
   | 'workspaceCheckpointEnabled' | 'workspaceCheckpointEnabledHint'
   | 'mcpTitle' | 'mcpDescription' | 'mcpEmpty' | 'mcpEnable' | 'mcpDisable' | 'mcpRemove'
   | 'mcpAddTitle' | 'mcpName' | 'mcpTransport' | 'mcpTransportStdio' | 'mcpTransportHttp'
-  | 'mcpCommand' | 'mcpArgs' | 'mcpUrl' | 'mcpAdd' | 'mcpAdvancedHint' | 'mcpConflict'
+  | 'mcpCommand' | 'mcpArgs' | 'mcpUrl'
+  | 'mcpNamePlaceholder' | 'mcpCommandPlaceholder' | 'mcpArgsPlaceholder' | 'mcpUrlPlaceholder'
+  | 'mcpAdd' | 'mcpAdvancedHint' | 'mcpConflict'
   | 'mcpNameRequired' | 'mcpNameInvalid' | 'mcpCommandRequired' | 'mcpUrlRequired' | 'mcpUrlInvalid'
 
 /** English copy. */
@@ -95,6 +97,10 @@ export const en: Record<PluginsSettingsLocaleKey, string> = {
   mcpCommand: 'Command',
   mcpArgs: 'Arguments, one per line',
   mcpUrl: 'Endpoint URL',
+  mcpNamePlaceholder: 'github',
+  mcpCommandPlaceholder: 'npx',
+  mcpArgsPlaceholder: '-y\n@modelcontextprotocol/server-github',
+  mcpUrlPlaceholder: 'http://localhost:3000/mcp',
   mcpAdd: 'Stage server',
   mcpAdvancedHint: 'Timeouts, environment, headers, and reconnect tuning live in settings.yaml.',
   mcpConflict: 'Settings changed elsewhere. Discard your draft and try again.',
@@ -180,6 +186,10 @@ export const zh: Record<PluginsSettingsLocaleKey, string> = {
   mcpCommand: '启动命令',
   mcpArgs: '参数，每行一个',
   mcpUrl: '端点 URL',
+  mcpNamePlaceholder: 'github',
+  mcpCommandPlaceholder: 'npx',
+  mcpArgsPlaceholder: '-y\n@modelcontextprotocol/server-github',
+  mcpUrlPlaceholder: 'http://localhost:3000/mcp',
   mcpAdd: '暂存服务器',
   mcpAdvancedHint: '超时、环境变量、请求头与重连调优请在 settings.yaml 中完成。',
   mcpConflict: '设置已在其他位置更新。请放弃修改后重试。',

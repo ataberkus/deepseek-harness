@@ -159,6 +159,8 @@ export type QueueAction =
   }
   | { readonly kind: 'remove' }
   | { readonly kind: 'steer' }
+
+/** One Session list entry. */
 export interface SessionSummary {
   readonly sessionId: SessionId
   readonly updatedAt: number
@@ -637,7 +639,11 @@ export type SessionControlFrame =
 
 declare module '@deepseek-ai/cordis' {
   interface Events {
-    /** A workspace checkpoint update for one Session. */
+    /**
+     * A workspace checkpoint update for one Session.
+     * @mode emit
+     * @param frame - checkpoint rows or edit/activation progress for the Session.
+     */
     'session/checkpoints'(frame: SessionCheckpointFrame): void
     /**
      * A Session became visible to Session list consumers.

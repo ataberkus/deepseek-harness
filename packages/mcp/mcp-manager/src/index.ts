@@ -98,15 +98,21 @@ export interface Config {
 }
 
 /** Resolved manager configuration after schemastery applied the defaults. */
-type ResolvedConfig = { servers: Record<string, ResolvedEntry> }
+type ResolvedConfig = {
+  /** Servers by name, each with its defaults applied. */
+  servers: Record<string, ResolvedEntry>
+}
 
 /** One resolved entry with defaults applied. */
 type ResolvedEntry = (
   | Omit<McpStdioServerEntry, 'enabled' | 'args' | 'env' | 'cwd' | 'toolCallTimeoutMs' | 'failOnStartupError'>
   | Omit<McpHttpServerEntry, 'enabled' | 'headers' | 'toolCallTimeoutMs' | 'failOnStartupError'>
 ) & {
+  /** False keeps the configuration but mounts nothing. */
   enabled: boolean
+  /** Per-tool-call timeout in milliseconds. */
   toolCallTimeoutMs: number
+  /** Fail plugin activation when the initial connection or tool synchronization fails. */
   failOnStartupError: boolean
 } & Record<string, unknown>
 
