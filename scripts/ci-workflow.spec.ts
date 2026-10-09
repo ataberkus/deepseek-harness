@@ -592,6 +592,13 @@ describe('DeepSeek e2e workflow', () => {
     expect(JSON.stringify(steps)).not.toContain('apt-get')
   })
 
+  it('runs outside the deepseek-harness organization only when DSH_E2E_ENABLED opts in', () => {
+    const e2e = workflowJob(loadWorkflow('.github/workflows/e2e.yml'), 'e2e')
+
+    expect(e2e.if).toContain("github.repository_owner == 'deepseek-harness' || vars.DSH_E2E_ENABLED == 'true'")
+    expect(e2e.if).toContain('head.repo.fork')
+  })
+
   it('bounds profile subprocess fan-out to the tested e2e default', () => {
     const workflow = loadWorkflow('.github/workflows/e2e.yml')
     const e2e = workflowJob(workflow, 'e2e')
@@ -956,7 +963,8 @@ describe('Issue lifecycle workflow', () => {
     expect(lifecyclePullRequest.types).not.toContain('ready_for_review')
     expect(lifecyclePullRequest.types).toContain('review_requested')
     expect(lifecycleReview.types).toEqual(['submitted'])
-    const gated = "${{ github.event_name != 'pull_request_review' || github.event.review.state == 'changes_requested' }}"
+    const gated =
+      "${{ vars.DSH_ISSUE_APP_CLIENT_ID != '' && (github.event_name != 'pull_request_review' || github.event.review.state == 'changes_requested') }}"
     const steps = lifecycleJob.steps.filter(isRecord)
     const tokenStep = steps.find(s => s.name === 'Create project token')
     const handleStep = steps.find(s => s.name === 'Handle repository event')
@@ -976,7 +984,7 @@ describe('Issue lifecycle workflow', () => {
     const tokenStep = steps.find(step => step.name === 'Create Project read token')
     const validateStep = steps.find(step => step.name === 'Validate pull request')
     const humanPullRequest =
-      "${{ github.event.pull_request.user.type != 'Bot' && github.event.pull_request.user.type != 'App' }}"
+      "${{ vars.DSH_ISSUE_APP_CLIENT_ID != '' && github.event.pull_request.user.type != 'Bot' && github.event.pull_request.user.type != 'App' }}"
 
     expect(tokenStep).toMatchObject({
       id: 'app-token',
