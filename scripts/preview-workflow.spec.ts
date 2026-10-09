@@ -10,7 +10,7 @@ const workflow = yaml.load(readFileSync(resolve(import.meta.dirname, '../.github
   env: Record<string, string>
   jobs: Record<'preview', {
     'runs-on': string
-    steps: Array<{ name?: string; uses?: string; run?: string; with?: Record<string, unknown>; env?: Record<string, string> }>
+    steps: Array<{ name?: string; if?: string; uses?: string; run?: string; with?: Record<string, unknown>; env?: Record<string, string> }>
   }>
 }
 const preview = workflow.jobs.preview
@@ -36,6 +36,13 @@ describe('PR preview workflow', () => {
     expect(preview.steps.find(step => step.uses === 'actions/cache/restore@v4')?.with).toMatchObject({
       key: "${{ runner.os }}-node-${{ env.PRIMARY_NODE_VERSION }}-pnpm-${{ hashFiles('pnpm-lock.yaml') }}",
     })
+  })
+
+  it('skips every step that needs Cloudflare credentials outside the organization', () => {
+    for (const name of ['Upload to Cloudflare Pages', 'Verify the protected deployment serves the image', 'Comment the preview URL']) {
+      expect(preview.steps.find(step => step.name === name), name).toMatchObject({ if: "github.repository_owner == 'deepseek-harness'" })
+    }
+    expect(preview.steps.find(step => step.run === 'pnpm --filter @deepseek-ai/dsh-web-frontend run build:preview')).not.toHaveProperty('if')
   })
 
   it('retains per-PR deployment, protected image verification, and idempotent URL comments', () => {
