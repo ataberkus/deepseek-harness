@@ -9,6 +9,9 @@
   ],
   "references": [
     {
+      "path": "../../util/crypto"
+    },
+    {
       "path": "../../util/launch-environment"
     },
     {

@@ -161,7 +161,9 @@ function overlaysLiveCatalog(provider: string, baseURL: string): boolean {
 /**
  * Protocol and endpoint to list for a catalog route, when that route overlays
  * a live listing. OpenRouter (the catalog id, or an OpenRouter hostname on
- * another listable route) overlays; other catalog endpoints do not.
+ * another listable route) overlays; other catalog endpoints do not. Without a
+ * profile protocol, the route's catalog models must name exactly one listable
+ * protocol; models on non-listable protocols do not count.
  * @param provider - provider route key.
  * @param profile - optional protocol and endpoint overrides.
  * @returns the protocol and base URL to list, or `undefined` when this route
@@ -174,9 +176,11 @@ export function catalogListingTarget(
   const catalog = catalogProvider(provider)
   const baseURL = profile.baseURL ?? catalog?.baseUrl
   if (baseURL === undefined || baseURL.length === 0) return undefined
-  const apis = new Set<string>()
-  for (const model of catalogModels(provider).values()) apis.add(model.api)
-  const api = profile.api ?? (apis.size === 1 ? [...apis][0] : undefined)
+  const listable = new Set<string>()
+  for (const model of catalogModels(provider).values()) {
+    if (LISTABLE_PROTOCOLS.has(model.api)) listable.add(model.api)
+  }
+  const api = profile.api ?? (listable.size === 1 ? [...listable][0] : undefined)
   if (api === undefined || !LISTABLE_PROTOCOLS.has(api)) return undefined
   if (!overlaysLiveCatalog(provider, baseURL)) return undefined
   return { api, baseURL }
