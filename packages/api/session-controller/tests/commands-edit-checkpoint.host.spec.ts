@@ -326,7 +326,7 @@ describe('session.edit failure rollback', () => {
 
   it('passes a Remote error from the branch step through unchanged', async () => {
     const { run } = await seeded('edit-remote-error')
-    const failure = new RemoteError('session/agent-busy', 'busy child', {})
+    const failure = new RemoteError('session/agent-busy', 'busy child', { reason: 'busy' })
     fixture.spies.recordEdit.mockRejectedValueOnce(failure)
     await expect(run()).rejects.toBe(failure)
     expect(await readFile(join(cwd, 'note.txt'), 'utf8')).toBe('after-turn-2')
@@ -335,10 +335,9 @@ describe('session.edit failure rollback', () => {
   it('marks the workspace recovery-required when the rollback also fails', async () => {
     const { run } = await seeded('edit-rollback-fails')
     fixture.spies.recordEdit.mockRejectedValueOnce(new Error('index locked'))
-    const original = fixture.restore.getMockImplementation()
     fixture.restore.mockImplementation(async (request) => {
       if (fixture.restore.mock.calls.length > 1) throw new Error('disk full')
-      return original?.(request)
+      return fixture.impl.restore(request)
     })
     await expect(run()).rejects.toMatchObject({
       code: 'checkpoint-recovery-required',
@@ -353,9 +352,8 @@ describe('session.edit failure rollback', () => {
 
   it('fails without touching the workspace when the emergency checkpoint is not ready', async () => {
     const { run } = await seeded('edit-emergency-unready')
-    const original = fixture.capture.getMockImplementation()
     fixture.capture.mockImplementationOnce(async (request) => {
-      const record: CheckpointRecord = await original?.(request)
+      const record = await fixture.impl.capture(request)
       const unready = { ...record, status: { kind: 'failed', reason: 'quota exceeded' } as never }
       fixture.records.set(String(record.id), unready)
       return unready
@@ -391,9 +389,8 @@ describe('session.edit failure rollback', () => {
 
   it('rolls back when the child initial checkpoint is not ready', async () => {
     const { run } = await seeded('edit-child-initial-unready')
-    const original = fixture.capture.getMockImplementation()
     fixture.capture.mockImplementation(async (request) => {
-      const record: CheckpointRecord = await original?.(request)
+      const record = await fixture.impl.capture(request)
       return request.role === 'initial'
         ? { ...record, status: { kind: 'failed', reason: 'cannot snapshot child' } as never }
         : record

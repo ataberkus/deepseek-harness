@@ -168,10 +168,9 @@ describe('session.retry', () => {
   it('keeps the workspace recovery-required when the retry fails and the rollback also fails', async () => {
     const { agent, run } = await seededFailure('retry-rollback-fails')
     agent.followup = () => { throw new Error('agent disposed') }
-    const original = fixture.restore.getMockImplementation()
     fixture.restore.mockImplementation(async (request) => {
       if (fixture.restore.mock.calls.length > 1) throw new Error('disk full')
-      return original?.(request)
+      return fixture.impl.restore(request)
     })
     await expect(run()).rejects.toMatchObject({ code: 'checkpoint-recovery-required' })
     expect(fixture.spies.markRecoveryRequired).toHaveBeenCalledWith(
@@ -182,7 +181,7 @@ describe('session.retry', () => {
 
   it('passes a Remote error through when the lease cannot be acquired and nothing was captured', async () => {
     const { run } = await seededFailure('retry-lease-fails')
-    const failure = new RemoteError('session/agent-busy', 'workspace locked', {})
+    const failure = new RemoteError('session/agent-busy', 'workspace locked', { reason: 'locked' })
     fixture.spies.acquireLease.mockRejectedValueOnce(failure)
     await expect(run()).rejects.toBe(failure)
     expect(fixture.restore).not.toHaveBeenCalled()
@@ -347,7 +346,7 @@ describe('session.activate', () => {
 
   it('passes a Remote error through when the lease cannot be acquired', async () => {
     const { run } = await seededCompleted('activate-lease-fails')
-    const failure = new RemoteError('session/agent-busy', 'workspace locked', {})
+    const failure = new RemoteError('session/agent-busy', 'workspace locked', { reason: 'locked' })
     fixture.spies.acquireLease.mockRejectedValueOnce(failure)
     await expect(run()).rejects.toBe(failure)
     expect(fixture.restore).not.toHaveBeenCalled()

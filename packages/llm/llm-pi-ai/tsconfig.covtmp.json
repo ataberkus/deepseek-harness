@@ -1,5 +1,0 @@
-{
-  "extends": "../../../tsconfig.base.json",
-  "compilerOptions": { "noEmit": true, "composite": false, "incremental": false, "declaration": false, "declarationMap": false, "rootDir": "../../..", "skipLibCheck": true },
-  "include": ["src/**/*.ts", "tests/coverage-*.spec.ts"]
-}

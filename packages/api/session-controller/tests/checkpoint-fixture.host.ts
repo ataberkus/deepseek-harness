@@ -139,6 +139,11 @@ export interface CheckpointFixture {
   readonly capture: Mock<(request: CaptureRequest) => Promise<CheckpointRecord>>
   readonly restore: Mock<(request: RestoreRequest) => Promise<{ checkpointId: CheckpointRecord['id']; fileCount: number }>>
   readonly spies: CheckpointSpies
+  /** Unmocked implementations, for specs that wrap or fail one call. */
+  readonly impl: {
+    readonly capture: (request: CaptureRequest) => Promise<CheckpointRecord>
+    readonly restore: (request: RestoreRequest) => Promise<{ checkpointId: CheckpointRecord['id']; fileCount: number }>
+  }
   readonly lease: { release: Mock<() => void> }
   /** Child sessions are registered with a followup that completes a turn. */
   readonly childAgentFactory: { attach: boolean }
@@ -189,14 +194,15 @@ export async function composeCheckpointFixture(): Promise<CheckpointFixture> {
   const snapshots = new Map<string, string>()
   const records = new Map<string, CheckpointRecord>()
   let nextCheckpoint = 1
-  const restore = vi.fn(async (restoreRequest: RestoreRequest): Promise<{ checkpointId: CheckpointRecord['id']; fileCount: number }> => {
+  const restoreImpl = async (restoreRequest: RestoreRequest): Promise<{ checkpointId: CheckpointRecord['id']; fileCount: number }> => {
     const record = records.get(String(restoreRequest.checkpointId))
     if (record === undefined) throw new Error(`checkpoint not found: ${String(restoreRequest.checkpointId)}`)
     await writeFile(join(restoreRequest.cwd, 'note.txt'), snapshots.get(String(record.id)) ?? '')
     return { checkpointId: record.id, fileCount: record.fileCount }
-  })
+  }
+  const restore = vi.fn(restoreImpl)
   const lease = { release: vi.fn<() => void>() }
-  const capture = vi.fn(async (captureRequest: CaptureRequest): Promise<CheckpointRecord> => {
+  const captureImpl = async (captureRequest: CaptureRequest): Promise<CheckpointRecord> => {
     const id = CheckpointId(`cp-${String(nextCheckpoint++)}`)
     let value = ''
     try {
@@ -227,7 +233,8 @@ export async function composeCheckpointFixture(): Promise<CheckpointFixture> {
     }
     records.set(String(id), record)
     return record
-  })
+  }
+  const capture = vi.fn(captureImpl)
   const spies: CheckpointSpies = {
     inspect: vi.fn(async (id: CheckpointRecord['id']): Promise<CheckpointRecord> => {
       const record = records.get(String(id))
@@ -263,7 +270,19 @@ export async function composeCheckpointFixture(): Promise<CheckpointFixture> {
     evict: vi.fn(async () => undefined),
   } as unknown as WorkspaceCheckpoint
   ctx.provide('workspaceCheckpoint', checkpoint)
-  return { ctx, checkpoint, records, frames, workspaces, capture, restore, spies, lease, childAgentFactory }
+  return {
+    ctx,
+    checkpoint,
+    records,
+    frames,
+    workspaces,
+    capture,
+    restore,
+    spies,
+    lease,
+    impl: { capture: captureImpl, restore: restoreImpl },
+    childAgentFactory,
+  }
 }
 
 /**

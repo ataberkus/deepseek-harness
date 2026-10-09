@@ -232,10 +232,14 @@ export function apply(ctx: Context, config: ResolvedConfig): void {
       try {
         const fiber = await ctx.plugin(McpClient, parsed)
         if (isClosed()) {
-          await fiber.dispose().catch((error: unknown) => {
+          // Closing already ran this child's disposer, so `dispose()` may
+          // return `undefined`; awaiting inside the try tolerates both.
+          try {
+            await fiber.dispose()
+          } catch (error) {
             ctx.logger.error(`mcp-manager: disposing late-mounted server "${serverName}" failed`)
             ctx.logger.error(error)
-          })
+          }
           return
         }
         live.set(serverName, { fiber, config: next })

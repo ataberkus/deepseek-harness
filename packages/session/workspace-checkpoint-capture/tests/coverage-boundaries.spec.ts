@@ -262,7 +262,7 @@ describe('workspace-checkpoint-capture recovery admission', () => {
       name: 'write-clear',
       description: 'write',
       parameters: {},
-      output: { schema: { type: 'string' }, render: (_args, value) => [{ type: 'text', text: value }] },
+      output: { schema: { type: 'string' }, render: () => [{ type: 'text', text: 'written' }] },
       execute: async () => 'written',
     })
 
@@ -274,7 +274,7 @@ describe('workspace-checkpoint-capture recovery admission', () => {
       signal: new AbortController().signal,
     })
 
-    expect(result).toMatchObject({ isError: false, value: 'written' })
+    expect(result).toMatchObject({ isError: false, content: [{ type: 'text', text: 'written' }] })
   })
 
   it('dispatches a tool whose session has no cwd even while a workspace needs recovery', async () => {
@@ -285,7 +285,7 @@ describe('workspace-checkpoint-capture recovery admission', () => {
       name: 'write-bare',
       description: 'write',
       parameters: {},
-      output: { schema: { type: 'string' }, render: (_args, value) => [{ type: 'text', text: value }] },
+      output: { schema: { type: 'string' }, render: () => [{ type: 'text', text: 'written' }] },
       execute: async () => 'written',
     })
 
@@ -297,6 +297,6 @@ describe('workspace-checkpoint-capture recovery admission', () => {
       signal: new AbortController().signal,
     })
 
-    expect(result).toMatchObject({ isError: false, value: 'written' })
+    expect(result).toMatchObject({ isError: false, content: [{ type: 'text', text: 'written' }] })
   })
 })
