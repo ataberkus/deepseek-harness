@@ -230,7 +230,7 @@ export class McpCardController {
 
   private currentServers(): Map<string, Record<string, unknown>> {
     const servers = this.scope.getSnapshot().value?.servers ?? {}
-    return new Map(Object.entries(servers).map(([name, entry]) => [name, { ...(entry as Record<string, unknown>) }]))
+    return new Map(Object.entries(servers).map(([name, entry]) => [name, { ...entry }]))
   }
 
   private desiredServers(): Map<string, Record<string, unknown>> {

@@ -114,6 +114,9 @@ async function bench(locale: 'zh' | 'en' = 'zh') {
       contribution = c
       return () => { contribution = undefined }
     },
+    decorate() {
+      return () => {}
+    },
   })
   const seats = new Map<string, {
     inject: ((sessionId: SessionId) => ModelSelectInjected) | undefined

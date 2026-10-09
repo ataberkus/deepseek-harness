@@ -209,7 +209,7 @@ export function apply(ctx: ClientContext): void {
       available: session => sessions.subagentAddress(session.sessionId) === undefined,
       ui: {
         kind: 'popupSelect',
-        options: async () => loginOptions(t),
+        options: () => Promise.resolve(loginOptions(t)),
         onSelect: async (option, session) => {
           const outcome = await command.execute(session, `/login ${option.id}`)
           if (outcome.kind === 'error') {

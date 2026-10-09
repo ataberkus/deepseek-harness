@@ -153,7 +153,7 @@ function TurnErrorItem({ node, t, useSession, useChat, useInput, retryTurn }: {
   }
   let running = false
   try {
-    running = useSession(s => s.running) ?? false
+    running = useSession(s => s.running)
   } catch {
     running = false
   }
@@ -171,7 +171,7 @@ function TurnErrorItem({ node, t, useSession, useChat, useInput, retryTurn }: {
   }
   let isLatest = false
   try {
-    isLatest = useChat(snapshot => snapshot.timeline.turnOrder.at(-1) === node.turn) ?? false
+    isLatest = useChat(snapshot => snapshot.timeline.turnOrder.at(-1) === node.turn)
   } catch {
     isLatest = false
   }
@@ -440,7 +440,6 @@ export const UserMessageNodeView = memo(function UserMessageNodeView({
     alreadyEditing = false
   }
   const eligible = alreadyEditing ? undefined : selectEditCheckpoint(checkpoints, data.seq)
-  const beginEdit = inputActions?.beginEdit
   return (
     <UserStyleBubble
       content={data.content}
@@ -455,9 +454,9 @@ export const UserMessageNodeView = memo(function UserMessageNodeView({
           time={data.time}
           clock="start"
           className={css.actions}
-          {...eligible === undefined || beginEdit === undefined
+          {...eligible === undefined || inputActions.beginEdit === undefined
             ? {}
-            : { onEdit: () => { beginEdit({ messageSeq: data.seq, checkpointId: eligible.id, originalText: text }) } }}
+            : { onEdit: () => { inputActions.beginEdit?.({ messageSeq: data.seq, checkpointId: eligible.id, originalText: text }) } }}
           t={t}
         />
       )}
