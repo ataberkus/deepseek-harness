@@ -7,8 +7,14 @@ cd /d "%~dp0"
 
 call :pick_pnpm || exit /b 1
 
+rem esbuild.exe inherits the checkout's Low integrity label on sandbox-managed
+rem clones and cannot delete its own temp files from a Medium-integrity %TEMP%.
+if not exist "%USERPROFILE%\AppData\LocalLow\Temp" mkdir "%USERPROFILE%\AppData\LocalLow\Temp"
+set "TEMP=%USERPROFILE%\AppData\LocalLow\Temp"
+set "TMP=%TEMP%"
+
 echo [run-web] Starting client-bundle watcher in a second window...
-start "dsh dev:web" /d "%~dp0" cmd /k %PNPM% run dev:web
+start "dsh dev:web" /d "%~dp0" cmd /k %PNPM% run dev:web --skip-build --no-serve
 echo [run-web] Starting web server in this window (Ctrl+C to stop)...
 %PNPM% dsh web %*
 if errorlevel 1 (
