@@ -1,13 +1,13 @@
 ---
 description: "可选插件包：通过一次辅助模型调用，把输入框草稿改写成更清晰、更具体的提示词。"
-kind: "package-reference"
+kind: "package-bundle"
 ---
 
 # @deepseek-ai/dsh-experimental-prompt-enhance
 
 [English](README.md) | 中文
 
-## 概要
+## 概述
 
 这个可选插件包为 Web 输入框加入提示词增强。Host 插件注册 `POST /prompt-enhance`；[浏览器控件](../client-ui-prompt-enhance/README.zh.md)提交已打开会话的草稿，并用返回结果替换草稿。调用使用会话所选模型、最近的对话文本和会话工作目录，不会向 Agent 发送任何内容。
 

@@ -3,14 +3,14 @@
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/experimental/prompt-enhance/README.md
 /:
-  en: 61d17faf5c70f076
-  zh: 2db08c0f78834243
+  en: 593b8e8cd4f4f658
+  zh: b453c1e4aff6fac9
 /deepseek-ai-dsh-experimental-prompt-enhance:
   en: 17f0c0a9fe90f2a1
   zh: a931a114fad5e427
 /deepseek-ai-dsh-experimental-prompt-enhance/summary:
   en: e6d9bb0fdcbd227f
-  zh: 831af0da02aed2c5
+  zh: cc1f24c10eb57fc7
 /deepseek-ai-dsh-experimental-prompt-enhance/table-of-contents:
   en: d152484eb41ac6b4
   zh: aec3688fb92d60ae

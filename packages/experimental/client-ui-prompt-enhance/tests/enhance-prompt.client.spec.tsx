@@ -65,7 +65,7 @@ it('shows the Host failure and keeps the draft', async () => {
 
 it.each(['', '   ', '/compact', '!ls'])('disables the control for %j', (draft) => {
   fixture(draft, vi.fn())
-  expect((screen.getByRole('button', { name: zh.enhance }) as HTMLButtonElement).disabled).toBe(true)
+  expect(screen.getByRole('button', { name: zh.enhance })).toHaveProperty('disabled', true)
 })
 
 it('exposes a shortcut target scoped to its composer card', async () => {

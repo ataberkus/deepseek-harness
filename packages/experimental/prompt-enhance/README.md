@@ -1,6 +1,6 @@
 ---
 description: "Optional bundle that rewrites a composer draft into a clearer, more specific prompt with one auxiliary model call."
-kind: "package-reference"
+kind: "package-bundle"
 ---
 
 # @deepseek-ai/dsh-experimental-prompt-enhance

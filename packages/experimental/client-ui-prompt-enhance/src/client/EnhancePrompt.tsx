@@ -50,7 +50,7 @@ export function EnhancePrompt({ sessionId, useInput, inputActions, useSession, e
   useEnhanceShortcut, t }: EnhancePromptProps) {
   const draft = useInput(state => state.draft)
   const busy = useInput(state => state.phase === 'adjudicating' || state.phase === 'submitting')
-  const removed = useSession(session => session.removed) ?? false
+  const removed = useSession(session => session.removed)
   const shortcutKeys = useEnhanceShortcut(keys => keys)
   const [running, setRunning] = useState<AbortController | null>(null)
   const [notice, setNotice] = useState<Notice | null>(null)

@@ -7,10 +7,10 @@ import { apply, type Config } from '../src/index.ts'
 
 type Handler = (req: IncomingMessage, res: ServerResponse) => Promise<void>
 
-const CONFIG: Config = {
+const CONFIG = {
   maxDraftChars: 100, historyMessages: 2, historyMessageChars: 50,
   maxOutputTokens: 200, timeoutMs: 5_000, maxConcurrent: 1,
-}
+} satisfies Config
 
 const answer = (text: string): StreamChunk[] => [
   { type: 'block-start', index: 0, blockType: 'text' },
@@ -116,7 +116,7 @@ describe('prompt-enhance route', () => {
 
   it('reports model failures and empty answers', async () => {
     const failing = await boot({ chunks: async function* () {
-      yield { type: 'finish', reason: { kind: 'error', failure: { code: 'auth', message: 'no key' } } } as StreamChunk
+      yield { type: 'finish', reason: { kind: 'error', failure: { code: 'auth', message: 'no key' } } }
     } })
     expect(await failing.post({ sessionId: 'session-1', text: 'x' })).toEqual({ status: 502, body: { code: 'auth', message: 'no key' } })
     const empty = await boot({ chunks: async function* () { yield* answer('```') } })
@@ -135,6 +135,6 @@ describe('prompt-enhance route', () => {
   })
 
   it('requires provider and model together', () => {
-    expect(() => apply({} as Context, { ...CONFIG, provider: 'p' })).toThrow(/together/)
+    expect(() => { apply({} as Context, { ...CONFIG, provider: 'p' }) }).toThrow(/together/)
   })
 })

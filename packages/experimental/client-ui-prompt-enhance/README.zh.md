@@ -7,7 +7,7 @@ kind: "package-reference"
 
 [English](README.md) | 中文
 
-## 概要
+## 概述
 
 这个浏览器插件绘制 [prompt-enhance 插件包](../prompt-enhance/README.zh.md)的 ✨ 控件。它注册一个 `conversation.input.right` 条目和 `composer.enhancePrompt` 键盘命令。按下后，草稿提交到 Host 路由，并由返回结果替换。
 
