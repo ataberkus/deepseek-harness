@@ -3,6 +3,12 @@
 // The post publishes no test for this mod; this one covers the behavior it describes.
 import { describe, expect, test } from 'claude-code/testing'
 import type { MountedElement, MountedSurface } from '../../../src/testing.ts'
+import { PAUSE_ARGV } from '../hooks/blast-radius.mjs'
+
+/** Whether a $.process.run argv is the hold loop's wait. */
+function isPause(argv: string[]): boolean {
+  return argv.length === PAUSE_ARGV.length && argv.every((item, index) => item === PAUSE_ARGV[index])
+}
 
 /** Poll a mounted surface until a Button with the label shows, as the held hook draws asynchronously. */
 async function button(surface: MountedSurface, label: string): Promise<MountedElement> {
@@ -20,8 +26,8 @@ describe('blast-radius', () => {
     on('session.cwd', () => ({ value: '/work' }))
     on('process.run', (_$, e: { argv: string[] }) => {
       ran.push(e.argv.join(' '))
-      // The hold loop waits on short sleeps; give each one real time so a press can land between them.
-      if (e.argv[0] === 'sleep') return new Promise(resolve => setTimeout(() => resolve({ value: { exitCode: 0, stdout: '', stderr: '' } }), 5))
+      // The hold loop waits on short pauses; give each one real time so a press can land between them.
+      if (isPause(e.argv)) return new Promise(resolve => setTimeout(() => resolve({ value: { exitCode: 0, stdout: '', stderr: '' } }), 5))
       if (e.argv[0] === 'git' && e.argv[1] === 'status') return { value: { exitCode: 0, stdout: ' M src/index.ts\n M README.md\n', stderr: '' } }
       return { value: { exitCode: 0, stdout: '', stderr: '' } }
     })
@@ -56,7 +62,7 @@ describe('blast-radius', () => {
   test('measures a recursive delete with du and find, and draws into a placed pane', async ($, on) => {
     on('session.cwd', () => ({ value: '/work' }))
     on('process.run', (_$, e: { argv: string[] }) => {
-      if (e.argv[0] === 'sleep') return new Promise(resolve => setTimeout(() => resolve({ value: { exitCode: 0, stdout: '', stderr: '' } }), 5))
+      if (isPause(e.argv)) return new Promise(resolve => setTimeout(() => resolve({ value: { exitCode: 0, stdout: '', stderr: '' } }), 5))
       if (e.argv[0] === 'du') return { value: { exitCode: 0, stdout: '1.1M\tbuild\n', stderr: '' } }
       if (e.argv[0] === 'find') return { value: { exitCode: 0, stdout: 'build/a.js\nbuild/b.js\nbuild/c.map\n', stderr: '' } }
       return { value: { exitCode: 0, stdout: '', stderr: '' } }

@@ -1,8 +1,10 @@
 // Blast Radius, from "Getting started with Claude Code mods"
 // (https://claude.dev/blog/getting-started-with-claude-code-mods/, Anthropic, 2026-10-01).
-// The post publishes the tool.call hook below unchanged; the rest of the module
-// (classify, measure, the pane and band trees) is completed to the post's
-// description of the mod, which is marked where it starts.
+// The post publishes the tool.call hook below unchanged except for its wait,
+// which calls pause() instead of running `sleep 0.25` so the hold also works on
+// Windows; the rest of the module (classify, measure, pause, the pane and band
+// trees) is completed to the post's description of the mod, which is marked
+// where it starts.
 
 // Blast Radius: see what a risky command would change before it runs.
 
@@ -30,7 +32,7 @@ export function register(on) {
     if (!opened.isPlaced) held.where = "band";         // too narrow for a pane: draw above the prompt
 
     while (held.decision === null && !next.signal.aborted) {
-      await $.process.run(["sleep", "0.25"]);          // time inside $ calls doesn't count against the hook's time limit
+      await pause($);                                  // time inside $ calls doesn't count against the hook's time limit
     }
     if (held.decision === "proceed") return next(e);   // let it run
     return { deny: `Blast Radius held this command: the user pressed Cancel. It would have: ${report.summary}.` };
@@ -96,6 +98,17 @@ async function run($, argv) {
   } catch {
     return { exitCode: 1, stdout: "", stderr: "" };
   }
+}
+
+// Windows has no `sleep` executable: the failed spawn would skip the hook and
+// let the held command run. There the wait runs the host's own Node instead.
+export const PAUSE_ARGV = process.platform === "win32"
+  ? [process.execPath, "-e", "setTimeout(() => {}, 250)"]
+  : ["sleep", "0.25"];
+
+// One quarter-second wait inside a $ call, so it pauses the hook's budget clock.
+function pause($) {
+  return $.process.run(PAUSE_ARGV, { env: { ELECTRON_RUN_AS_NODE: "1" } });
 }
 
 function decide(decision) {
