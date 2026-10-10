@@ -135,6 +135,9 @@ describe('closed runner protocol', () => {
     writeFileSync(invalid.requestPath, JSON.stringify({ cwd: '/target', env: {}, control: 'ipc' }))
     expect(() => consumeLinuxLaunchRequest(invalid.requestPath)).toThrow('invalid Linux launch request')
     expect(() => parseWindowsStartRequest({ type: 'start', cwd: 'C:\\target', env: {}, control: 'ipc' })).toThrow()
+    expect(parseWindowsStartRequest({ type: 'start', cwd: 'C:\\target', env: {}, stdin: 'ignore' }))
+      .toEqual({ type: 'start', cwd: 'C:\\target', env: {}, stdin: 'ignore' })
+    expect(() => parseWindowsStartRequest({ type: 'start', cwd: 'C:\\target', env: {}, stdin: 'pipe' })).toThrow()
   })
 
   it('creates, consumes, reports through, and cleans one private Linux exchange', () => {
@@ -287,7 +290,7 @@ describe('runner launch inputs', () => {
     expect(runnerStdio({
       ...spec,
       stdio: { stdin: 'ignore', stdout: 'inherit', stderr: 'pipe' },
-    }, true, 17)).toEqual(['ignore', 'ignore', 'ignore', 'ipc', 17, 1, 'pipe'])
+    }, true)).toEqual(['ignore', 'ignore', 'ignore', 'ipc', 'ignore', 1, 'pipe'])
   })
 
   it('removes ambient Node and tsx controls from the bootstrap environment only', () => {
@@ -726,6 +729,18 @@ describe('Windows Job runner protocol owner', () => {
     expect(host.sent).toEqual([{ type: 'target-exit', exitCode: 0 }])
     expect(host.exitCode).toBe(0)
     expect(host.env).toEqual({ SAFE: 'bootstrap' })
+  })
+
+  it('passes the runner null-device fd 0 for ignored stdin and closes only received carriers', async () => {
+    const host = new FakeRunnerHost()
+    const closeFileDescriptor = vi.fn()
+    const native = internals({ closeFileDescriptor })
+    await runWindows(host, native, { type: 'start', cwd: 'C:\\target', env: {}, stdin: 'ignore' })
+    expect(native.spawnCurrentTokenJobProcess).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
+      stdio: { stdin: 0, stdout: 5, stderr: 6 },
+    }))
+    expect(closeFileDescriptor.mock.calls).toEqual([[5], [6]])
+    expect(host.sent).toEqual([{ type: 'target-exit', exitCode: 0 }])
   })
 
   it.each([undefined, 'pipe'] as const)('closes every target carrier with control %s before the first Windows poll', async (control) => {

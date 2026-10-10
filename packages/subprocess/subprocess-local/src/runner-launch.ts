@@ -111,15 +111,17 @@ export function parseRunnerTargetArgv(argv: readonly string[]): string[] {
 /**
  * Build direct Linux target stdio, or isolated Windows runner stdio with IPC
  * on fd 3 and target carriers on fd 4 through fd 6; optional control uses fd 7.
+ * Windows ignored stdin leaves fd 4 absent: the runner hands the target its own
+ * null-device fd 0. Only `inherit` stdout/stderr pass the caller's descriptors,
+ * because any inherited descriptor makes libuv drop `CREATE_NO_WINDOW` and the
+ * runner then shares the caller's console.
  * @param spec - ordinary subprocess request whose stdio modes are preserved.
  * @param ipc - whether to isolate the runner and add its private Node IPC descriptor.
- * @param stdinCarrier - runner fd 4 carrier; Windows ignore passes an opened null-device fd.
  * @returns child-process stdio options for the runner.
  */
 export function runnerStdio(
   spec: SubprocessSpawnSpec,
   ipc: boolean,
-  stdinCarrier: 'pipe' | number = 'pipe',
 ): StdioOptions {
   const targetStdio: StdioOptions = [
     spec.stdio.stdin === 'ignore' ? 'ignore' : 'pipe',
@@ -138,7 +140,7 @@ export function runnerStdio(
     'ignore',
     'ignore',
     'ipc',
-    stdinCarrier,
+    spec.stdio.stdin === 'ignore' ? 'ignore' : 'pipe',
     spec.stdio.stdout === 'inherit' ? 1 : 'pipe',
     spec.stdio.stderr === 'inherit' ? 2 : 'pipe',
   ]

@@ -1,5 +1,4 @@
 import { EventEmitter } from 'node:events'
-import { fstatSync } from 'node:fs'
 import { PassThrough } from 'node:stream'
 import { describe, expect, it, vi } from 'vitest'
 import {
@@ -191,43 +190,19 @@ describe('Windows parent runner contract', () => {
     expect(result.stderr).toBe(child.targetStderr)
   })
 
-  it('carries a null-device fd 4 for ignored stdin and closes the parent descriptor after spawn', () => {
+  it('inherits no runner descriptor for ignored stdin and piped output', () => {
     const child = new FakeChild()
     const ignored = {
       ...spec,
-      stdio: { stdin: 'ignore', stdout: 'pipe', stderr: 'inherit' },
+      stdio: { stdin: 'ignore', stdout: 'pipe', stderr: 'pipe' },
     } as const
     const { result, spawn } = launch(child, ignored)
     expect(spawn).toHaveBeenCalledWith('C:\\node.exe', expect.any(Array), expect.objectContaining({
-      stdio: ['ignore', 'ignore', 'ignore', 'ipc', expect.any(Number), 'pipe', 2],
+      windowsHide: true,
+      stdio: ['ignore', 'ignore', 'ignore', 'ipc', 'ignore', 'pipe', 'pipe'],
     }))
-    const options = spawn.mock.calls[0]?.[2] as { stdio: unknown[] }
-    const carrier = options.stdio[4]
-    if (typeof carrier !== 'number') throw new Error('expected numeric null-device carrier')
-    expect(() => fstatSync(carrier)).toThrow()
+    expect(child.sent).toEqual([{ type: 'start', cwd: 'C:\\target', env: { TARGET: 'yes' }, stdin: 'ignore' }])
     expect(result.stdin).toBeNull()
-  })
-
-  it('closes the ignored-stdin descriptor when runner spawn throws synchronously', () => {
-    const ignored = {
-      ...spec,
-      stdio: { stdin: 'ignore', stdout: 'pipe', stderr: 'inherit' },
-    } as const
-    let carrier: number | undefined
-    const spawn = vi.fn((_command: string, _args: readonly string[], options: unknown) => {
-      const candidate = (options as { stdio: unknown[] }).stdio[4]
-      if (typeof candidate !== 'number') throw new Error('expected numeric null-device carrier')
-      carrier = candidate
-      throw new Error('runner spawn failed')
-    })
-
-    expect(() => launchWindowsJob(ignored, { TARGET: 'yes' }, {
-      spawn: spawn as never,
-      runnerInvocation: ['C:\\node.exe', 'C:\\runner.js'],
-    })).toThrow('runner spawn failed')
-    if (carrier === undefined) throw new Error('runner spawn was not attempted')
-    const closedCarrier = carrier
-    expect(() => fstatSync(closedCarrier)).toThrow()
   })
 
   it('maps target-exit to direct outcome and clean close to range quiescence', async () => {

@@ -2,8 +2,6 @@
 
 import { controlPipe } from './control-spawn.ts'
 import { spawn } from 'node:child_process'
-import { closeSync, openSync } from 'node:fs'
-import { devNull } from 'node:os'
 import type { Readable, Writable } from 'node:stream'
 import type { SubprocessOutcome, SubprocessSpawnSpec } from '@deepseek-ai/dsh-subprocess'
 import {
@@ -129,22 +127,17 @@ export function launchWindowsJob(
 ): ManagedProcessLaunch {
   const invocation = internals.runnerInvocation ?? spawnRunnerInvocation()
   const [command, ...prefix] = invocation
-  const ignoredStdinFd = spec.stdio.stdin === 'ignore' ? openSync(devNull, 'r') : undefined
-  let child: RunnerProcess
-  try {
-    child = (internals.spawn ?? spawn)(command, [
-      ...prefix,
-      '--',
-      ...spec.argv,
-    ], {
-      cwd: process.cwd(),
-      windowsHide: true,
-      env: runnerEnvironment(WINDOWS_RUNNER_SELECTION, invocation),
-      stdio: runnerStdio(spec, true, ignoredStdinFd ?? 'pipe'),
-    }) as RunnerProcess
-  } finally {
-    if (ignoredStdinFd !== undefined) closeSync(ignoredStdinFd)
-  }
+  // windowsHide applies CREATE_NO_WINDOW only while no runner descriptor is inherited.
+  const child = (internals.spawn ?? spawn)(command, [
+    ...prefix,
+    '--',
+    ...spec.argv,
+  ], {
+    cwd: process.cwd(),
+    windowsHide: true,
+    env: runnerEnvironment(WINDOWS_RUNNER_SELECTION, invocation),
+    stdio: runnerStdio(spec, true),
+  }) as RunnerProcess
   const targetStdin = child.stdio[4] as Writable | null
 
   const direct = Promise.withResolvers<SubprocessOutcome>()
@@ -209,7 +202,13 @@ export function launchWindowsJob(
     runnerSpawned = true
     try {
       if (child.send === undefined) throw new Error('subprocess-local: Windows runner has no IPC channel')
-      child.send({ type: 'start', cwd: spec.cwd, env: targetEnv, ...spec.stdio.control === undefined ? {} : { control: spec.stdio.control } }, (error) => {
+      child.send({
+        type: 'start',
+        cwd: spec.cwd,
+        env: targetEnv,
+        ...spec.stdio.control === undefined ? {} : { control: spec.stdio.control },
+        ...spec.stdio.stdin === 'ignore' ? { stdin: 'ignore' } : {},
+      }, (error) => {
         if (error === null) return
         failInfrastructure(error)
         owner.terminateForHostExit()

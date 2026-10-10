@@ -39,6 +39,8 @@ export interface WindowsStartRequest {
   cwd: string
   env: Record<string, string>
   control?: 'pipe'
+  /** Target stdin is the runner's own null-device fd 0; runner fd 4 is absent. */
+  stdin?: 'ignore'
 }
 
 /** The only parent-to-runner control message on Windows. */
@@ -174,12 +176,19 @@ export function readLinuxStartupError(path: string): LinuxStartupError | undefin
  * @returns validated target start request.
  */
 export function parseWindowsStartRequest(value: unknown): WindowsStartRequest {
-  if (!isRecord(value) || !hasExactKeys(value, ['type', 'cwd', 'env'], ['control'])
+  if (!isRecord(value) || !hasExactKeys(value, ['type', 'cwd', 'env'], ['control', 'stdin'])
     || value.type !== 'start' || typeof value.cwd !== 'string' || !isStringRecord(value.env)
-    || (value.control !== undefined && value.control !== 'pipe')) {
+    || (value.control !== undefined && value.control !== 'pipe')
+    || (value.stdin !== undefined && value.stdin !== 'ignore')) {
     throw new Error('subprocess runner received an invalid Windows start request')
   }
-  return { type: 'start', cwd: value.cwd, env: value.env, ...value.control === 'pipe' ? { control: 'pipe' as const } : {} }
+  return {
+    type: 'start',
+    cwd: value.cwd,
+    env: value.env,
+    ...value.control === 'pipe' ? { control: 'pipe' as const } : {},
+    ...value.stdin === 'ignore' ? { stdin: 'ignore' as const } : {},
+  }
 }
 
 /**

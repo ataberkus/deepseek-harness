@@ -307,17 +307,20 @@ class WindowsJobRunner {
         return
       }
       this.api = this.internals.loadWin32ProcessBindings()
+      // Ignored stdin reuses the runner's libuv null-device fd 0; the parent passes no fd 4.
+      const stdin = request.stdin === 'ignore' ? 0 : 4
       const spawned = this.internals.spawnCurrentTokenJobProcess(this.api, {
         command: command as string,
         applicationName,
         args,
         cwd: request.cwd,
         env: request.env,
-        stdio: { stdin: 4, stdout: 5, stderr: 6, ...request.control === 'pipe' ? { control: SUBPROCESS_CONTROL_FD } : {} },
+        stdio: { stdin, stdout: 5, stderr: 6, ...request.control === 'pipe' ? { control: SUBPROCESS_CONTROL_FD } : {} },
       })
       this.processHandle = spawned.process
       this.jobHandle = spawned.job
-      for (const fileDescriptor of request.control === 'pipe' ? [4, 5, 6, SUBPROCESS_CONTROL_FD] : [4, 5, 6]) {
+      const carriers = [...stdin === 4 ? [4] : [], 5, 6, ...request.control === 'pipe' ? [SUBPROCESS_CONTROL_FD] : []]
+      for (const fileDescriptor of carriers) {
         this.internals.closeFileDescriptor(fileDescriptor)
       }
       this.pollTimer = setInterval(() => { this.poll() }, 10)
