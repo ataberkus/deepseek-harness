@@ -18,6 +18,13 @@ export const zh = {
 /** Prompt-enhancement locale key union. */
 export type PromptEnhanceKey = keyof typeof zh
 
+declare module '@deepseek-ai/dsh-client-ui-slots' {
+  interface LocaleNamespaceMap {
+    /** Composer prompt-enhancement copy. */
+    'prompt-enhance': PromptEnhanceKey
+  }
+}
+
 /** English dictionary checked against the Chinese key set. */
 export const en = {
   enhance: 'Enhance prompt',

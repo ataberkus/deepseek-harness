@@ -11,15 +11,8 @@ import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type { ShortcutCommandId } from '@deepseek-ai/dsh-client-shortcuts/client'
 import { EnhancePrompt, type EnhancePromptInjected, type EnhanceShortcutTarget } from './EnhancePrompt.tsx'
-import { en, NS, zh, type PromptEnhanceKey } from './locales.ts'
+import { en, NS, zh } from './locales.ts'
 import { requestEnhancement } from './request.ts'
-
-declare module '@deepseek-ai/dsh-client-ui-slots' {
-  interface LocaleNamespaceMap {
-    /** Composer prompt-enhancement copy. */
-    'prompt-enhance': PromptEnhanceKey
-  }
-}
 
 export type { EnhancePromptInjected, EnhancePromptProps, EnhanceShortcutTarget } from './EnhancePrompt.tsx'
 export type { PromptEnhanceKey } from './locales.ts'
