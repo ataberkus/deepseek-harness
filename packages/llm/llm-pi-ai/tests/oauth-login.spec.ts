@@ -85,7 +85,7 @@ describe('parseOAuthProvider', () => {
 })
 
 describe('host command metadata', () => {
-  it('advertises provider input on the host login command', async () => {
+  it('advertises provider input on the host login and logout commands', async () => {
     await isolateDshHome()
     const ctx = new Context()
     contexts.push(ctx)
@@ -93,11 +93,15 @@ describe('host command metadata', () => {
     await ctx.plugin(CommandRuntime)
     await ctx.plugin(LlmPiAi, {})
 
-    const login = ctx.commands.list(fakeAgent()).find(command => command.name === 'login')
-    expect(login).toMatchObject({
-      name: 'login',
-      input: { hint: oauthHosts.OAUTH_COMMAND_HINT },
-    })
+    // Without `input`, the Web composer runs only the bare command, and bare
+    // `/logout` signs out of openai-codex instead of the named provider.
+    const commands = ctx.commands.list(fakeAgent())
+    for (const name of ['login', 'logout']) {
+      expect(commands.find(command => command.name === name)).toMatchObject({
+        name,
+        input: { hint: oauthHosts.OAUTH_COMMAND_HINT },
+      })
+    }
   })
 })
 
