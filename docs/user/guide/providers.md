@@ -56,7 +56,7 @@ This unofficial Cloud Code Assist backend is not a public API; Google may change
 
 Claude Pro and Max subscriptions sign in through Anthropic's browser OAuth, the same login Claude Code uses. Run `/login claude` (aliases `claude-code` and `anthropic`) in Web, CLI, or ACP chat, complete login on claude.ai, then select an `anthropic` model. `/logout claude` deletes the stored tokens.
 
-The callback listens on `localhost:53692`, so the browser must run on the machine that serves dsh. Requests carry the subscription token with Claude Code identity headers and draw on the subscription's usage limits, not API credits. Tokens live in the same `$DSH_HOME/oauth-credentials.json` file as Codex. Anthropic does not support third-party use of subscription tokens and may restrict accounts.
+The callback listens on `localhost:54545` (a random port when 54545 is busy), so the browser must run on the machine that serves dsh. Requests carry the subscription token with Claude Code identity headers and draw on the subscription's usage limits, not API credits. Tokens live in the same `$DSH_HOME/oauth-credentials.json` file as Codex. Anthropic does not support third-party use of subscription tokens and may restrict accounts.
 
 While signed in, the Models page shows a signed-in row in place of the `anthropic` API-key card; **Delete** signs out and restores the key card. An `anthropic` settings profile saved before login takes precedence over the subscription; delete it to use the subscription.
 

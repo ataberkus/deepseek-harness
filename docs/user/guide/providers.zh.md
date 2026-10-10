@@ -56,7 +56,7 @@ Web UI 会像 Codex 一样在这次按键手势里打开新标签。第一次登
 
 Claude Pro 与 Max 订阅通过 Anthropic 的浏览器 OAuth 登录，与 Claude Code 使用的登录相同。在 Web、CLI 或 ACP 对话中运行 `/login claude`（别名 `claude-code` 与 `anthropic`），在 claude.ai 完成登录后选择一个 `anthropic` 模型。`/logout claude` 删除已存储的 token。
 
-回调监听 `localhost:53692`，因此浏览器必须运行在提供 dsh 服务的机器上。请求携带订阅 token 与 Claude Code 身份请求头，消耗订阅的用量额度而非 API 余额。token 与 Codex 共用 `$DSH_HOME/oauth-credentials.json`。Anthropic 不支持第三方使用订阅 token，可能限制账号。
+回调监听 `localhost:54545`（54545 被占用时改用随机端口），因此浏览器必须运行在提供 dsh 服务的机器上。请求携带订阅 token 与 Claude Code 身份请求头，消耗订阅的用量额度而非 API 余额。token 与 Codex 共用 `$DSH_HOME/oauth-credentials.json`。Anthropic 不支持第三方使用订阅 token，可能限制账号。
 
 登录期间，模型页以已登录行取代 `anthropic` API 密钥卡片；**删除**会退出登录并恢复密钥卡片。登录前已保存的 `anthropic` settings profile 优先于订阅；删除它即可使用订阅。
 

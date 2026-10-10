@@ -1,12 +1,13 @@
 /**
  * Provider-managed login for `openai-codex` (pi-ai browser PKCE), `anthropic`
- * (pi-ai Claude Pro/Max PKCE on localhost:53692), `cursor` (loginDeepControl
- * poll), and `google-antigravity` (Google auth-code on 127.0.0.1:51121), plus
- * the OpenCode Go API-key method. All persist in {@link FileOAuthStore}.
+ * (Oh My Pi's Claude Pro/Max PKCE on localhost:54545 in `anthropic/oauth.ts`),
+ * `cursor` (loginDeepControl poll), and
+ * `google-antigravity` (Google auth-code on 127.0.0.1:51121), plus the
+ * OpenCode Go API-key method. All persist in {@link FileOAuthStore}.
  *
  * Codex and Claude keep {@link createBrowserOAuthInteraction}: open the
  * authorize URL and hang the manual-code prompt until the localhost callback
- * aborts it (Codex first selects browser login). Cursor and Gemini CLI notify
+ * aborts it (Codex first selects browser login). Cursor and Antigravity notify
  * `auth_url` and wait; they never prompt `select` or `manual_code`, so the
  * same interaction only opens the URL.
  *
@@ -406,6 +407,7 @@ export function registerOAuthCommands(ctx: Context, deps: OAuthCommandDeps): voi
     commandCtx.commands.register({
       name: 'logout',
       description: 'Sign out of OpenAI Codex, Cursor, Antigravity, or Claude',
+      input: { hint: OAUTH_COMMAND_HINT },
       handler: async ({ rawInput }) => {
         const provider = parseOAuthProvider(rawInput)
         if (provider === undefined) {

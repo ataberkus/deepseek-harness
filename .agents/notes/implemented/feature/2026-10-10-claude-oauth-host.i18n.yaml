@@ -1,0 +1,22 @@
+# Bilingual-pair consistency record for 2026-10-10-claude-oauth-host.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-10-10-claude-oauth-host.md
+/agent-note-port-oh-my-pi-s-claude-subscription-oauth:
+  en: 16f2bffdc2198d6a
+  zh: aa16c564fa9cede1
+/agent-note-port-oh-my-pi-s-claude-subscription-oauth/problem:
+  en: 8a12370309652599
+  zh: 868706f67c6768ed
+/agent-note-port-oh-my-pi-s-claude-subscription-oauth/decision:
+  en: d431818f8e87ddfe
+  zh: 47e057347295ef27
+/agent-note-port-oh-my-pi-s-claude-subscription-oauth/alternatives-considered:
+  en: 1e614a4235775cc3
+  zh: 7aa3eb23edf957cc
+/agent-note-port-oh-my-pi-s-claude-subscription-oauth/consequences:
+  en: f6c8b2fe49e6b4f5
+  zh: 7c2d6f03a1759769
+/agent-note-port-oh-my-pi-s-claude-subscription-oauth/testing:
+  en: 95f53178cb96f88b
+  zh: 297e14b00e3178a5

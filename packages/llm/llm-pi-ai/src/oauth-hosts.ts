@@ -2,9 +2,10 @@
  * Hosted OAuth provider routes this adapter logs in through `/login`, not the
  * rest of pi-ai's catalog OAuth methods (those stay on the Models key path).
  * `anthropic` is the one route here that also takes a catalog API key: its
- * OAuth login is the Claude Pro/Max subscription. Its key card shows while
- * signed out; a stored login replaces it, unless a settings profile exists,
- * in which case that profile serves the route.
+ * OAuth login is the Claude Pro/Max subscription, served by this adapter's
+ * port of Oh My Pi's Claude login rather than pi-ai's. Its key card shows
+ * while signed out; a stored login replaces it, unless a settings profile
+ * exists, in which case that profile serves the route.
  *
  * @module dsh-llm-pi-ai/oauth-hosts
  */
@@ -21,7 +22,7 @@ export const OPENAI_CODEX_PROVIDER = 'openai-codex'
 /** Fallback display name when the catalog provider is unavailable. */
 export const OPENAI_CODEX_DISPLAY_NAME = 'OpenAI Codex'
 
-/** Installed pi-ai provider id whose OAuth method signs in with a Claude Pro/Max subscription. */
+/** Catalog provider id whose OAuth method (replaced by `anthropic/oauth.ts`) signs in with a Claude Pro/Max subscription. */
 export const ANTHROPIC_PROVIDER = 'anthropic'
 
 /** Hosted-login display name for the Claude subscription route. */

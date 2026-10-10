@@ -29,6 +29,8 @@ import type {
   Provider,
   ThinkingLevelMap,
 } from '@earendil-works/pi-ai'
+import { withClaudeOAuth } from './anthropic/oauth.ts'
+import { ANTHROPIC_PROVIDER } from './oauth-hosts.ts'
 import { CURSOR_PROVIDER } from './cursor/constants.ts'
 import { cursorFallbackModels } from './cursor/models.ts'
 import { cursorProvider } from './cursor/provider.ts'
@@ -158,11 +160,16 @@ let providerIndex: Map<string, Provider> | undefined
 /**
  * Installed catalog providers by id, constructed once. Each entry owns the API
  * implementations for its own models, which is why a catalog route reuses this
- * provider instead of being rebuilt from parts.
+ * provider instead of being rebuilt from parts. The `anthropic` entry carries
+ * this adapter's Claude Pro/Max OAuth ({@link withClaudeOAuth}) in place of
+ * pi-ai's, so login, the Models-page flow, and token refresh all use it.
  * @returns the catalog provider index.
  */
 function catalogProviders(): Map<string, Provider> {
-  providerIndex ??= new Map(builtinProviders().map(provider => [provider.id, provider]))
+  providerIndex ??= new Map(builtinProviders().map(provider => [
+    provider.id,
+    provider.id === ANTHROPIC_PROVIDER ? withClaudeOAuth(provider) : provider,
+  ]))
   return providerIndex
 }
 
