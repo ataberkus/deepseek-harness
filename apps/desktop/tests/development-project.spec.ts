@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -121,5 +121,34 @@ describe('desktop development project', () => {
       release: release(),
       target: 'mac-x64',
     })).toThrow(/must be @deepseek-ai\/dsh@1\.2\.3/u)
+  })
+
+  it('omits hoisted links whose targets were deleted and keeps live hoisted packages', () => {
+    const root = temporaryRoot()
+    const cli = join(root, 'cli')
+    const host = join(root, 'host')
+    const hoisted = join(root, 'hoisted')
+    const live = join(root, 'live')
+    const removed = join(root, 'removed-workspace-package')
+    const kind = process.platform === 'win32' ? 'junction' : 'dir'
+    mkdirSync(cli)
+    mkdirSync(join(host, 'lib'), { recursive: true })
+    mkdirSync(join(hoisted, '@scope'), { recursive: true })
+    mkdirSync(live)
+    mkdirSync(removed)
+    writeFileSync(join(cli, 'package.json'), JSON.stringify({ name: '@deepseek-ai/dsh', version: '1.2.3' }))
+    writeFileSync(join(host, 'package.json'), JSON.stringify({ name: '@deepseek-ai/dsh-desktop-host', version: '1.2.3' }))
+    writeFileSync(join(host, 'lib/index.js'), '')
+    writeFileSync(join(live, 'package.json'), JSON.stringify({ name: '@scope/live', version: '1.0.0' }))
+    symlinkSync(live, join(hoisted, '@scope/live'), kind)
+    symlinkSync(removed, join(hoisted, '@scope/stale'), kind)
+    symlinkSync(removed, join(hoisted, 'stale'), kind)
+    rmSync(removed, { recursive: true })
+    const project = prepareDevelopmentProject({ projectDir: join(root, 'runtime'), cliDir: cli, hostDir: host, dependencyDir: hoisted, release: release(), target: 'mac-arm64' })
+    expect(realpathSync(join(project, 'node_modules/@scope/live'))).toBe(realpathSync(live))
+    expect(existsSync(join(project, 'node_modules/@scope/stale'))).toBe(false)
+    expect(existsSync(join(project, 'node_modules/stale'))).toBe(false)
+    const descriptor = JSON.parse(readFileSync(join(project, 'desktop-runtime.json'), 'utf8')) as { sharedPackages: { name: string }[] }
+    expect(descriptor.sharedPackages.map(({ name }) => name)).toContain('@scope/live')
   })
 })

@@ -69,6 +69,10 @@ function linkDirectory(source: string, destination: string): void {
   symlinkSync(realpathSync(source), destination, process.platform === 'win32' ? 'junction' : 'dir')
 }
 
+/**
+ * Mirror pnpm's undeclared hoist directory. A link whose target is gone (for example a deleted workspace package,
+ * which pnpm never prunes from this directory) is already unresolvable in the workspace, so the mirror omits it.
+ */
 function mirrorDependencyLinks(sourceRoot: string, destinationRoot: string): string[] {
   const names: string[] = []
   for (const entry of readdirSync(sourceRoot, { withFileTypes: true })) {
@@ -77,13 +81,14 @@ function mirrorDependencyLinks(sourceRoot: string, destinationRoot: string): str
     if (entry.name.startsWith('@') && (entry.isDirectory() || entry.isSymbolicLink())) {
       mkdirSync(join(destinationRoot, entry.name), { recursive: true })
       for (const scoped of readdirSync(source, { withFileTypes: true })) {
-        if (!scoped.isDirectory() && !scoped.isSymbolicLink()) continue
-        linkDirectory(join(source, scoped.name), join(destinationRoot, entry.name, scoped.name))
+        const scopedSource = join(source, scoped.name)
+        if ((!scoped.isDirectory() && !scoped.isSymbolicLink()) || !existsSync(scopedSource)) continue
+        linkDirectory(scopedSource, join(destinationRoot, entry.name, scoped.name))
         names.push(`${entry.name}/${scoped.name}`)
       }
       continue
     }
-    if (entry.isDirectory() || entry.isSymbolicLink()) {
+    if ((entry.isDirectory() || entry.isSymbolicLink()) && existsSync(source)) {
       linkDirectory(source, join(destinationRoot, entry.name))
       names.push(entry.name)
     }
