@@ -5,8 +5,12 @@
         maxDraftChars: 20000
         historyMessages: 6
         historyMessageChars: 1500
+        instructionsMaxChars: 20000
+        maxToolCalls: 6
+        toolResultMaxChars: 12000
+        scanMaxBytes: 2000000
         maxOutputTokens: 4000
-        timeoutMs: 120000
+        timeoutMs: 150000
         maxConcurrent: 3
     - id: ui-prompt-enhance
       name: '@deepseek-ai/dsh-experimental-client-ui-prompt-enhance'

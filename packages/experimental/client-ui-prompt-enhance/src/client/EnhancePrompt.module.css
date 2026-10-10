@@ -1,7 +1,16 @@
 .anchor { display: inline-flex; flex: none; }
 .trigger { width: 28px; padding: 0; flex: none; }
 .trigger[data-prompt-enhance='running'] { color: var(--dsw-alias-state-business-primary); animation: pulse 1.2s ease-in-out infinite; }
-.status { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.status {
+  min-width: 0;
+  max-width: 280px;
+  overflow: hidden;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: var(--dsh-content-font-size-secondary, 13px);
+  line-height: calc(20px + var(--dsh-content-font-delta-secondary, 0px));
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 
 @keyframes pulse {
   50% { opacity: 0.45; }

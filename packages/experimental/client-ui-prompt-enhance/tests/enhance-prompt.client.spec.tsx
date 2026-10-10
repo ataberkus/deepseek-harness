@@ -7,15 +7,17 @@ import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import { zh as commonZh } from '@deepseek-ai/dsh-client-locale/src/locales/zh.ts'
 import { EnhancePrompt, type EnhancePromptProps, type EnhanceShortcutTarget } from '../src/client/EnhancePrompt.tsx'
 import { zh } from '../src/client/locales.ts'
+import type { SubmitAttachment } from '@deepseek-ai/dsh-client-ui-conversation/client'
 
 afterEach(() => { cleanup() })
 
-function fixture(draft: string, enhance: EnhancePromptProps['enhance']) {
+function fixture(draft: string, enhance: EnhancePromptProps['enhance'], serialize: () => Promise<readonly SubmitAttachment[]> = async () => []) {
   const input = createSnapshotStore({ draft, phase: 'plain' as const })
   const inputActions = {
     captureInsertion: vi.fn(), insertText: vi.fn(() => true), persistDraft: vi.fn(),
     setDraft: vi.fn((text: string) => { input.set({ ...input.getSnapshot(), draft: text }) }),
-    addAttachments: vi.fn(() => true), removeAttachment: vi.fn(), pruneAttachments: vi.fn(), submit: vi.fn(),
+    addAttachments: vi.fn(() => true), removeAttachment: vi.fn(), pruneAttachments: vi.fn(),
+    serializeAttachments: vi.fn(serialize), submit: vi.fn(),
   }
   const targets: EnhanceShortcutTarget[] = []
   // The fixture stores carry only the fields the control reads.
@@ -35,16 +37,89 @@ it('replaces the draft with the rewrite and restores it through Undo', async () 
   const b = fixture('fix it', enhance)
   fireEvent.click(screen.getByRole('button', { name: zh.enhance }))
   await waitFor(() => { expect(b.inputActions.setDraft).toHaveBeenCalledWith('Rewritten') })
-  expect(enhance).toHaveBeenCalledWith('session-1', 'fix it', expect.any(AbortSignal))
+  expect(enhance).toHaveBeenCalledWith('session-1', 'fix it', [], expect.any(AbortSignal), expect.any(Function))
   expect(b.inputActions.persistDraft).toHaveBeenCalled()
   expect(b.inputActions.submit).not.toHaveBeenCalled()
   fireEvent.click(await screen.findByRole('button', { name: zh.undo }))
   expect(b.inputActions.setDraft).toHaveBeenLastCalledWith('fix it')
 })
 
+it('shows the model and each lookup while the rewrite runs', async () => {
+  let finish!: (text: string) => void
+  let report: Parameters<EnhancePromptProps['enhance']>[4] | undefined
+  fixture('fix it', (_session, _text, _images, _signal, onProgress) => {
+    report = onProgress
+    return new Promise((resolve) => { finish = resolve })
+  })
+  fireEvent.click(screen.getByRole('button', { name: zh.enhance }))
+  expect((await screen.findByRole('status')).textContent).toBe(zh.enhancing)
+  await waitFor(() => { expect(report).toBeDefined() })
+  act(() => { report!({ type: 'start', model: 'm1' }) })
+  expect(screen.getByRole('status').textContent).toBe('正在用 m1 增强…')
+  act(() => { report!({ type: 'step', tool: 'read', target: 'src/a.ts' }) })
+  expect(screen.getByRole('status').textContent).toBe('正在用 m1 增强 · 读取 src/a.ts…')
+  act(() => { report!({ type: 'step', tool: 'grep', target: 'foo' }) })
+  expect(screen.getByRole('status').textContent).toBe('正在用 m1 增强 · 搜索“foo”…')
+  act(() => { report!({ type: 'step', tool: 'glob', target: '*.ts' }) })
+  expect(screen.getByRole('status').textContent).toBe('正在用 m1 增强 · 列出 *.ts…')
+  act(() => { report!({ type: 'step', tool: 'future', target: 'x' }) })
+  expect(screen.getByRole('status').textContent).toBe('正在用 m1 增强 · 列出 *.ts…')
+  act(() => { finish('Rewritten') })
+  await waitFor(() => { expect(screen.queryByRole('status')).toBeNull() })
+})
+
+it('sends draft images and falls back to text when they cannot be encoded', async () => {
+  const enhance = vi.fn(async () => 'Rewritten')
+  fixture('fix it', enhance, async () => [
+    { type: 'image', mediaType: 'image/png', data: 'AA==', name: 'a.png' },
+    { type: 'image', mediaType: 'image/jpeg', data: 'AQ==' },
+    { type: 'file', receiptId: 'r' },
+  ])
+  fireEvent.click(screen.getByRole('button', { name: zh.enhance }))
+  await waitFor(() => { expect(enhance).toHaveBeenCalled() })
+  expect(enhance.mock.calls[0]).toEqual(['session-1', 'fix it', [
+    { mediaType: 'image/png', data: 'AA==', name: 'a.png' }, { mediaType: 'image/jpeg', data: 'AQ==' },
+  ], expect.any(AbortSignal), expect.any(Function)])
+  cleanup()
+  const fallback = vi.fn(async () => 'Rewritten')
+  fixture('fix it', fallback, async () => { throw new Error('upload unfinished') })
+  fireEvent.click(screen.getByRole('button', { name: zh.enhance }))
+  await waitFor(() => { expect(fallback).toHaveBeenCalledWith('session-1', 'fix it', [], expect.any(AbortSignal), expect.any(Function)) })
+})
+
+it('cancelling while images encode never calls the Host', async () => {
+  let encoded!: (value: readonly SubmitAttachment[]) => void
+  const enhance = vi.fn(async () => 'Rewritten')
+  const b = fixture('fix it', enhance, () => new Promise((resolve) => { encoded = resolve }))
+  fireEvent.click(screen.getByRole('button', { name: zh.enhance }))
+  fireEvent.click(await screen.findByRole('button', { name: zh.cancel }))
+  act(() => { encoded([]) })
+  await screen.findByRole('button', { name: zh.enhance })
+  await Promise.resolve()
+  expect(enhance).not.toHaveBeenCalled()
+  expect(b.inputActions.setDraft).not.toHaveBeenCalled()
+})
+
+it('ignores progress and an answer that arrive after cancelling', async () => {
+  let report: Parameters<EnhancePromptProps['enhance']>[4] | undefined
+  let finish!: (text: string) => void
+  const b = fixture('fix it', (_session, _text, _images, _signal, onProgress) => {
+    report = onProgress
+    return new Promise((resolve) => { finish = resolve })
+  })
+  fireEvent.click(screen.getByRole('button', { name: zh.enhance }))
+  await waitFor(() => { expect(report).toBeDefined() })
+  fireEvent.click(screen.getByRole('button', { name: zh.cancel }))
+  act(() => { report!({ type: 'start', model: 'm1' }) })
+  act(() => { finish('Rewritten') })
+  await Promise.resolve()
+  expect(screen.queryByRole('status')).toBeNull()
+  expect(b.inputActions.setDraft).not.toHaveBeenCalled()
+})
+
 it('cancels a running rewrite without touching the draft', async () => {
   let signal: AbortSignal | undefined
-  const b = fixture('fix it', (_session, _text, aborted) => {
+  const b = fixture('fix it', (_session, _text, _images, aborted) => {
     signal = aborted
     return new Promise((_resolve, reject) => { aborted.addEventListener('abort', () => { reject(new Error('aborted')) }) })
   })

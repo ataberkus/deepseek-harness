@@ -102,7 +102,7 @@ function props(
       persistDraft: unused,
       addAttachments: unused,
       removeAttachment: unused,
-      pruneAttachments: unused,
+      pruneAttachments: unused, serializeAttachments: unused,
       submit: unused,
     },
   }

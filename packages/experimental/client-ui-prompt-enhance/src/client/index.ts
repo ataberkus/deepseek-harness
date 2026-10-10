@@ -62,7 +62,7 @@ export function apply(ctx: Context): void {
     return ctx.shortcuts.catalog.subscribe(publishKeys)
   }, 'prompt-enhance: shortcut keys')
   const injected: EnhancePromptInjected = {
-    enhance: (sessionId, text, signal) => requestEnhancement(sessionId, text, signal),
+    enhance: (sessionId, text, images, signal, onProgress) => requestEnhancement(sessionId, text, images, signal, onProgress),
     bindShortcut: (target) => {
       targets.add(target)
       return () => { targets.delete(target) }

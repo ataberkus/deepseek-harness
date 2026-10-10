@@ -134,7 +134,7 @@ const kit: Omit<QuestionComposerProps, 'matched'> = {
     persistDraft: () => { throw new Error('unused') },
     addAttachments: () => { throw new Error('unused') },
     removeAttachment: () => { throw new Error('unused') },
-    pruneAttachments: () => { throw new Error('unused') },
+    pruneAttachments: () => { throw new Error('unused') }, serializeAttachments: () => { throw new Error('unused') },
     submit: () => { throw new Error('unused') },
   },
   useStore: selector => selector(questionDraftStore.getSnapshot()),

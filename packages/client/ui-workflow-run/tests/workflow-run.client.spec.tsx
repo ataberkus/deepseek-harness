@@ -331,7 +331,7 @@ function panelProps(data: WorkflowRunChatData, sessions = listState(), openSessi
       persistDraft: () => {},
       addAttachments: () => false,
       removeAttachment: () => {},
-      pruneAttachments: () => {},
+      pruneAttachments: () => {}, serializeAttachments: () => Promise.resolve([]),
       submit: () => {},
     },
     useWorkspaces: selector => selector(panelWorkspace),

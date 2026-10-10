@@ -2,10 +2,12 @@
 import { useEffect, useRef, useState } from 'react'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ObservableSnapshot } from '@deepseek-ai/dsh-client-store'
+import type { SubmitAttachment } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import {
   Button, IconCloseOutlineRegular, IconSparkleRegular, IconWarningOutlineRegular, Toast, Tooltip,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { NS } from './locales.ts'
+import type { EnhanceImage, EnhanceProgress } from './request.ts'
 import css from './EnhancePrompt.module.css'
 
 /** A mounted composer the keyboard command can address. */
@@ -24,7 +26,13 @@ export interface EnhancePromptInjected {
    * Rewrite one draft through the Host.
    * @returns the rewritten prompt; rejects with a displayable message.
    */
-  enhance: (sessionId: string, text: string, signal: AbortSignal) => Promise<string>
+  enhance: (
+    sessionId: string,
+    text: string,
+    images: readonly EnhanceImage[],
+    signal: AbortSignal,
+    onProgress: (progress: EnhanceProgress) => void,
+  ) => Promise<string>
   /**
    * Make this composer addressable by the keyboard command.
    * @returns disposer withdrawing the target.
@@ -45,6 +53,21 @@ const enhanceable = (draft: string): boolean => {
   return trimmed !== '' && !trimmed.startsWith('/') && !trimmed.startsWith('!')
 }
 
+/** Live progress of the running call: the model in use and the latest lookup. */
+type Progress = { model?: string; step?: string }
+
+/** Encoded draft images; a draft whose attachments cannot be encoded is enhanced from its text alone. */
+async function draftImages(serialize: () => Promise<readonly SubmitAttachment[]>): Promise<EnhanceImage[]> {
+  try {
+    return (await serialize()).flatMap(attachment => attachment.type === 'image' ? [{
+      mediaType: attachment.mediaType, data: attachment.data, ...attachment.name === undefined ? {} : { name: attachment.name },
+    }] : [])
+  } catch {
+    // Swallows the encoding failure: images are optional context, and send reports the same failure later.
+    return []
+  }
+}
+
 /** Render the ✨ button; while a call runs it turns into a cancel button. */
 export function EnhancePrompt({ sessionId, useInput, inputActions, useSession, enhance, bindShortcut,
   useEnhanceShortcut, t }: EnhancePromptProps) {
@@ -54,11 +77,27 @@ export function EnhancePrompt({ sessionId, useInput, inputActions, useSession, e
   const shortcutKeys = useEnhanceShortcut(keys => keys)
   const [running, setRunning] = useState<AbortController | null>(null)
   const [notice, setNotice] = useState<Notice | null>(null)
+  const [progress, setProgress] = useState<Progress>({})
   const seq = useRef(0)
   const anchorRef = useRef<HTMLSpanElement | null>(null)
   const latestDraft = useRef(draft)
   latestDraft.current = draft
   const disabled = removed || busy || (running === null && !enhanceable(draft))
+
+  const stepText = (tool: string, target: string): string | undefined => {
+    switch (tool) {
+      case 'read': return t('step.read', { target })
+      case 'grep': return t('step.grep', { target })
+      case 'glob': return t('step.glob', { target })
+      // A lookup kind this build does not name keeps the previous step text.
+      default: return undefined
+    }
+  }
+  const status = progress.model === undefined
+    ? t('enhancing')
+    : progress.step === undefined
+      ? t('progress', { model: progress.model })
+      : t('progressStep', { model: progress.model, step: progress.step })
 
   const show = (text: string, undo?: string): void => {
     seq.current += 1
@@ -73,9 +112,22 @@ export function EnhancePrompt({ sessionId, useInput, inputActions, useSession, e
     }
     if (disabled) return
     const controller = new AbortController()
+    const original = latestDraft.current
     setRunning(controller)
+    setProgress({})
     setNotice(null)
-    void enhance(sessionId, latestDraft.current, controller.signal).then((text) => {
+    const onProgress = (update: EnhanceProgress): void => {
+      if (controller.signal.aborted) return
+      if (update.type === 'start') setProgress({ model: update.model })
+      else {
+        const step = stepText(update.tool, update.target)
+        if (step !== undefined) setProgress(current => ({ ...current, step }))
+      }
+    }
+    void draftImages(() => inputActions.serializeAttachments()).then((images) => {
+      if (controller.signal.aborted) throw controller.signal.reason
+      return enhance(sessionId, original, images, controller.signal, onProgress)
+    }).then((text) => {
       if (controller.signal.aborted) return
       const previous = latestDraft.current
       inputActions.setDraft(text)
@@ -113,7 +165,7 @@ export function EnhancePrompt({ sessionId, useInput, inputActions, useSession, e
         </Button>
       </span>
     </Tooltip>
-    {running !== null && <span className={css.status} role="status">{t('enhancing')}</span>}
+    {running !== null && <span className={css.status} role="status" title={status}>{status}</span>}
     {notice !== null && <Toast
       key={notice.seq}
       text={notice.text}

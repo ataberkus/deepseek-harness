@@ -233,6 +233,18 @@ describe('matrix row: claimed with attachments', () => {
     expect(shell.snapshot.phase).toBe('plain')
   })
 
+  it('the public action face encodes the current draft attachments without consuming them', async () => {
+    const png: SubmitAttachment = { type: 'image', mediaType: 'image/png', data: 'AA==' }
+    const { shell, serialize, release } = bench({ serialize: () => Promise.resolve([png]) })
+    await expect(shell.actions.serializeAttachments()).resolves.toEqual([])
+    expect(serialize).not.toHaveBeenCalled()
+    act(() => { shell.addAttachments([img]) })
+    await expect(shell.actions.serializeAttachments()).resolves.toEqual([png])
+    expect(serialize).toHaveBeenCalledWith([img])
+    expect(release).not.toHaveBeenCalled()
+    expect(shell.snapshot.attachmentIds).toEqual([img])
+  })
+
   it('a handler error keeps a serialized file unreleased beside the notice and draft', async () => {
     const submit = vi.fn(() => Promise.resolve({ kind: 'error' as const, text: '处理失败' }))
     const file: SubmitAttachment = { type: 'file', receiptId: 'receipt-x' }

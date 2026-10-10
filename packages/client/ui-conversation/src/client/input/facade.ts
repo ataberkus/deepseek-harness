@@ -132,6 +132,9 @@ export class SessionInputShell implements SessionInput {
     addAttachments: ids => this.addAttachments(ids),
     removeAttachment: (id) => { this.removeAttachment(id) },
     pruneAttachments: (ids) => { this.pruneAttachments(ids) },
+    serializeAttachments: () => this.attachmentIds.length === 0
+      ? Promise.resolve([])
+      : this.deps.commandAttachments.serialize(this.attachmentIds),
     submit: () => { this.submit('queue') },
   }
 

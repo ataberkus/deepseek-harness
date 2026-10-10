@@ -222,7 +222,7 @@ function standaloneProps(
     persistDraft: () => {},
     addAttachments: () => false,
     removeAttachment: () => {},
-    pruneAttachments: () => {},
+    pruneAttachments: () => {}, serializeAttachments: () => Promise.resolve([]),
     submit: () => {},
   }
   return {
@@ -351,7 +351,7 @@ function mount(fixture: Awaited<ReturnType<typeof bench>>) {
     persistDraft: vi.fn(),
     addAttachments: vi.fn(() => false),
     removeAttachment: vi.fn(),
-    pruneAttachments: vi.fn(),
+    pruneAttachments: vi.fn(), serializeAttachments: vi.fn(),
     submit: vi.fn(),
   }
   const standardProps = {

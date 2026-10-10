@@ -436,7 +436,7 @@ function makeHarness(
       persistDraft: () => {},
       addAttachments: () => true,
       removeAttachment: () => {},
-      pruneAttachments: () => {},
+      pruneAttachments: () => {}, serializeAttachments: () => Promise.resolve([]),
       submit: () => {},
     },
     useStore: bindSnapshotSelector(chat),

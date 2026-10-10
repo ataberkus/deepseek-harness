@@ -333,7 +333,7 @@ describe('ImageGallery', () => {
         persistDraft: vi.fn(),
         addAttachments: vi.fn(() => true),
         removeAttachment: vi.fn(),
-        pruneAttachments: vi.fn(),
+        pruneAttachments: vi.fn(), serializeAttachments: vi.fn(),
         submit: vi.fn(),
       },
       images: [{ attachment }],

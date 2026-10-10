@@ -257,6 +257,11 @@ export interface InputActions {
   removeAttachment(id: DraftAttachmentId): void
   /** Drop ids whose browser-owned objects no longer exist. */
   pruneAttachments(ids: readonly DraftAttachmentId[]): void
+  /**
+   * Encode the current draft attachments without sending or releasing them.
+   * @returns wire payloads in draft order; rejects when an attachment no longer resolves or a file upload is unfinished.
+   */
+  serializeAttachments(): Promise<readonly SubmitAttachment[]>
   /** Enter submission (adjudication / claim transaction / default sink inside). */
   submit(): void
 }

@@ -1,6 +1,6 @@
 {
   "meta": {
     "title": "Enhance Prompt",
-    "description": "Add a ✨ button to the composer that rewrites your draft into a clearer, more specific prompt using the conversation so far."
+    "description": "Add a ✨ button to the composer that rewrites your draft into a clearer, more specific prompt, looking up the files and symbols it refers to in your workspace."
   }
 }

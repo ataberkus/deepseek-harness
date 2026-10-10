@@ -3,35 +3,35 @@
 # After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/experimental/prompt-enhance/README.md
 /:
-  en: 593b8e8cd4f4f658
-  zh: b453c1e4aff6fac9
+  en: 0f95da73aed9382a
+  zh: e229c8751f94f402
 /deepseek-ai-dsh-experimental-prompt-enhance:
   en: 17f0c0a9fe90f2a1
   zh: a931a114fad5e427
 /deepseek-ai-dsh-experimental-prompt-enhance/summary:
-  en: e6d9bb0fdcbd227f
-  zh: cc1f24c10eb57fc7
+  en: 14ba3529db06cc10
+  zh: 0a9ce394842bd24e
 /deepseek-ai-dsh-experimental-prompt-enhance/table-of-contents:
   en: d152484eb41ac6b4
   zh: aec3688fb92d60ae
 /deepseek-ai-dsh-experimental-prompt-enhance/use-this-package:
-  en: 213096fed48b70c1
-  zh: de61807b1653844b
+  en: e296e50b435869bc
+  zh: 4806474613b39962
 /deepseek-ai-dsh-experimental-prompt-enhance/understand-the-implementation:
-  en: c2817eeb3eb87981
-  zh: 1d60a738510fe598
+  en: 60911c768459f8b2
+  zh: 65b85d1dae6266cd
 /deepseek-ai-dsh-experimental-prompt-enhance/further-exploration:
   en: d535fbdfc553ca90
   zh: 586a5de25bf6c42b
 /deepseek-ai-dsh-experimental-prompt-enhance/model-experience:
-  en: 62368e10534026a5
-  zh: 906a1471f7e91c3a
+  en: 87c3021186bd9dfb
+  zh: 45d10a8d6fddfc9d
 /deepseek-ai-dsh-experimental-prompt-enhance/model-experience/kv-cache-effect:
   en: 60835eca1cee4e0e
   zh: 3b5579ceccd5b5e7
 /deepseek-ai-dsh-experimental-prompt-enhance/known-limitations-and-deferred-work:
-  en: b5434654586d9fb2
-  zh: f2cc21cd14138c7f
+  en: c5f905d0613a6909
+  zh: d0f4ac2817b32eee
 /deepseek-ai-dsh-experimental-prompt-enhance/known-limitations-and-deferred-work/dev-note:
   en: 0225ba087c5266f3
   zh: 0400e21a2683a23c
