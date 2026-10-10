@@ -64,6 +64,7 @@ it('passes explicit model credentials without ambient environment and awaits Wor
   expect(model).toEqual(nativeModel)
   expect(env.STAGEHAND_FIXTURE_TOKEN).toBeUndefined()
   expect(env.HTTP_PROXY).toBeUndefined()
+  expect(env.TSX_DISABLE_CACHE).toBe('1')
   const socket = connect(port, '127.0.0.1')
   await once(socket, 'connect')
   socket.destroy()

@@ -26,6 +26,8 @@ export async function openBrowserWorker(
     worker = new Worker(entry, { workerData: config, execArgv: [], env })
   } else {
     const source = new URL('./worker.ts', import.meta.url)
+    // Without TEMP or SystemRoot, Windows os.tmpdir() is the relative `undefined\temp`; tsx would write its cache under the cwd.
+    env.TSX_DISABLE_CACHE = '1'
     const bootstrap = `import { register } from ${JSON.stringify(import.meta.resolve('tsx/esm/api'))}; register(); await import(${JSON.stringify(source.href)})`
     worker = new Worker(new URL(`data:text/javascript,${encodeURIComponent(bootstrap)}`), { workerData: config, execArgv: [], env })
   }
