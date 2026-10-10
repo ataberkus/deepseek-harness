@@ -45,6 +45,12 @@ export const zh = {
   'changes.collapseAria': '收起改动文件列表',
   'changes.oversized': '过大',
   'changes.viewDiff': '查看 {name} 的改动',
+  'commit.related': '提交相关改动',
+  'commit.all': '全部提交',
+  'commit.promptRelated': '只提交你在本会话中改动的文件。工作区中的其他改动（包括已经暂存的内容）都不要放进这次提交。'
+    + '先查看 `git status` 和 `git diff`，再写一条简洁描述这些改动的提交信息。',
+  'commit.promptAll': '暂存并提交工作区中的全部改动。先查看 `git status` 和 `git diff`，再写一条简洁描述这些改动的提交信息。',
+  'commit.error': '无法把提交请求发送到对话，请重试',
   'review.title': '第 {turn} 轮改动',
   'review.selectFile': '选择要查看的文件',
   'review.split': '切换为左右对比',
@@ -109,6 +115,14 @@ export const en: Record<DeliverablesKey, string> = {
   'changes.collapseAria': 'Collapse changed files',
   'changes.oversized': 'too large',
   'changes.viewDiff': 'View changes to {name}',
+  'commit.related': 'Commit related changes',
+  'commit.all': 'Commit all',
+  'commit.promptRelated': 'Commit only the files you changed in this session. '
+    + 'Leave every other working-tree change, including anything already staged, out of the commit. '
+    + 'Check `git status` and `git diff` first, then write a concise commit message that describes the changes.',
+  'commit.promptAll': 'Stage and commit every change in the working tree. '
+    + 'Check `git status` and `git diff` first, then write a concise commit message that describes the changes.',
+  'commit.error': 'Could not send the commit request to the chat. Try again.',
   'review.title': 'Review · turn {turn}',
   'review.selectFile': 'Choose the file to review',
   'review.split': 'Switch to split view',

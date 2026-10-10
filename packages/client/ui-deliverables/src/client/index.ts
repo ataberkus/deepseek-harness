@@ -1,6 +1,7 @@
 /**
- * Deliverables plugin, browser half: registers the changed-files card and
- * delivery cards into the chat view's turn-tail list, the `changes-review`
+ * Deliverables plugin, browser half: registers the changed-files card, with
+ * commit-prompt actions on a Session's latest card, and delivery cards into the chat
+ * view's turn-tail list, the `changes-review`
  * right-Sidebar tab type that reviews one turn's changed files one comparison
  * at a time, and provides the `chatFileMentions` service that links
  * inline-code mentions of produced or delivered files in the closing prose.
@@ -11,6 +12,7 @@
 import './file-actions.ts'
 import type { Context as ClientContext } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-api-remotes/client'
+import type {} from '@deepseek-ai/dsh-api-session-controller/client'
 import type {} from '@deepseek-ai/dsh-client-connection/client'
 import type { ChatFileMentions } from '@deepseek-ai/dsh-client-ui-chat/client'
 import type {} from '@deepseek-ai/dsh-client-locale/client'
@@ -21,6 +23,7 @@ import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
 import { changesReviewAddress } from '../changes.ts'
 import { ChangesDiffStore } from './changes-diff.ts'
 import { ChangesSummaryStore } from './changes-summary.ts'
+import { ChangesCommitController } from './changes-commit.ts'
 import { PresentedOpenController } from './present-open.ts'
 import { PresentRow } from './PresentRow.tsx'
 import { DeliverablesTail, type DeliverablesInjected } from './Deliverables.tsx'
@@ -50,7 +53,13 @@ export function apply(ctx: ClientContext): void {
   const opener = new PresentedOpenController()
   const summaries = new ChangesSummaryStore()
   const diffs = new ChangesDiffStore()
-  ctx.effect(() => () => Promise.all([opener.dispose(), summaries.dispose(), diffs.dispose()]))
+  const commits = new ChangesCommitController(async (sessionId, text) => {
+    // Strict lookup: the Session scope and its conversation exist only while the Session is open in this window.
+    const conversation = ctx.get('sessions')?.scope(sessionId)?.get('conversation')
+    if (conversation === undefined) throw new Error(`ui-deliverables: session "${sessionId}" has no conversation`)
+    await conversation.send(text)
+  })
+  ctx.effect(() => () => Promise.all([opener.dispose(), summaries.dispose(), diffs.dispose(), commits.dispose()]))
   ctx.on('connection/reset', () => {
     opener.resetHost()
     summaries.reset()
@@ -67,7 +76,9 @@ export function apply(ctx: ClientContext): void {
       children: { 'deliverables.file.actions': { kind: 'list', scope: 'session' } },
       inject: (): DeliverablesInjected => ({
         hooks: { changesDiff: diffs.state, presentedOpen: opener.state, presentedHost: opener.host, changesSummary: summaries.state,
-          showCodeDiff: ctx.configForms.developerTools.enabled },
+          showCodeDiff: ctx.configForms.developerTools.enabled, changesCommit: commits.state, changesLatest: commits.latest },
+        noteChangesShown: (sessionId, seq) => { commits.noteShown(sessionId, seq) },
+        requestCommit: (sessionId, text) => commits.request(sessionId, text),
         loadChangesDiff: (sessionId, seq, index) => diffs.load(sessionId, seq, index),
         reloadPresentedHost: () => opener.loadHost(),
         loadChangesSummary: (sessionId, seq) => summaries.load(sessionId, seq),

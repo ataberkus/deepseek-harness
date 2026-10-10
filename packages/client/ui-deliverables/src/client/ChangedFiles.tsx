@@ -4,6 +4,7 @@ import { resolveWorkspacePath } from '@deepseek-ai/dsh-util-workspace-path'
 import { FileTypeIcon, HoverCard, IconChevronDownOutlineRegular, IconChevronUpOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { InjectFace, PropsLocale, SessionStandardProps } from '@deepseek-ai/dsh-client-ui-slots'
 import { changesDiffUrl, type ChangesSummary } from '../changes.ts'
+import { CommitActions, type CommitActionsProps } from './CommitActions.tsx'
 import type { DeliverablesInjected } from './Deliverables.tsx'
 import { FileDiff } from './FileDiff.tsx'
 import diffCss from './FileDiff.module.css'
@@ -30,16 +31,19 @@ function Counts({ added, deleted, t }: { added: number; deleted: number } & Prop
 /**
  * Render one turn's changed files. The header opens the turn's review in the
  * right Sidebar on its first file. A single file uses only the header; it and
- * multi-file rows preview their comparison after a 500ms hover.
- * @param props - the recorded summary, the review opener, and localized copy.
+ * multi-file rows preview their comparison after a 500ms hover. A card given
+ * commit actions ends with the commit row.
+ * @param props - the recorded summary, the review opener, optional commit actions, and localized copy.
  * @returns the card.
  */
-export function ChangedFiles({ changes, cwd, openReview, t, sessionId, useChangesDiff, loadChangesDiff }: {
+export function ChangedFiles({ changes, cwd, openReview, commit, t, sessionId, useChangesDiff, loadChangesDiff }: {
   /** The served summary with the sequence of the event that announced it. */
   changes: Pick<ChangesSummary, 'files' | 'total' | 'added' | 'deleted'> & { seq: number }
   cwd: string | undefined
   /** Open the turn's review on the file at an original summary index. */
   openReview: (index: number) => void
+  /** The Session's commit status and callbacks; only the card of the latest shown announcement receives them. */
+  commit?: CommitActionsProps | undefined
 } & PropsLocale<typeof NS> & PreviewProps) {
   const cardRef = useRef<HTMLDivElement>(null)
   const pathDescriptionId = useId()
@@ -102,6 +106,7 @@ export function ChangedFiles({ changes, cwd, openReview, t, sessionId, useChange
       <span>{t(expanded ? 'changes.collapse' : 'changes.all', { count: String(changes.files.length) })}</span>
       {expanded ? <IconChevronUpOutlineRegular /> : <IconChevronDownOutlineRegular />}
     </button>}
+    {commit !== undefined && <CommitActions {...commit} t={t} />}
   </div>
 }
 

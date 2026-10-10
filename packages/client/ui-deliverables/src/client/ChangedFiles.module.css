@@ -31,6 +31,10 @@ button.header:disabled { cursor: progress; }
 .toggle svg { flex: none; width: 14px; height: 14px; }
 @media (pointer: coarse) { .row, .toggle { min-height: 44px; } }
 
+.commit { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 8px 14px; border-top: 0.5px solid var(--dsw-alias-border-l2); }
+.commitButtons { display: inline-flex; flex-wrap: wrap; gap: 8px; }
+.commitError { min-width: 0; color: var(--dsw-alias-state-error-primary); font-size: 12px; line-height: 18px; }
+
 .preview { max-height: 100%; overflow: hidden; }
 
 .previewPath { flex: 1 1 auto; min-width: 0; overflow-x: auto; overflow-y: hidden; color: var(--dsw-alias-label-tertiary); font-family: var(--ds-font-family-code); font-size: 12px; line-height: 20px; white-space: nowrap; }

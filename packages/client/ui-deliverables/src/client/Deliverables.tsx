@@ -7,6 +7,7 @@ import type { ObservableSnapshot } from '@deepseek-ai/dsh-client-store'
 import type { PresentedOpenController } from './present-open.ts'
 import type { ChangesDiffStore } from './changes-diff.ts'
 import type { ChangesSummaryStore } from './changes-summary.ts'
+import type { ChangesCommitController } from './changes-commit.ts'
 import { ChangedFiles } from './ChangedFiles.tsx'
 import { changesForClosing, presentedForClosing, type ChangesTurnData, type PresentedPath } from './turn-deliverables.ts'
 import type { NS } from './locales.ts'
@@ -27,7 +28,13 @@ export interface DeliverablesInjected {
     presentedOpen: ObservableSnapshot<ReturnType<PresentedOpenController['state']['getSnapshot']>>
     presentedHost: ObservableSnapshot<ReturnType<PresentedOpenController['host']['getSnapshot']>>
     changesSummary: ObservableSnapshot<ReturnType<ChangesSummaryStore['state']['getSnapshot']>>
+    changesCommit: ObservableSnapshot<ReturnType<ChangesCommitController['state']['getSnapshot']>>
+    changesLatest: ObservableSnapshot<ReturnType<ChangesCommitController['latest']['getSnapshot']>>
   }
+  /** Record that a card shows a served summary, moving the commit actions to the latest one. */
+  noteChangesShown: ChangesCommitController['noteShown']
+  /** Queue a commit prompt in one Session's chat. */
+  requestCommit: ChangesCommitController['request']
   reloadPresentedHost: PresentedOpenController['loadHost']
   loadChangesDiff: ChangesDiffStore['load']
   loadChangesSummary: ChangesSummaryStore['load']
@@ -61,13 +68,16 @@ export function DeliverablesTail(props: PropsRuntime<'conversation.chat.turnTail
 /**
  * Render the changed-files card, once the Host has served the announced
  * summary and it lists a file, and shared native opening controls for declared
- * files. A summary the Host no longer serves leaves no card.
+ * files. A summary the Host no longer serves leaves no card. Of a Session's
+ * cards, the one with the highest announcement sequence shown so far carries
+ * the commit actions, which queue commit prompts in the Session's chat.
  * @param props - matched announcement and files, workspace opener, and localized copy.
  * @returns the closing turn's file rows.
  */
 export function Deliverables({
   matched, openFile, t, sessionId, useSessions, openPresented, openChangesReview, usePresentedOpen, usePresentedHost,
   useChangesDiff, loadChangesDiff, useChangesSummary, reloadPresentedHost, loadChangesSummary, useShowCodeDiff, renderSlot,
+  useChangesCommit, useChangesLatest, noteChangesShown, requestCommit,
 }: Pick<TurnTailOwnerProps, 'openFile'> & {
   matched: DeliverablesMatch
 } & PropsLocale<typeof NS> & Pick<SessionStandardProps, 'sessionId'> & Pick<GlobalStandardProps, 'useSessions'> & InjectFace<DeliverablesInjected> & PropsRenderSlots<'deliverables.file.actions'>) {
@@ -84,6 +94,15 @@ export function Deliverables({
   const changes = announced !== null && typeof summary === 'object' && summary.files.length > 0
     ? { seq: announced.seq, ...summary }
     : null
+  const shownSeq = changes?.seq
+  useEffect(() => {
+    if (shownSeq !== undefined) noteChangesShown(sessionId, shownSeq)
+  }, [shownSeq, sessionId, noteChangesShown])
+  const latest = useChangesLatest(value => value[sessionId])
+  const commitPhase = useChangesCommit(value => value[sessionId])
+  const commit = changes !== null && changes.seq === latest
+    ? { phase: commitPhase, request: (text: string) => { void requestCommit(sessionId, text) } }
+    : undefined
   const collapsible = matched.presented.length > COLLAPSED_PRESENTED_COUNT
   const presented = collapsible && !expanded
     ? matched.presented.slice(0, COLLAPSED_PRESENTED_COUNT)
@@ -92,7 +111,7 @@ export function Deliverables({
     if (host === null) void reloadPresentedHost()
   }, [host, reloadPresentedHost])
   return <>
-    {changes !== null && <ChangedFiles changes={changes} cwd={cwd} t={t}
+    {changes !== null && <ChangedFiles changes={changes} cwd={cwd} t={t} commit={commit}
       sessionId={sessionId} useChangesDiff={useChangesDiff} loadChangesDiff={loadChangesDiff}
       openReview={(index) => { openChangesReview({ sessionId, seq: changes.seq, turn: changes.turn }, index) }} />}
     {matched.presented.length > 0 && <div

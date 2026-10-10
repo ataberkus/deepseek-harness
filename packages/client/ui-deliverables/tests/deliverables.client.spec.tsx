@@ -7,9 +7,11 @@
  * SlotRegistry.
  */
 import { renderFileActions } from './file-actions.tsx'
-import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
+import { useSyncExternalStore } from 'react'
+import { createSnapshotStore, type ObservableSnapshot } from '@deepseek-ai/dsh-client-store'
+import { ChangesCommitController } from '../src/client/changes-commit.ts'
 import { Context } from '@deepseek-ai/cordis'
-import { cleanup, fireEvent, render, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { SessionLiveEventEntry, SessionListState } from '@deepseek-ai/dsh-api-session-controller/client'
 import {
@@ -39,7 +41,16 @@ import { en, zh } from '../src/client/locales.ts'
 import { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { SessionEvent } from '@deepseek-ai/dsh-session/types'
 
-function openProps(controller = new PresentedOpenController(), summaries = new ChangesSummaryStore()) {
+/** A selector hook that re-renders on store changes, as the renderer-bound hooks do. */
+function liveHook<S>(store: ObservableSnapshot<S>) {
+  return <T,>(select: (state: S) => T): T =>
+    select(useSyncExternalStore(listener => store.subscribe(listener), () => store.getSnapshot()))
+}
+
+function openProps(
+  controller = new PresentedOpenController(), summaries = new ChangesSummaryStore(),
+  commits = new ChangesCommitController(() => Promise.resolve()),
+) {
   controller.host.set({ name: 'desktop', available: true, fileManager: 'finder' })
   const diffs = new ChangesDiffStore()
   const sessions: SessionListState = { ids: [], byId: {}, phase: 'ready', projectionsBySession: {} }
@@ -61,6 +72,10 @@ function openProps(controller = new PresentedOpenController(), summaries = new C
     openChangesReview: vi.fn<DeliverablesInjected['openChangesReview']>(),
     usePresentedOpen: <T,>(select: (state: ReturnType<typeof controller.state.getSnapshot>) => T): T =>
       select(controller.state.getSnapshot()),
+    useChangesCommit: liveHook(commits.state),
+    useChangesLatest: liveHook(commits.latest),
+    noteChangesShown: vi.fn((...args: Parameters<ChangesCommitController['noteShown']>) => { commits.noteShown(...args) }),
+    requestCommit: vi.fn((...args: Parameters<ChangesCommitController['request']>) => commits.request(...args)),
   }
 }
 
@@ -649,7 +664,9 @@ describe('ChangedFiles card', () => {
     expect(props.openChangesReview).toHaveBeenLastCalledWith({ sessionId: 'child-session', seq: 5, turn: 1 }, 4)
     const collapse = within(card).getByRole('button', { name: 'Collapse changed files' })
     expect(collapse.getAttribute('aria-expanded')).toBe('true')
-    expect(card.lastElementChild).toBe(collapse)
+    // The fold control closes the file list; the latest card's commit row follows it.
+    expect(card.querySelector('ul')?.nextElementSibling).toBe(collapse)
+    expect(collapse.nextElementSibling?.hasAttribute('data-changes-commit')).toBe(true)
     fireEvent.click(collapse)
     expect(within(card).getAllByRole('listitem')).toHaveLength(4)
   })
@@ -769,6 +786,10 @@ describe('plugin registration', () => {
     } as never)
     ctx.provide('remote.session', session as never)
     ctx.provide('configForms', { developerTools: { enabled: createSnapshotStore(true) }, get: () => stubConfigForm().scope } as never)
+    const send = vi.fn(async (_text: string) => {})
+    ctx.provide('sessions', {
+      scope: (id: string) => id === 'child-session' ? { get: (name: string) => name === 'conversation' ? { send } : undefined } : undefined,
+    } as never)
     await ctx.plugin({ inject: localeInject, apply: applyLocale }).await()
 
     const fiber = ctx.plugin({ inject: [...inject], apply })
@@ -823,6 +844,14 @@ describe('plugin registration', () => {
     expect(face.hooks.presentedOpen.getSnapshot()['api/present.open?sessionId=child-session&seq=2&index=0']).toBe('opened')
     await face.openChanged(SessionId('child-session'), 5, 0)
     expect(face.hooks.presentedOpen.getSnapshot()['api/changes.open?sessionId=child-session&seq=5&index=0']).toBe('opened')
+    face.noteChangesShown(SessionId('child-session'), 5)
+    expect(face.hooks.changesLatest.getSnapshot()).toEqual({ 'child-session': 5 })
+    // A commit request is a prompt queued in the Session's own conversation.
+    await face.requestCommit(SessionId('child-session'), 'Commit it')
+    expect(send).toHaveBeenCalledExactlyOnceWith('Commit it')
+    expect(face.hooks.changesCommit.getSnapshot()).toEqual({})
+    await face.requestCommit(SessionId('closed-session'), 'Commit it')
+    expect(face.hooks.changesCommit.getSnapshot()).toEqual({ 'closed-session': 'error' })
     face.openChangesReview({ sessionId: SessionId('child-session'), seq: 5, turn: 3 }, 1)
     expect(openResource).toHaveBeenCalledWith('dsh-resource://changes-review/session/child-session/5/3', { params: { index: 1 } })
     expect((registered as { title(address: string): string }).title('dsh-resource://changes-review/session/child-session/5/3')).toBe('Review · turn 3')
@@ -1021,4 +1050,80 @@ it('contributes file artifacts to the tail list only for turns with deliveries',
   const withFile = tailOwner({ produced: [], presented: [{ path: 'report.md', seq: 2, index: 0 }] }, 3)
   view.rerender(<DeliverablesTail {...props} {...withFile} />)
   expect(view.getByText('report.md')).toBeTruthy()
+})
+
+describe('changed-files commit actions', () => {
+  const session = SessionId('child-session')
+  const summary = (path: string): ChangesSummary => ({ turn: 1, files: [changedFile(path, 1, 0)], total: 1, added: 1, deleted: 0 })
+
+  function renderCards(commits = new ChangesCommitController(() => Promise.resolve())) {
+    const summaries = new ChangesSummaryStore()
+    summaries.state.set({ [changesSummaryUrl(session, 5)]: summary('a.ts'), [changesSummaryUrl(session, 9)]: summary('b.ts') })
+    const props = openProps(new PresentedOpenController(), summaries, commits)
+    const card = (seq: number) => <Deliverables key={seq} {...props} matched={{ changes: { seq }, presented: [] }} openFile={vi.fn()}
+      sessionId={session} t={makeTranslate(en)} />
+    const view = render(<>{card(5)}{card(9)}</>)
+    return { props, view, commits }
+  }
+
+  it('offers the actions only on the card of the latest shown announcement', () => {
+    const { view, props } = renderCards()
+    const cards = view.container.querySelectorAll('[data-changed-files]')
+    expect(cards).toHaveLength(2)
+    expect(cards[0]!.querySelector('[data-changes-commit]')).toBeNull()
+    expect(within(cards[1] as HTMLElement).getByRole('button', { name: en['commit.related'] })).toBeTruthy()
+    expect(within(cards[1] as HTMLElement).getByRole('button', { name: en['commit.all'] })).toBeTruthy()
+    expect(props.noteChangesShown).toHaveBeenCalledWith(session, 9)
+  })
+
+  it.each([
+    ['commit.related', 'commit.promptRelated'],
+    ['commit.all', 'commit.promptAll'],
+  ] as const)('queues the %s prompt in the Session’s chat without a dialog', async (button, prompt) => {
+    const sendPrompt = vi.fn((_sessionId: SessionId, _text: string) => Promise.resolve())
+    const { view } = renderCards(new ChangesCommitController(sendPrompt))
+    fireEvent.click(view.getByRole('button', { name: en[button] }))
+    expect(view.queryByRole('dialog')).toBeNull()
+    expect(sendPrompt).toHaveBeenCalledExactlyOnceWith(session, en[prompt])
+    await act(async () => { await Promise.resolve() })
+    expect(view.queryByRole('alert')).toBeNull()
+  })
+
+  it('disables the buttons while a prompt is sent and reports a failed one until the next attempt', async () => {
+    let settle: (failure?: Error) => void = () => {}
+    const sendPrompt = vi.fn(() => new Promise<void>((resolve, reject) => {
+      settle = (failure) => { if (failure === undefined) resolve(); else reject(failure) }
+    }))
+    const commits = new ChangesCommitController(sendPrompt)
+    const { view } = renderCards(commits)
+    const related = view.getByRole('button', { name: en['commit.related'] }) as HTMLButtonElement
+    fireEvent.click(related)
+    expect(related.disabled).toBe(true)
+    expect((view.getByRole('button', { name: en['commit.all'] }) as HTMLButtonElement).disabled).toBe(true)
+    // A second request for the same Session while one is sent does nothing.
+    await commits.request(session, 'again')
+    expect(sendPrompt).toHaveBeenCalledOnce()
+    await act(async () => { settle(new Error('session/agent-busy')) })
+    expect(view.getByRole('alert').textContent).toBe(en['commit.error'])
+    expect(related.disabled).toBe(false)
+    fireEvent.click(related)
+    expect(view.queryByRole('alert')).toBeNull()
+    await act(async () => { settle() })
+    expect(commits.state.getSnapshot()).toEqual({})
+  })
+
+  it('keeps the latest sequence and publishes nothing once disposed', async () => {
+    let finish: () => void = () => {}
+    const commits = new ChangesCommitController(() => new Promise<void>((resolve) => { finish = resolve }))
+    commits.noteShown(session, 9)
+    commits.noteShown(session, 3)
+    expect(commits.latest.getSnapshot()[session]).toBe(9)
+    const running = commits.request(session, 'cut short')
+    const disposed = commits.dispose()
+    finish()
+    await Promise.all([running, disposed])
+    expect(commits.state.getSnapshot()[session]).toBe('sending')
+    await commits.request(SessionId('other'), 'late')
+    expect(commits.state.getSnapshot()).toEqual({ [session]: 'sending' })
+  })
 })
