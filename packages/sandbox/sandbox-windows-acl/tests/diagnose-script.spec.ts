@@ -119,8 +119,16 @@ function aclLines(path: string): string[] {
   return icacls(path).split(/\r?\n/u).map(line => line.trim()).filter(line => line !== '')
 }
 
-function integrityLines(path: string): string[] {
-  return aclLines(path).filter(line => /Mandatory|S-1-16-/u.test(line))
+/** The SACL part of `icacls /save`, whose SDDL names the mandatory label without the UI language. */
+function labelSddl(path: string): string {
+  const directory = mkdtempSync(join(tmpdir(), 'dsh-acl-label-'))
+  try {
+    const saved = join(directory, 'acl.txt')
+    icacls(path, '/save', saved)
+    return /S:.*$/mu.exec(readFileSync(saved, 'utf16le'))?.[0] ?? ''
+  } finally {
+    rmSync(directory, { recursive: true, force: true })
+  }
 }
 
 function normalized(path: string, lines: readonly string[]): string[] {
@@ -246,8 +254,8 @@ describe.skipIf(!isWin32 || !pwshAvailable())('diagnose-windows-sandbox-acl scri
     try {
       const target = makeDir(scratch, 'missing-write-owner')
       icacls(target, '/setintegritylevel', 'L')
-      const labelsBefore = integrityLines(target)
-      expect(labelsBefore.length).toBeGreaterThan(0)
+      const labelBefore = labelSddl(target)
+      expect(labelBefore).toMatch(/\(ML;[^)]*;LW\)/u)
       icacls(target, '/inheritance:r', '/grant:r', `*${meSid}:(M)`)
       const ownerBefore = ownerOf(target)
 
@@ -258,9 +266,10 @@ describe.skipIf(!isWin32 || !pwshAvailable())('diagnose-windows-sandbox-acl scri
       expect(run.output).toContain('SUMMARY FIXED=0 GRANTED=1 REFUSED=0 RESTORED=0')
       expect(aclLines(target).join('\n')).toMatch(/\(F\)/u)
       expect(ownerOf(target)).toBe(ownerBefore)
-      expect(integrityLines(target)).toEqual(labelsBefore)
+      expect(labelSddl(target)).toBe(labelBefore)
 
       const entries = reports(run)
+      expect(entries).toContainEqual(containingObject({ kind: 'observation', operation: 'inspect_acl', path: target, status: 'read', details: containingObject({ lowLabel: true }) }))
       expect(entries).toContainEqual(containingObject({ kind: 'verification', operation: 'grant', path: target, status: 'verified' }))
       expect(entries.at(-1)).toMatchObject({ details: containingObject({ nextAction: 'verify_original_confined_operation' }) })
     } finally {

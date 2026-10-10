@@ -77,12 +77,14 @@ function Write-Line { param([string]$Text) Write-Output $Text }
 
 # Reports bypass the success pipeline so diagnostics cannot become a function's
 # return value. Each JSON record occupies one stdout line, including paths/errors.
+# Records are ASCII-only: redirected stdout uses the console code page, which can
+# neither encode localized error text nor keep best-fit quotes out of JSON strings.
 function Write-Report {
   param([string]$Kind, [string]$Operation, [string]$Target, [string]$Status, [string]$Reason, $Details = @{})
   $record = [ordered]@{ kind = $Kind; operation = $Operation; path = $Target; status = $Status; reason = $Reason; details = $Details }
   if ($Kind -eq 'observation' -and $Status -in @('unknown', 'unreadable', 'partial')) { $script:observationFailures++ }
   $script:reports.Add($record)
-  $json = $record | ConvertTo-Json -Depth 12 -Compress
+  $json = $record | ConvertTo-Json -Depth 12 -Compress -EscapeHandling EscapeNonAscii
   # The complete record set also lands in the report file: tool output is truncated to its
   # tail, so a long run's early records survive only there.
   if ($null -ne $script:reportWriter) {
@@ -414,7 +416,6 @@ function Get-ObjectFacts {
     Aces = @()
     Errors = @()
     LowLabel = $null
-    AclLines = @()
   }
   try {
     # Get-Acl reads the security descriptor directly. On .NET Core the
@@ -453,17 +454,19 @@ function Get-ObjectFacts {
     try { $facts[$check.field] = [Dsh.TokenInfo]::HasAccess($FullPath, $check.mask) }
     catch { $facts.Errors += @{ operation = $check.field; error = (Get-HResultChain $_.Exception) } }
   }
-  # The mandatory label lives in the SACL. Reading the SACL needs a privilege while
-  # icacls prints the label without one, but icacls renders it by name, which is
-  # localized: try the integrity SID first and keep the English name as a fallback.
+  # The mandatory label lives in the SACL. Get-Acl -Audit needs SeSecurityPrivilege,
+  # while icacls /save writes the label without it. The saved form is SDDL, which
+  # names the label by SID or SDDL alias; the listing form names it in the UI language.
+  $saved = Join-Path ([System.IO.Path]::GetTempPath()) ('dsh-acl-label-{0}.txt' -f [guid]::NewGuid().ToString('N'))
   try {
-    $facts.AclLines = @(icacls $FullPath 2>&1 | ForEach-Object { [string]$_ })
-    if ($LASTEXITCODE -ne 0) { throw "icacls exit ${LASTEXITCODE}: $($facts.AclLines -join "`n")" }
-    $text = $facts.AclLines -join "`n"
-    # An unrecognized localized label is unknown, not evidence of a Low label.
-    if ($text -match $LOW_LABEL_SID -or $text -match 'Mandatory Label\\Low Mandatory Level') { $facts.LowLabel = $true }
+    $output = @(icacls $FullPath /save $saved 2>&1 | ForEach-Object { [string]$_ })
+    if ($LASTEXITCODE -ne 0) { throw "icacls exit ${LASTEXITCODE}: $($output -join "`n")" }
+    $sddl = [System.IO.File]::ReadAllText($saved, [System.Text.Encoding]::Unicode)
+    $facts.LowLabel = $sddl -match "\(ML;[^;]*;[^;]*;;;(LW|$LOW_LABEL_SID)\)"
   } catch {
     $facts.Errors += @{ operation = 'icacls'; error = (Get-HResultChain $_.Exception) }
+  } finally {
+    Remove-Item -LiteralPath $saved -Force -ErrorAction Ignore
   }
   Write-Report observation inspect_acl $FullPath $(if ($facts.Errors.Count) { 'partial' } else { 'read' }) 'Read the ACL and check effective WRITE_DAC and WRITE_OWNER; observed ACEs alone do not identify which rule caused a denial.' @{
     owner = $facts.Owner; writeDac = $facts.HasWriteDac; writeOwner = $facts.HasWriteOwner
@@ -522,7 +525,7 @@ try {
       $script:reportPath = Join-Path $directory ('acl-report-{0}.jsonl' -f [guid]::NewGuid().ToString('N'))
       $stream = [System.IO.File]::Open($script:reportPath, [System.IO.FileMode]::CreateNew, [System.IO.FileAccess]::Write)
       $script:reportWriter = [System.IO.StreamWriter]::new($stream, [System.Text.UTF8Encoding]::new($false))
-      foreach ($record in $script:reports) { $script:reportWriter.WriteLine(($record | ConvertTo-Json -Depth 12 -Compress)) }
+      foreach ($record in $script:reports) { $script:reportWriter.WriteLine(($record | ConvertTo-Json -Depth 12 -Compress -EscapeHandling EscapeNonAscii)) }
     }
   }
   $identity = Get-CurrentIdentity
@@ -790,7 +793,7 @@ try {
   }
   # Last on stdout, after the summary record: whatever the tool truncates, the tail
   # still carries the decisions, the report path and the counts.
-  Write-Line ('RECAP ' + ($recap | ConvertTo-Json -Depth 8 -Compress))
+  Write-Line ('RECAP ' + ($recap | ConvertTo-Json -Depth 8 -Compress -EscapeHandling EscapeNonAscii))
   if ($reportPath) { Write-Line ('REPORT_FILE {0}' -f $reportPath) }
   Write-Line ('SUMMARY FIXED={0} GRANTED={1} REFUSED={2} RESTORED={3}' -f $fixed, $granted, $refused, $restored)
   if ($reportWriter) { $reportWriter.Dispose() }
