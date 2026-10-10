@@ -15,6 +15,11 @@ import { LocalSandboxProvider } from '@deepseek-ai/dsh-sandbox-local'
 
 const RO: SandboxPolicy = { mode: 'read-only', workspaceRoot: '/ws' }
 const WW: SandboxPolicy = { mode: 'workspace-write', workspaceRoot: '/ws' }
+/** The runner's own exit-127 signature, then an MSYS2 runtime that died initializing under the token. */
+const WINDOWS_ACL_RUNNER_FAILURE_RULES = [
+  { allowedExitCodes: [127], fatalSignatures: ['windows-acl-run: '] },
+  { allowedExitCodes: [0xC0000142], fatalSignatures: ['*** fatal error - '] },
+]
 
 async function setup(internals: LocalSandboxProvider['internals']) {
   const ctx = new Context()
@@ -43,7 +48,7 @@ describe('windows-acl win32 chain (LocalSandboxProvider)', () => {
     ])
     expect(confined.enforcement).toBe('partial')
     expect(confined.denialSignatures).toEqual(['access is denied', 'access to the path', 'permission denied', 'operation not permitted'])
-    expect(confined.runnerFailureRules).toEqual([{ allowedExitCodes: [127], fatalSignatures: ['windows-acl-run: '] }])
+    expect(confined.runnerFailureRules).toEqual(WINDOWS_ACL_RUNNER_FAILURE_RULES)
     // A sole candidate is selected unprobed.
     expect(probeWindowsAcl).not.toHaveBeenCalled()
   })
@@ -53,6 +58,6 @@ describe('windows-acl win32 chain (LocalSandboxProvider)', () => {
     const confined = await sandbox.confine(['true'], RO)
     expect(confined.argv.slice(-4)).toEqual(['--mode', 'read-only', '--', 'true'])
     expect(confined.enforcement).toBe('partial')
-    expect(confined.runnerFailureRules).toEqual([{ allowedExitCodes: [127], fatalSignatures: ['windows-acl-run: '] }])
+    expect(confined.runnerFailureRules).toEqual(WINDOWS_ACL_RUNNER_FAILURE_RULES)
   })
 })

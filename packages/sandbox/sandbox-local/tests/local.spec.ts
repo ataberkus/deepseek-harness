@@ -14,7 +14,7 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import { LAUNCHER_FAILURE_EXIT } from '@deepseek-ai/node-addon-system/landlock-run'
-import { SANDBOX_UNAVAILABLE, SandboxUnavailableError } from '@deepseek-ai/dsh-sandbox'
+import { SANDBOX_UNAVAILABLE, SandboxUnavailableError, classifyRunnerFailure } from '@deepseek-ai/dsh-sandbox'
 import type { SandboxPolicy } from '@deepseek-ai/dsh-sandbox'
 import {
   LocalSandboxProvider,
@@ -406,7 +406,14 @@ describe('the windows-acl probe (runner invocation contract)', () => {
     expect(confined.argv.slice(-4)).toEqual(['--mode', 'read-only', '--', 'true'])
     expect(confined.enforcement).toBe('partial')
     expect(confined.denialSignatures).toEqual(['access is denied', 'access to the path', 'permission denied', 'operation not permitted'])
-    expect(confined.runnerFailureRules).toEqual([{ allowedExitCodes: [127], fatalSignatures: ['windows-acl-run: '] }])
+    expect(confined.runnerFailureRules).toEqual([
+      { allowedExitCodes: [127], fatalSignatures: ['windows-acl-run: '] },
+      { allowedExitCodes: [0xC0000142], fatalSignatures: ['*** fatal error - '] },
+    ])
+    // An MSYS2 runtime that cannot initialize under the token never ran the command.
+    const msys = '      0 [main] bash (44712) C:\\Program Files\\Git\\usr\\bin\\bash.exe: *** fatal error - couldn\'t create signal pipe, Win32 error 5'
+    expect(classifyRunnerFailure(3221225794, `${msys}\n`, confined.runnerFailureRules)).toEqual({ detail: msys })
+    expect(classifyRunnerFailure(1, `${msys}\n`, confined.runnerFailureRules)).toBeUndefined()
   })
 
   it('reads a failing probe as unusable and walks to the next rung', async () => {

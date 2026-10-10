@@ -218,6 +218,14 @@ const DENIAL_SIGNATURES = {
 const WINDOWS_ACL_RUNNER_FAILURE_EXIT = 127
 
 /**
+ * STATUS_DLL_INIT_FAILED (0xC0000142), which the runner mirrors when an
+ * MSYS2/Cygwin program such as Git Bash aborts in runtime initialization: the
+ * Low-integrity write-restricted token cannot create the runtime's signal pipe
+ * or shared object directory, so the wrapped command never starts.
+ */
+const MSYS_RUNTIME_INIT_FAILURE_EXIT = 0xC0000142
+
+/**
  * Runner-owned fatal diagnostics. Landlock has a versioned exit-125 plus
  * fatal-line launcher-failure contract. Bubblewrap's current fatal paths exit
  * 1 but its public contract does not reserve that status, while sandbox-exec
@@ -238,7 +246,10 @@ const RUNNER_FAILURE_RULES = {
     informationalLines: [`${LAUNCHER_BIN}: partial enforcement (older Landlock ABI)`],
   }],
   seatbelt: [{ fatalSignatures: ['sandbox-exec: '] }],
-  'windows-acl': [{ allowedExitCodes: [WINDOWS_ACL_RUNNER_FAILURE_EXIT], fatalSignatures: ['windows-acl-run: '] }],
+  'windows-acl': [
+    { allowedExitCodes: [WINDOWS_ACL_RUNNER_FAILURE_EXIT], fatalSignatures: ['windows-acl-run: '] },
+    { allowedExitCodes: [MSYS_RUNTIME_INIT_FAILURE_EXIT], fatalSignatures: ['*** fatal error - '] },
+  ],
 } as const satisfies Record<SelectedRunner['runner'], readonly RunnerFailureRule[]>
 
 /**
