@@ -102,26 +102,31 @@ type ResolvedConfig = {
   servers: Volatile<Record<string, ResolvedEntry>>
 }
 
-/** One resolved entry with defaults applied. */
-type ResolvedEntry = (
-  | Omit<McpStdioServerEntry, 'enabled' | 'args' | 'env' | 'cwd' | 'toolCallTimeoutMs' | 'failOnStartupError'>
-  | Omit<McpHttpServerEntry, 'enabled' | 'headers' | 'toolCallTimeoutMs' | 'failOnStartupError'>
-) & {
-  /** Whether this entry mounts a child; a disabled entry keeps its name reserved but serves no tools. */
+/** Whether a resolved entry mounts a child; a disabled entry keeps its name reserved but serves no tools. */
+interface ResolvedEnablement {
+  /** False keeps the configuration but mounts nothing. */
   enabled: boolean
-  /** Ceiling for one tool call on this server's child before the call fails loud. */
-  toolCallTimeoutMs: number
-  /** Whether a startup failure refuses the request instead of logging and continuing without the child. */
-  failOnStartupError: boolean
-} & Record<string, unknown>
+}
 
-const StdioEntry = z.object({
+/** One resolved stdio entry: the client config without its dict-key `serverName`. */
+type ResolvedStdioEntry = Omit<McpClient.StdioConfig, 'serverName'> & ResolvedEnablement
+
+/** One resolved Streamable HTTP entry: the client config without its dict-key `serverName`. */
+type ResolvedHttpEntry = Omit<McpClient.StreamableHttpConfig, 'serverName'> & ResolvedEnablement
+
+/** One resolved entry with defaults applied. */
+type ResolvedEntry = ResolvedStdioEntry | ResolvedHttpEntry
+
+/** One resolved entry as read from the volatile `servers` reference: a recursively readonly snapshot. */
+type ResolvedEntrySnapshot = ReturnType<ResolvedConfig['servers']['get']>[string]
+
+const StdioEntry: z<McpStdioServerEntry, ResolvedStdioEntry> = z.object({
   transport: z.const('stdio'),
   enabled: z.boolean().default(true),
   ...McpClient.StdioServerFields,
 })
 
-const HttpEntry = z.object({
+const HttpEntry: z<McpHttpServerEntry, ResolvedHttpEntry> = z.object({
   transport: z.const('streamable-http'),
   enabled: z.boolean().default(true),
   ...McpClient.StreamableHttpServerFields,
@@ -129,8 +134,8 @@ const HttpEntry = z.object({
 
 /** Schema for the `mcp` settings section and the manager composition entry. */
 export const Config: z<Config, ResolvedConfig> = z.object({
-  servers: z.dict(z.union([StdioEntry, HttpEntry]) as unknown as z<McpServerEntry>).default({}).volatile(),
-}) as unknown as z<Config, ResolvedConfig>
+  servers: z.dict(z.union([StdioEntry, HttpEntry])).default({}).volatile(),
+})
 
 /**
  * Reject a fleet the manager could not mount. The schema validates each entry's
@@ -162,10 +167,11 @@ interface LiveChild {
  * @param entry - resolved fleet entry.
  * @returns client config for one `ctx.plugin` mount.
  */
-function toClientConfig(serverName: string, entry: ResolvedEntry): McpClient.Config {
+function toClientConfig(serverName: string, entry: ResolvedEntrySnapshot): McpClient.Config {
   const { enabled, ...rest } = entry
   void enabled
-  return { ...rest, serverName } as unknown as McpClient.Config
+  if (rest.transport === 'stdio') return { ...rest, args: [...rest.args], serverName }
+  return { ...rest, serverName }
 }
 
 /**
@@ -176,7 +182,7 @@ function toClientConfig(serverName: string, entry: ResolvedEntry): McpClient.Con
  * @param config - composition entry used as the settings base layer.
  */
 export function apply(ctx: Context, config: ResolvedConfig): void {
-  const servers = (): Record<string, ResolvedEntry> => config.servers.get()
+  const servers = (): Readonly<Record<string, ResolvedEntrySnapshot>> => config.servers.get()
   assertServiceableMcpConfig({ servers: servers() })
   const live = new Map<string, LiveChild>()
   let closed = false

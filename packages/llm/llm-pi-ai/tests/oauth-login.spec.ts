@@ -53,9 +53,34 @@ afterEach(async () => {
   await removeIsolatedHomes()
 })
 
+/** Idle Agent handle for command calls; every live operation fails because these commands only identify the caller. */
 function fakeAgent(): Agent {
   const session = Session.create(SessionId('oauth-login'))
-  return { session, status: 'idle', options: {} } as unknown as Agent
+  const unsupported = (): never => { throw new Error('this test Agent only identifies a command caller') }
+  return {
+    id: session.id,
+    options: {},
+    session,
+    status: 'idle',
+    ctx: new Context(),
+    inbox: {
+      nextTurn: [],
+      nextStep: [],
+      clear: unsupported,
+      append: unsupported,
+      prepend: unsupported,
+      replace: unsupported,
+      remove: unsupported,
+      splice: unsupported,
+    },
+    send: unsupported,
+    followup: unsupported,
+    steer: unsupported,
+    inject: unsupported,
+    cancel: unsupported,
+    runMaintenance: unsupported,
+    whenIdle: unsupported,
+  }
 }
 
 interface StoredCredentialRecord {

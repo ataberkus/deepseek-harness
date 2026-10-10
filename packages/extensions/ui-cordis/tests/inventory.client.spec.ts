@@ -90,7 +90,10 @@ describe('reading the registry', () => {
   it('contains a synchronous remote failure instead of throwing from refresh', async () => {
     const seam = port(() => Promise.resolve([ROW]))
     const onError = vi.fn()
-    const broken = { ...seam.port, inventory: undefined } as unknown as CordisDynamicPort
+    const broken: CordisDynamicPort = {
+      ...seam.port,
+      inventory: () => { throw new TypeError('remote inventory is unavailable') },
+    }
     const inventory = createCordisInventory(broken, onError)
 
     expect(() => { inventory.refresh() }).not.toThrow()

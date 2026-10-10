@@ -47,13 +47,19 @@ describe('mcp-manager real Loader composition', () => {
       ['@deepseek-ai/dsh-tools', ToolRuntime],
       ['@deepseek-ai/dsh-mcp-manager', McpManager],
     ])
+    const unexpectedLoaderOperation = (): never => { throw new Error('This composition does not use Node HMR operations') }
     context.loader.internal = {
       version: 'v2',
+      loadCache: new Map(),
+      register: unexpectedLoaderOperation,
+      getOrCreateModuleJob: unexpectedLoaderOperation,
+      resolveSync: unexpectedLoaderOperation,
+      load: unexpectedLoaderOperation,
       async import(specifier: string) {
         if (!modules.has(specifier)) throw new Error(`unexpected Loader import: ${specifier}`)
         return modules.get(specifier)
       },
-    } as unknown as NonNullable<typeof context.loader.internal>
+    }
     await context.loader.create({
       name: 'cordis:include',
       config: { path: pathToFileURL(configPath).href },
@@ -64,9 +70,6 @@ describe('mcp-manager real Loader composition', () => {
     expect(names.filter(toolName => toolName.startsWith('mcp__'))).toEqual([])
     // The settings card edits this field live; the Loader only commits values
     // into the running reference when the schema declares them volatile.
-    const schema = McpManager.Config as unknown as {
-      dict: Record<string, { meta?: { volatile?: boolean } }>
-    }
-    expect(schema.dict.servers?.meta?.volatile).toBe(true)
+    expect(McpManager.Config.dict?.servers?.meta.volatile).toBe(true)
   })
 })

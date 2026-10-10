@@ -16,6 +16,7 @@ import {
   decodeConnectFrames,
   frameConnectMessage,
 } from '../src/cursor/connect.ts'
+import type { CursorHttp2Stream } from '../src/cursor/connect.ts'
 import {
   cursorModel,
   cursorListingInternals,
@@ -89,6 +90,15 @@ import { normalizeContext } from '@earendil-works/pi-ai/utils/transcript'
 /** Cursor streams as pi-ai's `Models.streamSimple` calls them: with the normalized transcript. */
 function streamCursor(model: Model<Api>, context: PiContext, options?: Parameters<typeof streamCursorTranscript>[2]) {
   return streamCursorTranscript(model, normalizeContext(context), options)
+}
+
+/** HTTP/2 stream double; a test replaces the request operation it expects, and any other request write fails. */
+function fakeHttp2Stream(): EventEmitter & CursorHttp2Stream {
+  return Object.assign(new EventEmitter(), {
+    write: (): never => { throw new Error('unexpected HTTP/2 stream write') },
+    end: (): never => { throw new Error('unexpected HTTP/2 stream end') },
+    close: () => undefined,
+  })
 }
 
 const ZERO_USAGE = {
@@ -464,10 +474,7 @@ describe('cursor connect', () => {
     const payload = encodeString(1, 'ok')
     const requestBody = encodeString(1, 'request')
     const framed = frameConnectMessage(payload)
-    const stream = new EventEmitter() as EventEmitter & {
-      end: (body: Uint8Array) => void
-      close: () => void
-    }
+    const stream = fakeHttp2Stream()
     let sentBody: Uint8Array | undefined
     let sentHeaders: Record<string, unknown> | undefined
     stream.end = (body) => {
@@ -485,7 +492,7 @@ describe('cursor connect', () => {
         return stream
       },
       close: () => undefined,
-    }) as unknown as ReturnType<typeof cursorConnectInternals.connect>
+    })
     await expect(connectUnary({
       baseUrl: 'https://api2.cursor.sh/',
       path: '/agent.v1.AgentService/GetUsableModels',
@@ -506,10 +513,7 @@ describe('cursor connect', () => {
   it('keeps Connect framing for streaming HTTP/2 requests', async () => {
     const payload = encodeString(1, 'response')
     const requestBody = encodeString(1, 'request')
-    const stream = new EventEmitter() as EventEmitter & {
-      write: (body: Uint8Array) => void
-      close: () => void
-    }
+    const stream = fakeHttp2Stream()
     const sentBodies: Uint8Array[] = []
     let sentHeaders: Record<string, unknown> | undefined
     stream.write = (body) => {
@@ -528,7 +532,7 @@ describe('cursor connect', () => {
         return stream
       },
       close: () => undefined,
-    }) as unknown as ReturnType<typeof cursorConnectInternals.connect>
+    })
     const received: Uint8Array[] = []
     for await (const chunk of connectStream({
       baseUrl: 'https://api2.cursor.sh/',
@@ -550,10 +554,7 @@ describe('cursor connect', () => {
   })
 
   it('rejects non-success HTTP/2 responses before decoding their body', async () => {
-    const stream = new EventEmitter() as EventEmitter & {
-      end: (body: Uint8Array) => void
-      close: () => void
-    }
+    const stream = fakeHttp2Stream()
     stream.end = () => {
       queueMicrotask(() => {
         stream.emit('response', { ':status': 415 })
@@ -565,7 +566,7 @@ describe('cursor connect', () => {
     cursorConnectInternals.connect = () => ({
       request: () => stream,
       close: () => undefined,
-    }) as unknown as ReturnType<typeof cursorConnectInternals.connect>
+    })
     await expect(connectUnary({
       baseUrl: 'https://api2.cursor.sh',
       path: '/agent.v1.AgentService/GetUsableModels',
@@ -575,10 +576,7 @@ describe('cursor connect', () => {
   })
 
   it('rejects nonzero gRPC trailers and tolerates successful trailer metadata', async () => {
-    const stream = new EventEmitter() as EventEmitter & {
-      end: (body: Uint8Array) => void
-      close: () => void
-    }
+    const stream = fakeHttp2Stream()
     stream.end = () => {
       queueMicrotask(() => {
         stream.emit('response', {})
@@ -592,7 +590,7 @@ describe('cursor connect', () => {
     cursorConnectInternals.connect = () => ({
       request: () => stream,
       close: () => undefined,
-    }) as unknown as ReturnType<typeof cursorConnectInternals.connect>
+    })
     await expect(connectUnary({
       baseUrl: 'https://api2.cursor.sh',
       path: '/x',
@@ -602,10 +600,7 @@ describe('cursor connect', () => {
   })
 
   it('reports a client-frame write failure on an open stream', async () => {
-    const stream = new EventEmitter() as EventEmitter & {
-      write: (body: Uint8Array) => void
-      close: () => void
-    }
+    const stream = fakeHttp2Stream()
     let writes = 0
     stream.write = () => {
       writes++
@@ -616,7 +611,7 @@ describe('cursor connect', () => {
     cursorConnectInternals.connect = () => ({
       request: () => stream,
       close: () => undefined,
-    }) as unknown as ReturnType<typeof cursorConnectInternals.connect>
+    })
     await expect((async () => {
       for await (const _ of connectStream({
         baseUrl: 'https://api2.cursor.sh',
@@ -634,10 +629,7 @@ describe('cursor connect', () => {
   })
 
   it('normalizes non-Error client-frame write failures', async () => {
-    const stream = new EventEmitter() as EventEmitter & {
-      write: (body: Uint8Array) => void
-      close: () => void
-    }
+    const stream = fakeHttp2Stream()
     let writes = 0
     stream.write = () => {
       writes++
@@ -648,7 +640,7 @@ describe('cursor connect', () => {
     cursorConnectInternals.connect = () => ({
       request: () => stream,
       close: () => undefined,
-    }) as unknown as ReturnType<typeof cursorConnectInternals.connect>
+    })
     await expect((async () => {
       for await (const _ of connectStream({
         baseUrl: 'https://api2.cursor.sh',
@@ -663,10 +655,7 @@ describe('cursor connect', () => {
   })
 
   it('propagates HTTP/2 stream errors and abort', async () => {
-    const stream = new EventEmitter() as EventEmitter & {
-      end: (body: Uint8Array) => void
-      close: () => void
-    }
+    const stream = fakeHttp2Stream()
     stream.end = () => {
       queueMicrotask(() => stream.emit('error', new Error('rst')))
     }
@@ -676,7 +665,7 @@ describe('cursor connect', () => {
       close: () => {
         throw new Error('already closed')
       },
-    }) as unknown as ReturnType<typeof cursorConnectInternals.connect>
+    })
     await expect(connectUnary({
       baseUrl: 'https://api2.cursor.sh',
       path: '/x',
@@ -684,16 +673,13 @@ describe('cursor connect', () => {
       body: new Uint8Array(),
     })).rejects.toThrow(/rst/)
 
-    const hanging = new EventEmitter() as EventEmitter & {
-      end: (body: Uint8Array) => void
-      close: () => void
-    }
+    const hanging = fakeHttp2Stream()
     hanging.end = () => undefined
     hanging.close = () => undefined
     cursorConnectInternals.connect = () => ({
       request: () => hanging,
       close: () => undefined,
-    }) as unknown as ReturnType<typeof cursorConnectInternals.connect>
+    })
     const ac = new AbortController()
     const pending = connectUnary({
       baseUrl: 'https://api2.cursor.sh',
@@ -709,10 +695,7 @@ describe('cursor connect', () => {
   it('queues HTTP/2 DATA that arrives while another chunk is in flight', async () => {
     const first = encodeString(1, 'a')
     const second = encodeString(1, 'b')
-    const stream = new EventEmitter() as EventEmitter & {
-      end: (body: Uint8Array) => void
-      close: () => void
-    }
+    const stream = fakeHttp2Stream()
     stream.end = () => {
       queueMicrotask(() => {
         stream.emit('data', Buffer.from(frameConnectMessage(first)))
@@ -724,7 +707,7 @@ describe('cursor connect', () => {
     cursorConnectInternals.connect = () => ({
       request: () => stream,
       close: () => undefined,
-    }) as unknown as ReturnType<typeof cursorConnectInternals.connect>
+    })
     await expect(connectUnary({
       baseUrl: 'https://api2.cursor.sh',
       path: '/x',

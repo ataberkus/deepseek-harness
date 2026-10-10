@@ -21,6 +21,32 @@ export interface ConnectDataFrame {
   payload: Uint8Array
 }
 
+/** The HTTP/2 stream operations one Cursor RPC uses. */
+export interface CursorHttp2Stream {
+  /** Observe response or trailer headers. */
+  on(event: 'response' | 'trailers', listener: (headers: http2.IncomingHttpHeaders) => void): unknown
+  /** Observe one DATA chunk. */
+  on(event: 'data', listener: (chunk: Buffer) => void): unknown
+  /** Observe a stream failure. */
+  on(event: 'error', listener: (error: Error) => void): unknown
+  /** Observe the end of the response. */
+  on(event: 'end', listener: () => void): unknown
+  /** Send one request frame and keep the stream open. */
+  write(chunk: Uint8Array): unknown
+  /** Send the whole request body and half-close the stream. */
+  end(chunk: Uint8Array): unknown
+  /** Reset the stream. */
+  close(): void
+}
+
+/** The HTTP/2 session operations one Cursor RPC uses. */
+export interface CursorHttp2Session {
+  /** Open one request stream with the given headers. */
+  request(headers: http2.OutgoingHttpHeaders): CursorHttp2Stream
+  /** Close the session. */
+  close(): void
+}
+
 /** Injectable HTTP/2 so tests never open a real Cursor connection. */
 export const cursorConnectInternals = {
   /**
@@ -29,7 +55,7 @@ export const cursorConnectInternals = {
    */
   request: defaultHttp2Request,
   /* v8 ignore next -- tests replace `connect` so this never dials Cursor. */
-  connect: (origin: string): http2.ClientHttp2Session => http2.connect(origin),
+  connect: (origin: string): CursorHttp2Session => http2.connect(origin),
 }
 
 /** Options for one Cursor AgentService RPC. */

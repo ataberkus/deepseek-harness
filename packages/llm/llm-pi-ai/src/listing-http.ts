@@ -128,7 +128,8 @@ export async function fetchListingJson(
     throw error
   }
   try {
-    return JSON.parse(text) as unknown
+    const body: unknown = JSON.parse(text)
+    return body
   } catch (error: unknown) {
     throw new LlmError(`${url} did not answer with JSON`, 'DISCOVERY_FAILED', { cause: error })
   }
