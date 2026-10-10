@@ -15,7 +15,8 @@ export function formatBalance(amount: string, symbol: '¥' | '$'): string {
   return `${symbol}${addCommas(value.round(2, Big.roundDown).toFixed(2))}`
 }
 
+// Platform Web groups with commas regardless of the host locale.
 function addCommas(value: string): string {
   const [integer, fraction] = value.split('.')
-  return `${Number(integer).toLocaleString()}.${fraction}`
+  return `${Number(integer).toLocaleString('en-US')}.${fraction}`
 }
