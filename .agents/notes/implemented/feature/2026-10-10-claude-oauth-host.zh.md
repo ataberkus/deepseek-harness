@@ -8,7 +8,7 @@ Status: implemented
 
 `/login claude` 原先运行 pi-ai 内置的 Anthropic OAuth：回调只绑定 `127.0.0.1:53692` 却声明 `localhost`，授权码交换与刷新走 `platform.claude.com`，`state` 等于 PKCE verifier，刷新不带 Claude Code 的请求头，存储的凭据也没有账号或组织身份。
 
-Oh My Pi 使用同一个公开的 Claude Code 客户端登录，但遵循 Claude Code 自身的请求：`packages/catalog/src/compat/rules/auth/anthropic.kdl` 声明该流程，`packages/ai/src/registry/oauth/anthropic.ts` 提供身份查询。
+Oh My Pi 使用同一个公开的 Claude Code 客户端登录，但遵循 Claude Code 自身的请求：其 catalog 包（`src/compat/rules/auth/anthropic.kdl`）声明该流程，其 ai 包（`src/registry/oauth/anthropic.ts`）提供身份查询。
 
 ## 决策
 

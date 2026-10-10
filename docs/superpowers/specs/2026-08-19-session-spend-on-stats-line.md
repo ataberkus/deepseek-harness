@@ -41,7 +41,7 @@ Cursor and Gemini CLI catalog models remain `NO_COST`, and `llm-deepseek` remain
 
 Add adapter mapping tests for positive and zero pi-ai totals. Update token-meter expectations with `costUsd: 0` and add a test covering cost summing and same-step replacement. Update the fixture empty-log expectation and add StatsLine formatting and localized ordering coverage.
 
-Run `pnpm exec vitest run packages/llm/llm-pi-ai/tests/convert.spec.ts packages/llm/token-meter/tests/token-usage-projection.spec.ts packages/client/ui-chat/tests/chat-stats.client.spec.tsx packages/client/connection/tests/fixture.client.spec.ts`, then typecheck touched packages if the focused tests do not compile them.
+Run `pnpm exec vitest run packages/llm/llm-pi-ai/tests/convert.spec.ts packages/llm/token-meter/tests/token-usage-projection.spec.ts packages/client/ui-chat/tests/chat-stats.client.spec.tsx`, then typecheck touched packages if the focused tests do not compile them.
 
 Run `pnpm run verify-translation-pairing --write` for every edited bilingual file, including the new Agent Note and the architecture note whose `tokenUsage` sentence changes. Run the relevant documentation and diff checks; do not run snapshot refresh unless a fixture is intentionally made cost-bearing.
 

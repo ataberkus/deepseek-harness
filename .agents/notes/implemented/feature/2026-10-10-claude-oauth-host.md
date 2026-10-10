@@ -8,7 +8,7 @@ English | [中文](2026-10-10-claude-oauth-host.zh.md)
 
 `/login claude` ran pi-ai's built-in Anthropic OAuth: a callback bound only to `127.0.0.1:53692` while advertising `localhost`, code exchange and refresh on `platform.claude.com`, a state equal to the PKCE verifier, refresh without Claude Code's headers, and no account or organization identity on the stored credential.
 
-Oh My Pi signs in with the same public Claude Code client but follows Claude Code's own requests: `packages/catalog/src/compat/rules/auth/anthropic.kdl` declares the flow, and `packages/ai/src/registry/oauth/anthropic.ts` supplies the identity lookup.
+Oh My Pi signs in with the same public Claude Code client but follows Claude Code's own requests: its catalog package (`src/compat/rules/auth/anthropic.kdl`) declares the flow, and its ai package (`src/registry/oauth/anthropic.ts`) supplies the identity lookup.
 
 ## Decision
 

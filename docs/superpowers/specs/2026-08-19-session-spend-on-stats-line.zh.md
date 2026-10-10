@@ -41,7 +41,7 @@ Cursor 和 Gemini CLI catalog 模型保持 `NO_COST`，`llm-deepseek` 在适配�
 
 增加正、零 pi-ai 总额的适配器映射测试。为 token-meter 期望值加入 `costUsd: 0`，并增加覆盖不同步骤求和及同一步骤替换的测试。更新 fixture 空日志期望，并增加 StatsLine 格式和本地化顺序测试。
 
-运行 `pnpm exec vitest run packages/llm/llm-pi-ai/tests/convert.spec.ts packages/llm/token-meter/tests/token-usage-projection.spec.ts packages/client/ui-chat/tests/chat-stats.client.spec.tsx packages/client/connection/tests/fixture.client.spec.ts`，如果聚焦测试没有编译这些包，再对受影响的包执行 typecheck。
+运行 `pnpm exec vitest run packages/llm/llm-pi-ai/tests/convert.spec.ts packages/llm/token-meter/tests/token-usage-projection.spec.ts packages/client/ui-chat/tests/chat-stats.client.spec.tsx`，如果聚焦测试没有编译这些包，再对受影响的包执行 typecheck。
 
 对每个编辑过的双语文件运行 `pnpm run verify-translation-pairing --write`，包括新的 Agent Note 和需要在 `tokenUsage` 句子中提及 `costUsd` 的 architecture note。运行相关文档与 diff 检查；除非 fixture 有意加入可计费花费，否则不刷新 snapshot。
 

@@ -1,7 +1,7 @@
 /**
  * Claude Pro/Max subscription OAuth for the `anthropic` route, ported from Oh
- * My Pi (`packages/catalog/src/compat/rules/auth/anthropic.kdl` and
- * `packages/ai/src/registry/oauth/anthropic.ts`). Login is a PKCE
+ * My Pi (its catalog package's `src/compat/rules/auth/anthropic.kdl` and its
+ * ai package's `src/registry/oauth/anthropic.ts`). Login is a PKCE
  * authorization code on claude.ai whose loopback callback listens on
  * `localhost:54545/callback` (both loopback families; a random port when
  * 54545 is busy) and also accepts a pasted code or redirect URL. Exchange and
