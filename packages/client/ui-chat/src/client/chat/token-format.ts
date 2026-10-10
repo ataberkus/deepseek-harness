@@ -29,6 +29,18 @@ export function formatExactTokens(value: number, t: ChatViewSlotProps['t']): str
   return groups.join(t('number.groupSeparator'))
 }
 
+/**
+ * Adapter-reported USD spend: two decimals, or four below one cent or when
+ * whole cents would drop sub-cent precision.
+ * @param usd - positive spend in US dollars.
+ * @returns display string such as `$0.0042` or `$1.25`.
+ */
+export function formatCost(usd: number): string {
+  const cents = usd * 100
+  const hasSubCentPrecision = Math.abs(cents - Math.round(cents)) > 1e-9
+  return usd < 0.01 || hasSubCentPrecision ? `$${usd.toFixed(4)}` : `$${usd.toFixed(2)}`
+}
+
 /** Round a cache-read ratio to exact percentage units, with positive ties rounded up. */
 function roundedPercentUnits(cacheReadTokens: number, denominator: number, decimalPlaces: 0 | 1): number {
   const unitsPerPercent = decimalPlaces === 0 ? 1 : 10

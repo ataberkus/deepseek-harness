@@ -212,6 +212,20 @@ describe('composer stats pills', () => {
     expect(emptyView.container.textContent).toBe('')
   })
 
+  it('appends adapter-reported cost to the usage pill in both modes', () => {
+    const { source } = makeSource({ nodes: [assistant(1, 1)] })
+    const values = { tokenUsage: { ...USAGE, costUsd: 1.25 } }
+    const view = render(<UsagePill {...props(source, values)} />)
+    const pill = view.getByRole('button')
+    expect(pill.textContent).toBe('105 tok·Cache hit 90%·Cost $1.25')
+    expect(pill.getAttribute('aria-label')).toBe('105 tok · Cache hit 90% · Cost $1.25')
+    view.rerender(<UsagePill {...props(source, { tokenUsage: { ...USAGE, costUsd: 0.0042 } })} usePerformanceUsage={selector => selector('compact')} />)
+    expect(view.container.textContent).toBe('Cache hit 90%·Cost $0.0042')
+    const outputOnly = { uncachedInputTokens: 0, outputTokens: 5, cacheReadTokens: 0, cacheWriteTokens: 0, costUsd: 0.5 }
+    view.rerender(<UsagePill {...props(source, { tokenUsage: outputOnly })} usePerformanceUsage={selector => selector('compact')} />)
+    expect(view.container.textContent).toBe('Cost $0.50')
+  })
+
   it.each([
     { actual: '98.6%', tokenUsageValue: tokenUsage(986, 14), expected: 'Cache hit 99%' },
     { actual: '99.1%', tokenUsageValue: tokenUsage(991, 9), expected: 'Cache hit 99%' },

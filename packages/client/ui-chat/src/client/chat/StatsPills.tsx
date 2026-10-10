@@ -1,10 +1,10 @@
 // Composer statistics pills, each its own 'conversation.composer.dock' list
 // entry (activity, usage) so a plugin can replace or add one pill by id.
-// Compact keeps speed and cache hit as plain readings; Detailed adds counts,
+// Compact keeps speed, cache hit, and reported cost as plain readings; Detailed adds counts,
 // token totals, and click-open dialogs. Settled-node identity prevents
 // stream-delta updates from rerendering the pills.
 
-import { memo, useMemo, type ReactNode } from 'react'
+import { Fragment, memo, useMemo, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { IconDatabaseOutlineRegular, IconGaugeOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { UseProjection } from '@deepseek-ai/dsh-api-session-controller/client'
@@ -16,7 +16,7 @@ import type { ChatViewSlotProps, PerformanceUsageInjected } from '../contract/sl
 import type { ChatSnapshot } from '../contract/snapshot.ts'
 import { formatTokensPerSecond } from './message-chrome.ts'
 import { assistantStepReading } from '../contract/turn-metrics.ts'
-import { formatCacheHitPercent, formatExactTokens, formatTokens } from './token-format.ts'
+import { formatCacheHitPercent, formatCost, formatExactTokens, formatTokens } from './token-format.ts'
 import { MEASURE_STYLE, useStatDialog } from './stat-dialog.ts'
 import css from './StatsPills.module.css'
 import dialogCss from './stat-dialog.module.css'
@@ -142,15 +142,18 @@ function exactCount(value: number, t: Translate): string {
   return t('message.turnUsage.count', { count: formatExactTokens(value, t) })
 }
 
-function joined(first: string, second: string | null): ReactNode {
-  if (second === null) return first
-  return (
-    <>
-      {first}
-      <span className={css.sep} aria-hidden>·</span>
-      {second}
-    </>
-  )
+function joined(...parts: (string | null)[]): ReactNode {
+  const present = parts.filter((part): part is string => part !== null)
+  return present.map((part, index) => (
+    <Fragment key={index}>
+      {index > 0 && <span className={css.sep} aria-hidden>·</span>}
+      {part}
+    </Fragment>
+  ))
+}
+
+function joinedText(...parts: (string | null)[]): string {
+  return parts.filter((part): part is string => part !== null).join(' · ')
 }
 
 // Every figure rides the durable sessionStats projection, so paging and
@@ -278,7 +281,7 @@ export const ActivityPill = memo(function ActivityPill({ useChat, useProjection,
   )
 })
 
-/** Whole-log token total and cache hit; Compact keeps only the cache hit. */
+/** Whole-log token total, cache hit, and adapter-reported cost; Compact drops the token total. */
 export const UsagePill = memo(function UsagePill({ useProjection, usePerformanceUsage, t }: StatPillProps) {
   const mode = usePerformanceUsage(value => value)
   const usage = useProjection('tokenUsage')
@@ -287,9 +290,13 @@ export const UsagePill = memo(function UsagePill({ useProjection, usePerformance
   if (usage === undefined || (billedInputTokens(usage) === 0 && usage.outputTokens === 0)) return null
   const cacheHit = cacheHitPercent(usage)
   const cacheHitText = cacheHit !== null ? t('stats.cacheHit', { percent: cacheHit }) : null
+  // Spend is adapter-reported; routes that report none keep a zero total and show no cost.
+  const costText = usage.costUsd > 0 ? t('stats.cost', { cost: formatCost(usage.costUsd) }) : null
   const icon = <IconDatabaseOutlineRegular />
   if (mode === 'compact') {
-    return cacheHitText === null ? null : <PlainPill stat="usage" icon={icon} label={cacheHitText} />
+    return cacheHitText === null && costText === null
+      ? null
+      : <PlainPill stat="usage" icon={icon} label={joined(cacheHitText, costText)} />
   }
   // Same aggregate as the Turn pill's totalTokens: every prompt-side billing bucket plus output.
   const total = billedInputTokens(usage) + usage.outputTokens
@@ -298,8 +305,8 @@ export const UsagePill = memo(function UsagePill({ useProjection, usePerformance
     <DialogPill
       stat="usage"
       icon={icon}
-      label={joined(totalText, cacheHitText)}
-      ariaLabel={cacheHitText === null ? totalText : `${totalText} · ${cacheHitText}`}
+      label={joined(totalText, cacheHitText, costText)}
+      ariaLabel={joinedText(totalText, cacheHitText, costText)}
       title={t('stats.dialog.usageTitle')}
       titleValue={exactCount(total, t)}
     >
