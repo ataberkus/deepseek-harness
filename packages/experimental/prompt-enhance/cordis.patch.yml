@@ -1,0 +1,12 @@
+- insert:
+    - id: prompt-enhance
+      name: '@deepseek-ai/dsh-experimental-prompt-enhance'
+      config:
+        maxDraftChars: 20000
+        historyMessages: 6
+        historyMessageChars: 1500
+        maxOutputTokens: 4000
+        timeoutMs: 120000
+        maxConcurrent: 3
+    - id: ui-prompt-enhance
+      name: '@deepseek-ai/dsh-experimental-client-ui-prompt-enhance'

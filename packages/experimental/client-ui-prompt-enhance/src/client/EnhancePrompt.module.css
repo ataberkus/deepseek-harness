@@ -1,0 +1,12 @@
+.anchor { display: inline-flex; flex: none; }
+.trigger { width: 28px; padding: 0; flex: none; }
+.trigger[data-prompt-enhance='running'] { color: var(--dsw-alias-state-business-primary); animation: pulse 1.2s ease-in-out infinite; }
+.status { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+
+@keyframes pulse {
+  50% { opacity: 0.45; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .trigger[data-prompt-enhance='running'] { animation: none; }
+}
