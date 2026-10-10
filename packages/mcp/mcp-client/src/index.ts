@@ -219,7 +219,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
   // the transport here releases startup requests that are still awaiting a reply.
   ctx.on('internal/plugin', (fiber) => {
     if (fiber !== ctx.fiber || fiber.uid !== null) return
-    return dispose()
+    void dispose()
   }, { global: true })
   ctx.effect(() => dispose, 'mcp-client.connection')
 
