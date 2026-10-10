@@ -224,6 +224,9 @@ export function isDependencyCatalogCurrent(scanRoot: string = ROOT): boolean {
 
 /**
  * Isolate npm configuration and cache from the maintainer and invoking package manager.
+ * Registry and install-strategy settings travel as `npm_config_*` variables because npm ranks the environment above
+ * project, user, and global files, and loads a project `.npmrc` only from the nearest ancestor of its working
+ * directory that contains `package.json` or `node_modules`.
  * @param temporary - Private consumer directory owned by the caller.
  * @param inherited - Environment whose non-npm settings remain available to the child.
  * @returns Complete child environment, including isolated user/global configuration and cache paths.
@@ -236,13 +239,15 @@ export function createNpmResolutionEnvironment(
   const globalConfig = join(temporary, '.npmrc-global')
   writeFileSync(userConfig, '')
   writeFileSync(globalConfig, '')
-  writeFileSync(join(temporary, '.npmrc'), `registry=${REGISTRY}\n@deepseek-ai:registry=${REGISTRY}\ninstall-strategy=hoisted\n`)
   return {
     ...Object.fromEntries(Object.entries(inherited).filter(([name]) => !name.toLowerCase().startsWith('npm_config_'))),
     npm_config_userconfig: userConfig,
     npm_config_globalconfig: globalConfig,
     npm_config_cache: join(temporary, '.npm-cache'),
     npm_config_update_notifier: 'false',
+    npm_config_registry: REGISTRY,
+    'npm_config_@deepseek-ai:registry': REGISTRY,
+    npm_config_install_strategy: 'hoisted',
   }
 }
 
