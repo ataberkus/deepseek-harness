@@ -1,0 +1,28 @@
+# Bilingual-pair consistency record for 2026-10-10-usage-cost-prompt-enhance-source.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write docs/persistence-changes/2026-10-10-usage-cost-prompt-enhance-source.md
+/:
+  en: 3d5a424ae7d7e46b
+  zh: c22a8e4a62d8cc1a
+/2026-10-10-usage-cost-prompt-enhance-source:
+  en: 87da3eb082a01304
+  zh: f59dd0e4f98e05d5
+/2026-10-10-usage-cost-prompt-enhance-source/summary:
+  en: da844ef7143dec95
+  zh: b74635715582081b
+/2026-10-10-usage-cost-prompt-enhance-source/table-of-contents:
+  en: 6cf314a069ceb451
+  zh: 9adff678e9ecab3b
+/2026-10-10-usage-cost-prompt-enhance-source/declaration:
+  en: 6907136f28e48c90
+  zh: 02f8298485f3d8e7
+/2026-10-10-usage-cost-prompt-enhance-source/compatibility:
+  en: bbb5b4fa0d0f6bff
+  zh: adfb8aac8b4137d9
+/2026-10-10-usage-cost-prompt-enhance-source/verification:
+  en: 6c6137bcc7947fa8
+  zh: 19f50f28915300f6
+/2026-10-10-usage-cost-prompt-enhance-source/dev-note:
+  en: b75c8458928b72b9
+  zh: 003ba4e17b4b5269

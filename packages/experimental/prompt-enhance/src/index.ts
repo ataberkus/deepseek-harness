@@ -32,6 +32,11 @@ import { cleanEnhanced, conversationTail, ENHANCE_SYSTEM_PROMPT, enhanceInput } 
 
 declare module '@deepseek-ai/dsh-llm' {
   interface MessageSourceMap {
+    /**
+     * The enhancement request's own draft message. The call is never appended
+     * to a Session log, so readers neither see nor depend on this kind.
+     * @persistenceAttribution
+     */
     'dsh-prompt-enhance': { kind: 'dsh-prompt-enhance' } & ContextFormed
   }
 }

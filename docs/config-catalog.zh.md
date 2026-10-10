@@ -1062,6 +1062,39 @@ export interface InspectorOptions {
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-experimental-inspector -->
 
+<!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-experimental-prompt-enhance -->
+<a id="deepseek-aidsh-experimental-prompt-enhance"></a>
+
+## `@deepseek-ai/dsh-experimental-prompt-enhance`
+
+- `inject`: `webServer` · `connection` · `agents` · `llm` · `agentDefaultModel`
+- `source`: [`packages/experimental/prompt-enhance/src/index.ts:56`](../packages/experimental/prompt-enhance/src/index.ts)
+
+```ts config-catalog
+/** Prompt-enhancement deployment policy. */
+export interface Config {
+  /** Longest accepted draft, in characters. */
+  readonly maxDraftChars: number
+  /** Latest user and assistant messages shown to the enhancer. */
+  readonly historyMessages: number
+  /** Character cap of each shown conversation message. */
+  readonly historyMessageChars: number
+  /** Output-token cap of the enhancement call. */
+  readonly maxOutputTokens: number
+  /** End-to-end call deadline in milliseconds. */
+  readonly timeoutMs: number
+  /** Enhancement calls allowed at once across all Sessions. */
+  readonly maxConcurrent: number
+  /** Explicit provider route; must be paired with `model`. Omitted, the Session's model is used. */
+  readonly provider?: string
+  /** Explicit model id; must be paired with `provider`. */
+  readonly model?: string
+  /** Adapter-owned reasoning effort; omitted, the selected model's effort is used. */
+  readonly reasoningEffort?: string
+}
+```
+<!-- END GENERATED config-catalog:@deepseek-ai/dsh-experimental-prompt-enhance -->
+
 <!-- BEGIN GENERATED config-catalog:@deepseek-ai/dsh-experimental-ptc-runtime-python -->
 <a id="deepseek-aidsh-experimental-ptc-runtime-python"></a>
 
@@ -2104,7 +2137,7 @@ export interface ReconnectConfig {
 ## `@deepseek-ai/dsh-mcp-manager`
 
 - `inject`: `tools`
-- `refs`: `Volatile` (`@deepseek-ai/cordis`)
+- `refs`: [`McpClient`](../packages/mcp/mcp-client/src/index.ts) · `Volatile` (`@deepseek-ai/cordis`)
 - `source`: [`packages/mcp/mcp-manager/src/index.ts:100`](../packages/mcp/mcp-manager/src/index.ts)
 
 ```ts config-catalog
@@ -2119,68 +2152,18 @@ type ResolvedConfig = {
 }
 
 /** One resolved entry with defaults applied. */
-type ResolvedEntry = (
-  | Omit<McpStdioServerEntry, 'enabled' | 'args' | 'env' | 'cwd' | 'toolCallTimeoutMs' | 'failOnStartupError'>
-  | Omit<McpHttpServerEntry, 'enabled' | 'headers' | 'toolCallTimeoutMs' | 'failOnStartupError'>
-) & {
-  /** Whether this entry mounts a child; a disabled entry keeps its name reserved but serves no tools. */
+type ResolvedEntry = ResolvedStdioEntry | ResolvedHttpEntry
+
+/** One resolved stdio entry: the client config without its dict-key `serverName`. */
+type ResolvedStdioEntry = Omit<McpClient.StdioConfig, 'serverName'> & ResolvedEnablement
+
+/** One resolved Streamable HTTP entry: the client config without its dict-key `serverName`. */
+type ResolvedHttpEntry = Omit<McpClient.StreamableHttpConfig, 'serverName'> & ResolvedEnablement
+
+/** Whether a resolved entry mounts a child; a disabled entry keeps its name reserved but serves no tools. */
+interface ResolvedEnablement {
+  /** False keeps the configuration but mounts nothing. */
   enabled: boolean
-  /** Ceiling for one tool call on this server's child before the call fails loud. */
-  toolCallTimeoutMs: number
-  /** Whether a startup failure refuses the request instead of logging and continuing without the child. */
-  failOnStartupError: boolean
-} & Record<string, unknown>
-
-/** One stdio server entry; the dict key supplies `serverName`. */
-export interface McpStdioServerEntry {
-  /** Selects child-process stdio transport. */
-  transport: 'stdio'
-  /** False keeps the configuration but mounts nothing. */
-  enabled?: boolean
-  /** Executable used to start the server. */
-  command: string
-  /** Arguments passed directly, without shell interpolation. */
-  args?: string[]
-  /** Extra env vars merged on top of scrubbed ambient env, stored in plain text. */
-  env?: Record<string, string>
-  /** Working directory for the child process. */
-  cwd?: string
-  /** Per-tool-call timeout in milliseconds. */
-  toolCallTimeoutMs?: number
-  /** Fail plugin activation when the initial connection or tool synchronization fails. */
-  failOnStartupError?: boolean
-  /** Automatic reconnect policy after a lost connection; omission uses the defaults. */
-  reconnect?: McpReconnectEntry
-}
-
-/** One Streamable HTTP server entry; the dict key supplies `serverName`. */
-export interface McpHttpServerEntry {
-  /** Selects Streamable HTTP transport. */
-  transport: 'streamable-http'
-  /** False keeps the configuration but mounts nothing. */
-  enabled?: boolean
-  /** MCP endpoint URL. */
-  url: string
-  /** Additional headers attached to MCP requests, stored in plain text. */
-  headers?: Record<string, string>
-  /** Per-tool-call timeout in milliseconds. */
-  toolCallTimeoutMs?: number
-  /** Fail plugin activation when the initial connection or tool synchronization fails. */
-  failOnStartupError?: boolean
-  /** Automatic reconnect policy after a lost connection; omission uses the defaults. */
-  reconnect?: McpReconnectEntry
-}
-
-/** Automatic reconnect policy for one settings-driven server entry. */
-export interface McpReconnectEntry {
-  /** Reconnect automatically after a lost connection. */
-  enabled?: boolean
-  /** First reconnect delay in milliseconds; doubles per consecutive failed attempt. */
-  initialDelayMs?: number
-  /** Backoff ceiling in milliseconds; also the uptime after which the attempt budget resets. */
-  maxDelayMs?: number
-  /** Consecutive failed attempts per outage before giving up for good. */
-  maxAttempts?: number
 }
 ```
 <!-- END GENERATED config-catalog:@deepseek-ai/dsh-mcp-manager -->
@@ -4505,6 +4488,7 @@ export interface Config {
 | `@deepseek-ai/dsh-experimental-auto-review` | `approval` · `llm` · `permissionPresets` · `sessions` · `tools` | [`packages/experimental/auto-review/src/index.ts`](../packages/experimental/auto-review/src/index.ts) |
 | `@deepseek-ai/dsh-experimental-client-ui-agent-team` | — | [`packages/experimental/client-ui-agent-team/src/index.ts`](../packages/experimental/client-ui-agent-team/src/index.ts) |
 | `@deepseek-ai/dsh-experimental-client-ui-claude-code-mods` | — | [`packages/experimental/client-ui-claude-code-mods/src/index.ts`](../packages/experimental/client-ui-claude-code-mods/src/index.ts) |
+| `@deepseek-ai/dsh-experimental-client-ui-prompt-enhance` | — | [`packages/experimental/client-ui-prompt-enhance/src/index.ts`](../packages/experimental/client-ui-prompt-enhance/src/index.ts) |
 | `@deepseek-ai/dsh-experimental-client-ui-voice-input` | — | [`packages/experimental/client-ui-voice-input/src/index.ts`](../packages/experimental/client-ui-voice-input/src/index.ts) |
 | `@deepseek-ai/dsh-experimental-computer-use-cua-driver-native` | `computerUse` · `tools` · `systemPrompt` | [`packages/experimental/computer-use-cua-driver-native/src/index.ts`](../packages/experimental/computer-use-cua-driver-native/src/index.ts) |
 | `@deepseek-ai/dsh-experimental-session-inspector` | — | [`packages/experimental/session-inspector/src/index.ts`](../packages/experimental/session-inspector/src/index.ts) |
