@@ -1,5 +1,4 @@
-import { readFile, writeFile } from 'node:fs/promises'
-import { resolve } from 'node:path'
+import { readFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 import { defineConfig } from 'vite'
 import type { Plugin } from 'vite'
@@ -58,38 +57,30 @@ function rejectStandaloneServe(): Plugin {
  * script — the worker bootstrap entry — spliced ahead of its entry tag. Both
  * pages share every chunk; the extra tag is the only difference, so the
  * static worker deployment ships the served page verbatim plus its
- * bootstrap.
+ * bootstrap. The page derives from the in-memory index.html asset, which
+ * Vite's HTML plugin emits before post plugins run, and rides the same
+ * bundle write as index.html.
  */
 function emitPreviewPage(): Plugin {
-  let bootstrapFile: string | undefined
   let write = true
-  let written = false
-  let outputDirectory = ''
   return {
     name: 'dsh-emit-preview-page',
+    enforce: 'post',
     configResolved(config) {
       write = config.build.write
-      outputDirectory = resolve(config.root, config.build.outDir)
-    },
-    buildStart() {
-      bootstrapFile = undefined
-      written = false
     },
     generateBundle(_options, bundle) {
       if (!write) return
-      for (const item of Object.values(bundle)) {
-        if (item.type === 'chunk' && item.isEntry && item.name === 'bootstrap') bootstrapFile = item.fileName
-      }
-      if (bootstrapFile === undefined) throw new Error('vite: preview bootstrap entry missing from the bundle')
-    },
-    writeBundle() { written = true },
-    async closeBundle() {
-      if (!write || !written || bootstrapFile === undefined) return
-      const page = await readFile(resolve(outputDirectory, 'index.html'), 'utf8')
+      const bootstrap = Object.values(bundle)
+        .find(item => item.type === 'chunk' && item.isEntry && item.name === 'bootstrap')
+      if (bootstrap === undefined) throw new Error('vite: preview bootstrap entry missing from the bundle')
+      const index = bundle['index.html']
+      if (index?.type !== 'asset') throw new Error('vite: index.html missing from the bundle')
+      const page = typeof index.source === 'string' ? index.source : new TextDecoder().decode(index.source)
       const anchor = page.indexOf('<script type="module"')
       if (anchor === -1) throw new Error('vite: built index.html lost its module entry tag')
-      const tag = `<script type="module" crossorigin src="./${bootstrapFile}"></script>`
-      await writeFile(resolve(outputDirectory, 'preview.html'), `${page.slice(0, anchor)}${tag}${page.slice(anchor)}`)
+      const tag = `<script type="module" crossorigin src="./${bootstrap.fileName}"></script>`
+      this.emitFile({ type: 'asset', fileName: 'preview.html', source: `${page.slice(0, anchor)}${tag}${page.slice(anchor)}` })
     },
   }
 }
