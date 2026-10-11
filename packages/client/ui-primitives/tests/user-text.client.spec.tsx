@@ -5,7 +5,8 @@
  */
 import { describe, expect, it, vi } from 'vitest'
 import { fireEvent, render } from '@testing-library/react'
-import { projectUserText } from '../src/user-text.tsx'
+import { projectUserText, UserMarkdownText } from '../src/user-text.tsx'
+import { markdownLabels } from './labels.client.ts'
 
 const project = (
   text: string,
@@ -145,5 +146,37 @@ describe('projectUserText', () => {
     expect(host.querySelectorAll('div').length).toBe(0)
     expect(host.querySelectorAll('[data-ref-chip]').length).toBe(0)
     expect(host.textContent).toBe('纯文本，无引用')
+  })
+})
+
+describe('UserMarkdownText', () => {
+  const markdown = (text: string, sessionLabels?: readonly string[]) =>
+    render(<UserMarkdownText text={text} labels={markdownLabels} sessionLabels={sessionLabels} />)
+      .container.querySelector('[data-markdown-variant="compact"]')!
+
+  it('renders Markdown and turns soft line breaks into explicit breaks', () => {
+    const body = markdown('**bold** line\r\nnext *line*\n\n- a\n  - b')
+    expect(body.querySelector('strong')?.textContent).toBe('bold')
+    expect(body.querySelector('em')?.textContent).toBe('line')
+    expect(body.querySelector('p')?.querySelectorAll('br')).toHaveLength(1)
+    expect(body.querySelector('ul > li > ul > li')?.textContent).toBe('b')
+  })
+
+  it('keeps delimiter-bearing references whole while the surrounding emphasis still closes', () => {
+    const body = markdown('_see @src/__init__.py_ and @会话 *一*', ['会话 *一*'])
+    const chips = [...body.querySelectorAll('[data-ref-chip]')]
+    expect(chips.map(chip => chip.textContent)).toEqual(['__init__.py', '会话 *一*'])
+    expect(body.querySelector('em')?.textContent).toBe('see __init__.py')
+    expect(body.querySelector('strong')).toBeNull()
+  })
+
+  it('leaves references in links, code, and raw HTML undecorated and unescaped', () => {
+    const body = markdown('[see @a_b.ts](https://example.com/a_b) ` @c_d.ts `\n\n<div>\n @e_f\n</div>')
+    expect(body.querySelectorAll('[data-ref-chip]')).toHaveLength(0)
+    expect(body.querySelector('a')?.textContent).toBe('see @a_b.ts')
+    expect(body.querySelector('a')?.getAttribute('href')).toBe('https://example.com/a_b')
+    expect(body.querySelector('code')?.textContent).toBe('@c_d.ts')
+    expect(body.textContent).toContain('<div>\n @e_f\n</div>')
+    expect(body.textContent).not.toContain('\\')
   })
 })

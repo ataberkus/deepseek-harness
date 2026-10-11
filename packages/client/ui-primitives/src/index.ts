@@ -58,7 +58,7 @@ export { FileTypeIcon, classifyFileType, fileExtension } from './FileTypeIcon.ts
 export type {
   CodeFileType, FileType, FileTypeIconProps, FileTypeKind, FileTypeProjectContext,
 } from './FileTypeIcon.tsx'
-export { projectUserText, type UserTextReferences } from './user-text.tsx'
+export { projectUserText, UserMarkdownText, type UserTextReferences } from './user-text.tsx'
 export { Tooltip } from './Tooltip.tsx'
 export type { TooltipSide } from './Tooltip.tsx'
 export { pointerModality } from './input-modality.ts'
@@ -103,7 +103,9 @@ export { JsonBlock } from './markdown/JsonBlock.tsx'
 export { MarkdownDelegateProvider } from './markdown/MarkdownDelegate.tsx'
 export type { MarkdownDelegate, MarkdownDelegateProviderProps, MarkdownExternalLinkHandler } from './markdown/MarkdownDelegate.tsx'
 export { MarkdownText } from './markdown/MarkdownText.tsx'
-export type { MarkdownCodeLabels, MarkdownFileMentions, MarkdownLabels, MarkdownPathImages } from './markdown/MarkdownText.tsx'
+export type {
+  MarkdownCodeLabels, MarkdownFileMentions, MarkdownLabels, MarkdownPathImages, MarkdownTextDecorations,
+} from './markdown/MarkdownText.tsx'
 export { extractMarkdownPlainText } from './markdown/plain-text.ts'
 export type { MarkdownPlainTextMode, MarkdownPlainTextOptions } from './markdown/plain-text.ts'
 export * from './icons/index.tsx'

@@ -44,3 +44,37 @@
      a font-relative amount, so it holds across the font axis. */
   vertical-align: -0.125em;
 }
+
+/* UserMarkdownText: the compact Markdown variant's spacing and heading scale
+   at the consumer's own size, line height, and ink. Block separators are
+   newline text and soft breaks arrive as <br>, so wrapping resets to normal
+   inside a pre-wrap consumer. */
+.markdown {
+  min-width: 0;
+  white-space: normal;
+}
+
+.markdown > [data-markdown-variant] {
+  font-size: inherit;
+  line-height: inherit;
+  color: inherit;
+}
+
+/* A blank line between paragraphs keeps one empty line of the consumer's
+   line height, as the plain projection showed it. */
+.markdown > [data-markdown-variant] > p + p {
+  margin-top: 1lh;
+}
+
+/* Compact restyles `.fileMention` buttons as inherited-ink dotted links;
+   reference chips keep their own label treatment inside sent Markdown. */
+.markdown [data-markdown-variant] .refChip {
+  color: var(--dsw-alias-state-business-primary);
+  font-weight: 500;
+  text-decoration: none;
+}
+
+.markdown [data-markdown-variant] button.refChip:is(:hover, :focus) {
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+}

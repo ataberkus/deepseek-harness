@@ -179,6 +179,20 @@ export interface MarkdownFileMentions {
 }
 
 /**
+ * Inline decoration for prose text runs: the owner replaces each authored
+ * text run outside links and code with its own inline nodes (reference chips,
+ * explicit line breaks). The renderer applies it on settled renders only.
+ */
+export interface MarkdownTextDecorations {
+  /**
+   * Decorate one text run.
+   * @param value - The run's unescaped text; soft line breaks remain `\n`.
+   * @returns Inline nodes covering the whole run.
+   */
+  decorate(value: string): ReactNode
+}
+
+/**
  * One render pass's state: immutable options and targets plus the footnote
  * numbering accumulated in document order while references render.
  */
@@ -193,6 +207,8 @@ export interface MarkdownRenderContext {
   readonly fileMentions: MarkdownFileMentions | undefined
   /** Local-path image vocabulary; absent wherever no rewriting owner exists. */
   readonly pathImages: MarkdownPathImages | undefined
+  /** Prose text-run decoration; absent wherever text renders verbatim. */
+  readonly textDecorations?: MarkdownTextDecorations | undefined
   /** Inside an anchor's children: interactive mentions must not nest there. */
   readonly inLink?: boolean
   /** Reference targets visible to this pass. */
@@ -273,7 +289,10 @@ function renderChildren(
 function renderNode(node: Md.RootContent, key: Key, context: MarkdownRenderContext): ReactNode {
   switch (node.type) {
     case 'text':
-      return node.value
+      // Decorations may add buttons, which cannot nest inside an anchor.
+      return context.textDecorations === undefined || context.inLink === true
+        ? node.value
+        : <Fragment key={key}>{context.textDecorations.decorate(node.value)}</Fragment>
     case 'paragraph':
       return <p key={key}>{renderChildren(node.children, context)}</p>
     case 'heading':

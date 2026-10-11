@@ -33,8 +33,8 @@
   font-size: var(--dsh-content-font-size, 14px);
   line-height: calc(22px + var(--dsh-content-font-delta, 0px));
   color: var(--dsw-alias-label-primary);
-  /* The projected user text is inline runs; the bubble owns wrapping so a
-     decorated single-line message stays one line. */
+  /* Extra-block JSON keeps pre-wrap; the sent-Markdown body resets to normal
+     wrapping and renders its own line breaks. */
   white-space: pre-wrap;
   word-break: break-word;
 }
