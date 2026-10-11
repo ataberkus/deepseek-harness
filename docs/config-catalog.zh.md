@@ -1067,21 +1067,29 @@ export interface InspectorOptions {
 
 ## `@deepseek-ai/dsh-experimental-prompt-enhance`
 
-- `inject`: `webServer` · `connection` · `agents` · `llm` · `agentDefaultModel`
-- `source`: [`packages/experimental/prompt-enhance/src/index.ts:56`](../packages/experimental/prompt-enhance/src/index.ts)
+- `inject`: `webServer` · `connection` · `agents` · `llm` · `agentDefaultModel` · `subprocess`
+- `source`: [`packages/experimental/prompt-enhance/src/index.ts:78`](../packages/experimental/prompt-enhance/src/index.ts)
 
 ```ts config-catalog
 /** Prompt-enhancement deployment policy. */
 export interface Config {
   /** Longest accepted draft, in characters. */
   readonly maxDraftChars: number
-  /** Latest user and assistant messages shown to the enhancer. */
+  /** Latest user prompts and assistant messages shown to the enhancer. */
   readonly historyMessages: number
   /** Character cap of each shown conversation message. */
   readonly historyMessageChars: number
-  /** Output-token cap of the enhancement call. */
+  /** Character cap of the loaded workspace instructions shown to the enhancer; 0 omits them. */
+  readonly instructionsMaxChars: number
+  /** Workspace lookups one enhancement may run; 0 sends no tools. */
+  readonly maxToolCalls: number
+  /** Longest lookup result returned to the model, in characters. */
+  readonly toolResultMaxChars: number
+  /** Largest file a lookup reads, and largest raw search output it parses, in bytes. */
+  readonly scanMaxBytes: number
+  /** Output-token cap of each model request. */
   readonly maxOutputTokens: number
-  /** End-to-end call deadline in milliseconds. */
+  /** End-to-end deadline of one enhancement, including lookups, in milliseconds. */
   readonly timeoutMs: number
   /** Enhancement calls allowed at once across all Sessions. */
   readonly maxConcurrent: number
