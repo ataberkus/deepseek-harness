@@ -61,6 +61,10 @@ This section explains how the reload chain is built; observable behavior is cove
 
 The Host half watches each package's stamped entry artifact and serves `/plugins/events`. It forwards existing graph-change and rebuilt notifications; every new connection receives the current full graph. A graph describes the browser’s desired entries and carries no Host cleanup-completion guarantee. Host activation and cleanup remain owned by the Host lifecycle. The entry's mtime, ctime, and size identify the revision without hashing its contents; unchanged metadata requires no content read. Host restarts over unchanged artifacts keep the same revisions, so reconnecting the graph stream does not replace browser plugins. The browser half delegates both frame kinds to Client Modules, which serializes entry changes and waits for browser resource cleanup.
 
+### One connection per app mount
+
+Browsers allow six HTTP/1.1 connections per origin, and each open `/plugins/events` stream holds one. If every page held its own stream, six open pages would exhaust the pool, and the next page would stay blank because its document scripts could not be fetched. The pages of one app mount therefore elect a leader through a Web Lock named after the resolved events URL, so apps mounted at different paths of one origin keep separate leaders and frames. Only the leader opens the stream; it relays each frame to the other pages over a `BroadcastChannel` of the same name and answers a newly opened page with the latest graph. When the leader page closes, the next queued page acquires the lock and connects. Without Web Locks (a plain-HTTP LAN address is not a secure context), each page opens its own stream.
+
 ### The browser swap
 
 On a `rebuilt` frame, the controller invalidates the old module and prefetches its single-resource script while the old fiber still serves. It then deletes the registry runtime, drains the old fiber, clears its entry reference and removes owned styles. The module system materializes the new exports before `entry.refresh()` mounts them through Loader; this exposes import failures to page diagnostics even when Loader would only log them. CSS is injected after old effects have finished.
@@ -78,7 +82,7 @@ Download failures leave the running plugin active. After the old fiber is torn d
 | File | Role |
 |---|---|
 | [`src/index.ts`](src/index.ts) | Node half: bundle stat-poll, `rebuilt` reporting, `/plugins/events` SSE channel |
-| [`src/client/index.ts`](src/client/index.ts) | Browser half: SSE subscription and delegation to the shared entry controller |
+| [`src/client/index.ts`](src/client/index.ts) | Browser half: per-origin leader election, SSE subscription, frame relay, and delegation to the shared entry controller |
 | [`src/events.ts`](src/events.ts) | Shared frame types (`graph` / `rebuilt`) and the endpoint constant |
 
 </details>

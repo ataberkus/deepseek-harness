@@ -61,6 +61,10 @@ kind: "package-reference"
 
 Host 半侧监听每个包带完成标记的入口产物，并提供 `/plugins/events`。它转发现有的图变化与重建通知；每个新连接都会收到当前完整图。图描述浏览器的目标条目，不保证 Host 清理已经完成。Host 的激活与清理仍由 Host 生命周期管理。入口的 mtime、ctime 和大小共同标识 revision，无需对其内容求哈希；元数据未变时无需读取内容。Host 重启时若产物未变，revision 保持不变，因此图流重连不会替换浏览器插件。浏览器半侧将两种帧都交给 Client Modules，由它串行处理条目变更并等待浏览器资源清理。
 
+### 每个应用挂载点只占一个连接
+
+浏览器对每个源最多保持六个 HTTP/1.1 连接，每个打开的 `/plugins/events` 流占用其中一个。若每个页面各自持有一条流，打开六个页面就会耗尽连接池，下一个页面因无法获取文档脚本而保持空白。因此同一应用挂载点的页面通过以解析后的事件 URL 命名的 Web Lock 选出一个 leader，挂载在同一源不同路径下的应用各自拥有独立的 leader 和帧。只有 leader 打开该流；它通过同名 `BroadcastChannel` 将每一帧转发给其他页面，并向新打开的页面回应最新的图。leader 页面关闭后，下一个排队的页面获得锁并建立连接。没有 Web Locks 时（纯 HTTP 的局域网地址不是安全上下文），每个页面各自打开一条流。
+
 ### 浏览器侧替换
 
 收到 `rebuilt` 帧后，控制器使旧模块失效，并在旧 fiber 仍然服务时预取其单资源脚本。随后删除注册表 runtime、等待旧 fiber 清理、清除条目中的 fiber 引用并移除自身样式。模块系统先物化新导出，再由 `entry.refresh()` 通过 Loader 挂载；这样即使 Loader 只记录导入错误，页面诊断仍能获得失败原因。CSS 在旧 effect 完成清理后注入。
@@ -78,7 +82,7 @@ fiber 的激活 epoch 会串联其服务提供方的 uid，因此替换提供方
 | 文件 | 职责 |
 |---|---|
 | [`src/index.ts`](src/index.ts) | node 半侧：bundle stat 轮询、`rebuilt` 上报、`/plugins/events` SSE 通道 |
-| [`src/client/index.ts`](src/client/index.ts) | 浏览器半侧：SSE 订阅与共享条目控制器调用 |
+| [`src/client/index.ts`](src/client/index.ts) | 浏览器半侧：每源 leader 选举、SSE 订阅、帧转发与共享条目控制器调用 |
 | [`src/events.ts`](src/events.ts) | 共享帧类型（`graph` / `rebuilt`）与端点常量 |
 
 </details>
