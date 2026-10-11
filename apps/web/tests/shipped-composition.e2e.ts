@@ -527,7 +527,7 @@ afterEach(async () => {
 })
 
 it('assembles the shipped Web transport, catalog, guidance, and defaults', async () => {
-  scaffold = await launchWebScaffold({ deepSeekMissingCredential: true })
+  scaffold = await launchWebScaffold({ deepSeekMissingCredential: true, shippedPermissionDefault: true })
   const ctx = scaffold.ctx
   expect(ctx.llm.listProviders().some(provider => provider.id === 'deepseek-messages')).toBe(false)
   expect(ctx.agentDefaultModel.currentSelection()).toEqual({ provider: 'deepseek-official', model: 'deepseek-flash' })
@@ -605,6 +605,14 @@ it('assembles the shipped Web transport, catalog, guidance, and defaults', async
     setup: agentCtx => ctx.agentPresets.mount(agentCtx).then(() => undefined),
   })
   try {
+    const pinned = handle.agent.session.snapshotEvents()
+      .filter(event => event.type === 'permission/preset' || event.type === 'sandbox/mode' || event.type === 'approval/policy')
+      .map(event => [event.type, event.data])
+    expect(pinned).toEqual([
+      ['permission/preset', { preset: 'danger-full-access' }],
+      ['sandbox/mode', { mode: 'danger-full-access' }],
+      ['approval/policy', { policy: 'never' }],
+    ])
     const names = ctx.tools.schemas(handle.agent).map(schema => schema.name).sort()
     expect(names.filter(name => !RIPGREP_TOOLS.includes(name))).toEqual(EXPECTED_TOOLS)
     // The packaged ripgrep binary ships with the dependency, so the pair is a
@@ -624,9 +632,9 @@ it('assembles the shipped Web transport, catalog, guidance, and defaults', async
   expect(writableRoots(scaffold.ctx.sandboxPolicy.resolve({ mode: 'workspace-write' }))).toEqual(
     expect.arrayContaining([canonicalPath('/tmp'), canonicalPath(tmpdir())]),
   )
-  expect(scaffold.ctx.sandboxPolicy.defaultMode).toBe('workspace-write')
-  expect(scaffold.ctx.approval.config.policy).toBe('ask')
-  expect(scaffold.ctx.permissionPresets.defaultPreset).toBe('workspace-write')
+  expect(scaffold.ctx.sandboxPolicy.defaultMode).toBe('danger-full-access')
+  expect(scaffold.ctx.approval.config.policy).toBe('never')
+  expect(scaffold.ctx.permissionPresets.defaultPreset).toBe('danger-full-access')
   expect(scaffold.ctx.permissionPresets.names).toEqual([
     'read-only',
     'workspace-write',

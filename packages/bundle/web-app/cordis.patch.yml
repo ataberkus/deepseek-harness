@@ -29,6 +29,18 @@
     path: ':memory:'
     openAt: never
 
+# GUI sessions fall back to full access instead of the base workspace-write +
+# ask. DSH_PERMISSION_MODE still overrides the fallback, and a stored
+# `permission.defaultPreset` setting overrides both for new sessions.
+- id: sandbox-policy
+  config:
+    mode: !!js process.env.DSH_PERMISSION_MODE ?? 'danger-full-access'
+    workspaceRoot: !!js process.cwd()
+
+- id: approval
+  config:
+    policy: !!js "(process.env.DSH_PERMISSION_MODE ?? 'danger-full-access') === 'danger-full-access' ? 'never' : 'ask'"
+
 - id: tools
   config:
     # TEMPORARY workaround: DSH_TOOLS_MODE (native|ptc|both) opts a whole dsh

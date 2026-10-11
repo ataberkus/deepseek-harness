@@ -311,6 +311,12 @@ export interface LaunchOptions {
   /** Compare the replayed root Session; `read-only` also forbids refresh writes to a borrowed fixture. */
   compareReplaySession?: boolean | 'read-only'
   /**
+   * Boot with the shipped Web permission fallback (`danger-full-access` +
+   * `never`). Omitted, the scaffold pins `DSH_PERMISSION_MODE=workspace-write`
+   * so recorded sessions keep their workspace-write + ask pin.
+   */
+  shippedPermissionDefault?: boolean
+  /**
    * Optional product overlay applied after the shipped Web surface and before
    * the scaffold's hermetic test patches, matching the launcher's `--patch`
    * ordering.
@@ -517,31 +523,38 @@ export async function launchWebScaffold(options: LaunchOptions = {}): Promise<We
   // the resolved harness home so a scaffold sharing another's home — the
   // cross-port persistence scenario — pins the same roots the settings and
   // credentials rows were configured with.
-  const skillRootEnvironment = {
+  // The permission fallback is pinned the same way: the shipped Web rows read
+  // DSH_PERMISSION_MODE at load, and an unset value selects the shipped
+  // fallback regardless of the developer's environment.
+  const pinnedEnvironment: Record<string, string | undefined> = {
     DSH_HOME: harnessHome,
     DSH_AGENTS_HOME: join(workspaceCwd, '.agents-home'),
     DSH_BUNDLED_SKILL_DIR: join(workspaceCwd, '.bundled-skills'),
+    DSH_PERMISSION_MODE: options.shippedPermissionDefault === true ? undefined : 'workspace-write',
   }
-  const originalSkillRootEnvironment = Object.fromEntries(
-    Object.keys(skillRootEnvironment).map(key => [key, process.env[key]]),
-  )
-  let skillRootEnvironmentRestored = false
-  const restoreSkillRootEnvironment = (): void => {
-    if (skillRootEnvironmentRestored) return
-    skillRootEnvironmentRestored = true
-    for (const [key, value] of Object.entries(originalSkillRootEnvironment)) {
+  const assignEnvironment = (values: Record<string, string | undefined>): void => {
+    for (const [key, value] of Object.entries(values)) {
       if (value === undefined) Reflect.deleteProperty(process.env, key)
       else process.env[key] = value
     }
   }
-  Object.assign(process.env, skillRootEnvironment)
+  const originalPinnedEnvironment = Object.fromEntries(
+    Object.keys(pinnedEnvironment).map(key => [key, process.env[key]]),
+  )
+  let pinnedEnvironmentRestored = false
+  const restorePinnedEnvironment = (): void => {
+    if (pinnedEnvironmentRestored) return
+    pinnedEnvironmentRestored = true
+    assignEnvironment(originalPinnedEnvironment)
+  }
+  assignEnvironment(pinnedEnvironment)
   let persistenceRoot: string
   try {
     persistenceRoot = await mkdtemp(join(tmpdir(), 'dsh-web-e2e-sessions-'))
   } catch (error) {
     const failures: unknown[] = [error]
     await rm(workspaceCwd, { recursive: true, force: true }).catch((cleanupError: unknown) => failures.push(cleanupError))
-    restoreSkillRootEnvironment()
+    restorePinnedEnvironment()
     if (failures.length > 1) throw new AggregateError(failures, 'web scaffold temp-root setup failed')
     throw error
   }
@@ -907,7 +920,7 @@ export async function launchWebScaffold(options: LaunchOptions = {}): Promise<We
       await publicProxy.close().catch((closeError: unknown) => cleanupFailures.push(closeError))
     }
     restoreCredentialEnvironment()
-    restoreSkillRootEnvironment()
+    restorePinnedEnvironment()
     if (cleanupFailures.length > 0) {
       throw new AggregateError([error, ...cleanupFailures], 'web scaffold setup failed and cleanup was incomplete')
     }
@@ -988,7 +1001,7 @@ export async function launchWebScaffold(options: LaunchOptions = {}): Promise<We
         }
       } finally {
         restoreCredentialEnvironment()
-        restoreSkillRootEnvironment()
+        restorePinnedEnvironment()
       }
       if (failures.length > 0) throw new AggregateError(failures, 'web scaffold teardown failed')
     },
